@@ -1,36 +1,40 @@
+// api/version.js
 let versions = {
-    "126884695634066": 2,
-    "53453465134142342": 8
+    "126884695634066": { version: 2, updated: "2025-08-31" },
+    "53453465134142342": { version: 8, updated: "2025-08-31" }
 };
 
 const ADMIN_KEY = "Unknownpassword69";
 
 export default async function handler(req, res) {
+    res.setHeader("Content-Type", "text/plain"); // Important for loadstring
+
     if (req.method === "GET") {
-        const { placeid } = req.query;
-        if (!placeid) return res.status(400).json({ error: "Missing placeid" });
-
-        const version = versions[placeid];
-        if (version === undefined) return res.status(404).json({ error: "PlaceId not found" });
-
-        return res.status(200).json({ placeid, version });
+        // Return the entire table as Lua code
+        let luaString = "return " + JSON.stringify(versions)
+            .replace(/"(\w+)":/g, "['$1'] =") // convert keys to Lua format
+            .replace(/"version":/g, "version=")
+            .replace(/"updated":/g, "updated=")
+            .replace(/}/g, "}") // keep closing braces
+        res.status(200).send(luaString);
     } 
     else if (req.method === "POST") {
+        // Admin updates version
         try {
             const body = await json(req);
             const { key, placeid, version } = body;
 
-            if (key !== ADMIN_KEY) return res.status(403).json({ error: "Unauthorized" });
-            if (!placeid || version === undefined) return res.status(400).json({ error: "Missing placeid or version" });
+            if (key !== ADMIN_KEY) return res.status(403).send("Unauthorized");
+            if (!placeid || version === undefined) return res.status(400).send("Missing placeid or version");
 
-            versions[placeid] = version;
-            return res.status(200).json({ message: "Version updated", placeid, version });
+            versions[placeid] = { version, updated: new Date().toISOString() };
+            return res.status(200).send(`Version updated for placeId ${placeid}`);
         } catch {
-            return res.status(400).json({ error: "Invalid JSON" });
+            return res.status(400).send("Invalid JSON");
         }
     } 
     else {
-        return res.status(405).json({ error: "Method not allowed" });
+        return res.status(405).send("Method not allowed");
     }
 }
 
