@@ -7,32 +7,32 @@ let versions = {
 const ADMIN_KEY = "Unknownpassword69";
 
 export default async function handler(req, res) {
-    res.setHeader("Content-Type", "text/plain"); // crucial for loadstring
+    res.setHeader("Content-Type", "text/plain"); // IMPORTANT
 
     if (req.method === "GET") {
-        let luaString = "return {\n"
+        let lua = "return {\n"
         for (let key in versions) {
-            luaString += `  ['${key}'] = { version=${versions[key].version}, updated='${versions[key].updated}' },\n`
+            lua += `  ['${key}'] = { version=${versions[key].version}, updated='${versions[key].updated}' },\n`
         }
-        luaString += "}"
-        res.status(200).send(luaString)
-    } 
-    else if (req.method === "POST") {
+        lua += "}"
+        res.status(200).send(lua)
+        return
+    }
+
+    if (req.method === "POST") {
         try {
             const body = await json(req)
             const { key, placeid, version } = body
             if (key !== ADMIN_KEY) return res.status(403).send("Unauthorized")
             if (!placeid || version === undefined) return res.status(400).send("Missing placeid or version")
-
             versions[placeid] = { version, updated: new Date().toISOString() }
-            return res.status(200).send(`Version updated for placeId ${placeid}`)
+            return res.status(200).send(`Updated ${placeid}`)
         } catch {
             return res.status(400).send("Invalid JSON")
         }
-    } 
-    else {
-        return res.status(405).send("Method not allowed")
     }
+
+    res.status(405).send("Method not allowed")
 }
 
 async function json(req) {
