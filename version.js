@@ -1,4 +1,24 @@
-return {
-    ['117289497495248'] = { version=2, updated='2025-08-31' }, -- trident
-    ['53453465134142342'] = { version=8, updated='2025-08-31' } -- grow a garden? anyways its not real
+const api = {
+    "id1235324324": {
+        version: 1,
+        updated: "2025-09-01",
+        status: "Functional",
+        devs: {
+            dev1: "hwidid",
+            dev2: "hwidqwq"
+        }
+    },
+    "53453535": {
+        version: 2,
+        updated: "2025-09-01",
+        status: "Functional",
+        devs: {
+            dev1: "hwid123",
+            dev2: "hwid456"
+        }
+    }
+};
+
+if (typeof module !== "undefined" && module.exports) {
+    module.exports = api;
 }
