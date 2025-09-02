@@ -1,20 +1,20 @@
 const api = {
-    "id1235324324": {
+    "168556275": { //-- Baseplate --\\
         version: 1,
         updated: "2025-09-01",
         status: "Functional",
         devs: {
-            dev1: "hwidid",
-            dev2: "hwidqwq"
+            matpats: "B86F5628-12B8-4683-93C7-773F70D1A406",
+            john: "thisisafakehwid"
         }
     },
-    "53453535": {
+    "53453535": { //-- placeholder --\\
         version: 2,
         updated: "2025-09-01",
         status: "Functional",
         devs: {
-            dev1: "hwid123",
-            dev2: "hwid456"
+            matpats: "B86F5628-12B8-4683-93C7-773F70D1A406",
+            tod: "realhwid1234"
         }
     }
 };
