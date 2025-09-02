@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>voltex — home</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#121214; --panel:#0d0d0f; --muted:#b9b9b9; --ink:#e8e8e8; --stroke:#2e2e32;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,-apple-system,Segoe UI,Roboto,system-ui;}
+    body{
+      display:flex;align-items:center;justify-content:center;
+      background:linear-gradient(180deg,#151515,#0f0f10);color:var(--ink);
+      padding:36px;
+    }
+    .container{width:100%;max-width:920px}
+    header{display:flex;justify-content:center;margin-bottom:28px}
+    header h1{font-family:'Orbitron',sans-serif;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+    .grid{display:grid;grid-template-columns:1fr;gap:18px}
+    .panel{
+      background:var(--panel);border-radius:14px;padding:20px;border:1px solid var(--stroke);
+      box-shadow:0 10px 30px rgba(0,0,0,.4);
+    }
+    .row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .muted{color:var(--muted)}
+    input[type="text"]{width:100%;padding:10px;border-radius:8px;border:1px solid #222;background:#0a0a0a;color:var(--ink)}
+    button{padding:10px 14px;border-radius:10px;border:0;font-weight:700;cursor:pointer}
+    .btn-primary{background:#d1d1d1;color:#050505}
+    .btn-ghost{background:transparent;border:1px solid #2a2a2a;color:var(--ink)}
+    footer{margin-top:18px;text-align:center;color:var(--muted);font-size:13px}
+    .status{margin-top:12px;padding:10px;border-radius:8px;background:#091009;color:#bff1c0}
+    .status.bad{background:#2d0f12;color:#ffb3b3}
+    .right-btn{min-width:90px;display:inline-flex;align-items:center;justify-content:center}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header><h1>voltex</h1></header>
+
+    <main class="grid">
+      <section class="panel" aria-labelledby="about">
+        <h2 id="about">About Voltex</h2>
+        <p class="muted">Voltex is a minimal hub focused on speed and simplicity. Use the key check below to validate access (server must implement the /api/validate-key endpoint).</p>
+      </section>
+
+      <section class="panel" aria-labelledby="key-check">
+        <div class="row">
+          <div style="flex:1">
+            <h3 id="key-check">Key Validation</h3>
+            <p class="muted">Paste your key and press Validate. This page calls <code class="muted">POST /api/validate-key</code>.</p>
+            <div style="display:flex;gap:12px;margin-top:10px;">
+              <input id="keyInput" type="text" placeholder="Enter key value" />
+              <button id="validateBtn" class="btn-primary right-btn">Validate</button>
+            </div>
+            <div id="result" style="margin-top:12px"></div>
+          </div>
+
+          <div style="margin-left:18px;display:flex;align-items:center;">
+            <a href="/scripts.html" class="btn-ghost right-btn">Scripts</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>© <span id="year"></span> Voltex</footer>
+  </div>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    async function validateKey() {
+      const input = document.getElementById('keyInput');
+      const val = (input.value || "").trim();
+      const out = document.getElementById('result');
+      out.textContent = '';
+      if (!val) { out.innerHTML = '<div class="status bad">Please enter a key.</div>'; return; }
+
+      out.innerHTML = '<div class="status">Checking…</div>';
+      try {
+        const res = await fetch('/api/validate-key', {
+          method: 'POST',
+          headers: {'content-type':'application/json'},
+          body: JSON.stringify({ keyValue: val })
+        });
+        const json = await res.json();
+        if (res.ok && json.valid) {
+          out.innerHTML = `<div class="status">Key valid — expires: ${json.expires ?? 'never'}</div>`;
+        } else if (res.ok) {
+          out.innerHTML = `<div class="status bad">Key invalid or expired.</div>`;
+        } else {
+          out.innerHTML = `<div class="status bad">Error: ${json.message || res.statusText}</div>`;
+        }
+      } catch (err) {
+        out.innerHTML = `<div class="status bad">Network error</div>`;
+      }
+    }
+
+    document.getElementById('validateBtn').addEventListener('click', validateKey);
+    document.getElementById('keyInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') validateKey(); });
+  </script>
+
+  <!-- Analytics placeholder (replace with Plausible/Umami snippet) -->
+  <!-- <script defer data-domain="yourdomain.com" src="https://plausible.io/js/script.js"></script> -->
+</body>
+</html>
