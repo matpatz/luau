@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>voltex — scripts</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#121214;--panel:#0d0d0f;--muted:#b9b9b9;--ink:#e8e8e8;--stroke:#2e2e32}
+    *{box-sizing:border-box}
+    body{margin:0;height:100%;font-family:Inter,system-ui;background:linear-gradient(180deg,#151515,#0f0f10);color:var(--ink);padding:40px;display:flex;align-items:flex-start;justify-content:center}
+    .wrap{width:100%;max-width:980px}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+    h1{font-family:'Orbitron',sans-serif}
+    .panel{background:var(--panel);padding:18px;border-radius:12px;border:1px solid var(--stroke);box-shadow:0 8px 24px rgba(0,0,0,.4)}
+    .grid{display:grid;gap:12px}
+    .script-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;border-radius:8px;background:linear-gradient(180deg,#0b0b0b,#0d0d0f);border:1px solid rgba(255,255,255,0.02)}
+    .mono{font-family:ui-monospace,monospace}
+    .btn{padding:8px 12px;border-radius:8px;background:#d1d1d1;color:#050505;font-weight:700;border:0;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>voltex — Scripts</h1>
+      <a href="/" style="color:var(--muted);text-decoration:none">Home</a>
+    </header>
+
+    <main class="panel">
+      <h2>Available Scripts</h2>
+      <p style="color:var(--muted)">This page calls <code class="mono">GET /api/scripts</code> to fetch the list.</p>
+
+      <div id="list" style="margin-top:12px" class="grid">
+        <div class="script-row mono">Loading…</div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    async function loadScripts() {
+      const list = document.getElementById('list');
+      list.innerHTML = '<div class="script-row mono">Loading…</div>';
+      try {
+        const res = await fetch('/api/scripts');
+        if (!res.ok) throw new Error('Failed to fetch');
+        const data = await res.json();
+        if (!Array.isArray(data) || data.length === 0) {
+          list.innerHTML = '<div class="script-row mono">No scripts available</div>';
+          return;
+        }
+        list.innerHTML = '';
+        data.forEach(s => {
+          const row = document.createElement('div');
+          row.className = 'script-row';
+          row.innerHTML = `
+            <div style="flex:1">
+              <div style="font-weight:700">${escapeHtml(s.name)}</div>
+              <div style="color:var(--muted);font-size:13px">${escapeHtml(s.description)}</div>
+              <div style="margin-top:6px" class="mono"><small>${escapeHtml(s.loadstring)}</small></div>
+            </div>
+            <div style="margin-left:12px">
+              <button class="btn" onclick="copyLoad('${encodeURIComponent(s.loadstring)}')">Copy</button>
+            </div>
+          `;
+          list.appendChild(row);
+        });
+      } catch (err) {
+        list.innerHTML = '<div class="script-row mono">Error loading scripts</div>';
+      }
+    }
+
+    function copyLoad(enc) {
+      const text = decodeURIComponent(enc);
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Copied loadstring to clipboard');
+      }).catch(() => alert('Copy failed'));
+    }
+
+    function escapeHtml(str = '') {
+      return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    }
+
+    loadScripts();
+  </script>
+
+  <!-- Analytics placeholder -->
+  <!-- <script async src="https://analytics.umami.is/script.js" data-website-id="YOUR-WEBSITE-ID"></script> -->
+</body>
+</html>
