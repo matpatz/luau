@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>voltex</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Orbitron', sans-serif;
+      background: #1b1b1b;
+      color: #e8e8e8;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    h1 {
+      font-size: 3rem;
+      margin-bottom: 2rem;
+    }
+    .panel {
+      background: #0d0d0f;
+      border: 1px solid #2e2e32;
+      border-radius: 18px;
+      padding: 22px;
+      margin: 1rem 0;
+      max-width: 600px;
+      text-align: center;
+    }
+    .btn {
+      display: inline-block;
+      margin-top: 1rem;
+      padding: 12px 18px;
+      border-radius: 12px;
+      background: #d1d1d1;
+      color: #0a0a0a;
+      font-weight: bold;
+      text-decoration: none;
+    }
+    .btn:hover { background: #f0f0f0; }
+  </style>
+</head>
+<body>
+  <h1>voltex</h1>
+
+  <div class="panel">
+    <h2>About Voltex</h2>
+    <p>Voltex is a clean, minimal hub with a focus on speed and simplicity. This dark–grey theme keeps things lightweight while looking sharp.</p>
+  </div>
+
+  <div class="panel">
+    <h2>Our Scripts</h2>
+    <p>Explore our collection. The page is coming soon.</p>
+    <a href="/scripts.html" class="btn">Open</a>
+  </div>
+
+  <footer style="margin-top:2rem;opacity:0.6;font-size:14px;">
+    © <span id="year"></span> Voltex
+  </footer>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+
+  <!-- Analytics (replace domain/ID with yours) -->
+  <script defer data-domain="yourdomain.com" src="https://plausible.io/js/script.js"></script>
+</body>
+</html>
