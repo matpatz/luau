@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Get Key</title>
+<style>
+  body { background:#0f0f0f; color:#eee; font-family: sans-serif; display:flex; justify-content:center; align-items:center; height:100vh; }
+  .container { text-align:center; }
+  .btn { background:#333; color:#eee; border:none; padding:0.5rem 1rem; border-radius:5px; cursor:pointer; }
+  .btn:hover { background:#555; }
+  #keyDisplay { margin-top:1rem; display:block; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Get Your Key</h1>
+  <button class="btn" id="getKeyBtn">Get Key</button>
+  <span id="keyDisplay">No key yet</span>
+</div>
+
+<script>
+const getKeyBtn = document.getElementById('getKeyBtn');
+const keyDisplay = document.getElementById('keyDisplay');
+
+getKeyBtn.addEventListener('click', async () => {
+  keyDisplay.innerText = 'Fetching...';
+  try {
+    const res = await fetch('/api/getkey', { method: 'POST' });
+    const data = await res.json();
+    if(data.redirectUrl){
+      keyDisplay.innerHTML = `<a href="${data.redirectUrl}" target="_blank">Click here to get your key</a>`;
+    } else {
+      keyDisplay.innerText = 'Failed to fetch key';
+    }
+  } catch {
+    keyDisplay.innerText = 'Failed to fetch key';
+  }
+});
+</script>
+</body>
+</html>
