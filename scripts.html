@@ -12,58 +12,16 @@
     margin:0; 
     padding:2rem; 
   }
-  h1 { 
-    text-align:center; 
-    margin-bottom:2rem; 
-  }
-  .script-card { 
-    background:#222; 
-    padding:1rem; 
-    border-radius:6px; 
-    margin-bottom:1rem; 
-  }
-  .script-header {
-    display:flex;
-    align-items:center;
-    gap:0.5rem; /* space between title and status */
-    margin-bottom:0.5rem;
-    justify-content:flex-start; /* keep title and status together */
-  }
-  .script-title { 
-    font-weight:bold; 
-    font-size:1.1rem; 
-  }
-  pre { 
-    background:#111; 
-    padding:0.5rem; 
-    border-radius:4px; 
-    overflow-x:auto; 
-    flex:1; 
-    margin:0; 
-    display:inline-block; 
-  }
-  .copy-container { 
-    display:flex; 
-    align-items:center; 
-    gap:0.5rem; 
-  }
-  .btn { 
-    background:#333; 
-    color:#eee; 
-    border:none; 
-    padding:0.5rem 1rem; 
-    border-radius:5px; 
-    cursor:pointer; 
-  }
-  .btn:hover { 
-    background:#555; 
-  }
-  .status { 
-    padding:0.2rem 0.5rem; 
-    border-radius:4px; 
-    font-size:0.8rem; 
-    font-weight:bold; 
-  }
+  h1 { text-align:center; margin-bottom:2rem; }
+  h2 { margin-top:2rem; color:#fff; }
+  .script-card { background:#222; padding:1rem; border-radius:6px; margin-bottom:1rem; }
+  .script-header { display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem; justify-content:flex-start; }
+  .script-title { font-weight:bold; font-size:1.1rem; }
+  pre { background:#111; padding:0.5rem; border-radius:4px; overflow-x:auto; flex:1; margin:0; display:inline-block; }
+  .copy-container { display:flex; align-items:center; gap:0.5rem; }
+  .btn { background:#333; color:#eee; border:none; padding:0.5rem 1rem; border-radius:5px; cursor:pointer; }
+  .btn:hover { background:#555; }
+  .status { padding:0.2rem 0.5rem; border-radius:4px; font-size:0.8rem; font-weight:bold; }
   .UPDATED { background:#28a745; color:#fff; }
   .POPULAR { background:#fd7e14; color:#fff; }
   .PREMIUM { background:#dc3545; color:#fff; }
@@ -71,24 +29,42 @@
 </head>
 <body>
 <h1>Available Scripts</h1>
-<div id="scriptsContainer">Loading scripts...</div>
+<div id="scriptsContainer"></div>
 
 <script>
 const scripts = [
+  { section: "Main" },
   {
-    name: "Adopt Me",
+    name: "Teen Titans Battleground",
     loadstring: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/VoltexHub/ExtraScripts/main/adoptme.lua"))()',
     status: "UPDATED"
   },
   {
-    name: "Blox Fruits",
+    name: "Grow a Garden dupe - local",
     loadstring: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/VoltexHub/ExtraScripts/main/bloxfruits.lua"))()',
     status: "POPULAR"
   },
   {
-    name: "Arsenal",
+    name: "Catastrophia",
+    loadstring: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/VoltexHub/ExtraScripts/main/arsenal.lua"))()',
+    status: "UPDATED"
+  },
+  {
+    name: "Catastrophia - premium",
     loadstring: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/VoltexHub/ExtraScripts/main/arsenal.lua"))()',
     status: "PREMIUM"
+  },
+  { section: "Universal" },
+  {
+    name: "Account Age- ESP",
+    loadstring: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/VoltexHub/ExtraScripts/main/arsenal.lua"))()',
+    status: "PREMIUM"
+  },
+  { section: "Dev Tools" },
+  {
+    name: "Fake Script",
+    loadstring: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/VoltexHub/ExtraScripts/main/arsenal.lua"))()',
+    status: "UPDATED"
   }
 ];
 
@@ -96,6 +72,13 @@ const container = document.getElementById('scriptsContainer');
 container.innerHTML = '';
 
 scripts.forEach(script => {
+  if (script.section) {
+    const header = document.createElement('h2');
+    header.innerText = script.section;
+    container.appendChild(header);
+    return;
+  }
+
   const card = document.createElement('div');
   card.className = 'script-card';
   card.innerHTML = `
