@@ -3,94 +3,71 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Key Manager</title>
+<title>Voltex | Get Key</title>
 <style>
   body { 
     background:#0f0f0f; 
     color:#eee; 
-    font-family:sans-serif; 
-    padding:2rem; 
+    font-family: sans-serif; 
+    display:flex; 
+    justify-content:center; 
+    align-items:center; 
+    height:100vh; 
+    margin:0;
   }
-  h1 { text-align:center; margin-bottom:2rem; }
-  .container { max-width:600px; margin:0 auto; }
-  .btn { background:#333; color:#eee; border:none; padding:0.5rem 1rem; border-radius:5px; cursor:pointer; }
+  .container { text-align:center; max-width:400px; }
+  h1 { margin-bottom:1rem; }
+  .btn { 
+    background:#333; 
+    color:#eee; 
+    border:none; 
+    padding:0.75rem 1.25rem; 
+    border-radius:8px; 
+    cursor:pointer; 
+    font-size:1rem;
+    transition:background 0.2s;
+  }
   .btn:hover { background:#555; }
-  #keyList { margin-top:1rem; list-style:none; padding:0; }
-  #keyList li { background:#222; margin-bottom:0.5rem; padding:0.5rem; border-radius:5px; display:flex; justify-content:space-between; align-items:center; }
-  .copyBtn { background:#444; padding:0.3rem 0.6rem; border-radius:4px; margin-left:1rem; font-size:0.9rem; }
+  #keyDisplay { 
+    margin-top:1rem; 
+    display:block; 
+    padding:0.5rem; 
+    background:#1a1a1a; 
+    border-radius:6px;
+    font-size:0.95rem;
+  }
 </style>
 </head>
 <body>
 <div class="container">
-  <h1>Your Keys</h1>
-  <button class="btn" id="newKeyBtn">Obtain New Key</button>
-  <ul id="keyList"><li>Loading keys...</li></ul>
+  <h1>Get Your Voltex Key</h1>
+  <button class="btn" id="getKeyBtn">Generate Key</button>
+  <div id="keyDisplay">No key yet</div>
 </div>
 
 <script>
-const newKeyBtn = document.getElementById('newKeyBtn');
-const keyList = document.getElementById('keyList');
+const getKeyBtn = document.getElementById('getKeyBtn');
+const keyDisplay = document.getElementById('keyDisplay');
 
-async function fetchKeys() {
-  keyList.innerHTML = '<li>Loading keys...</li>';
+getKeyBtn.addEventListener('click', async () => {
+  keyDisplay.innerText = 'Fetching key...';
   try {
-    const res = await fetch('https://pandadevelopment.net/api/key', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer bc0fc0bba874ec172718721dee10920a3aa4afda6ff210ec7ed907189eecb07c'
-      },
-      body: JSON.stringify({ action: 'listKeys' })
-    });
+    const res = await fetch('https://yourdomain.net/api/getkey', { method: 'POST' });
     const data = await res.json();
-    if(data.keys && data.keys.length){
-      keyList.innerHTML = '';
-      data.keys.forEach(key => {
-        const li = document.createElement('li');
-        li.innerHTML = `<span>${key}</span><button class="copyBtn">Copy</button>`;
-        const copyBtn = li.querySelector('.copyBtn');
-        copyBtn.addEventListener('click', () => {
-          navigator.clipboard.writeText(key);
-          copyBtn.innerText = 'Copied!';
-          setTimeout(() => copyBtn.innerText = 'Copy', 1500);
-        });
-        keyList.appendChild(li);
-      });
+    if (data.key) {
+      keyDisplay.innerHTML = `
+        <strong>Your Key:</strong> ${data.key}<br>
+        <small>Copy and paste this into the executor</small>
+      `;
+    } else if (data.redirectUrl) {
+      keyDisplay.innerHTML = `<a href="${data.redirectUrl}" target="_blank">Click here to continue</a>`;
     } else {
-      keyList.innerHTML = '<li>No keys found</li>';
+      keyDisplay.innerText = 'Failed to fetch key';
     }
   } catch {
-    keyList.innerHTML = '<li>Failed to load keys</li>';
-  }
-}
-
-newKeyBtn.addEventListener('click', async () => {
-  newKeyBtn.innerText = 'Fetching...';
-  try {
-    const res = await fetch('https://pandadevelopment.net/api/key', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer bc0fc0bba874ec172718721dee10920a3aa4afda6ff210ec7ed907189eecb07c'
-      },
-      body: JSON.stringify({ action: 'getKey' })
-    });
-    const data = await res.json();
-    if(data.key){
-      alert(`New key obtained: ${data.key}`);
-      fetchKeys();
-    } else {
-      alert('Failed to get new key');
-    }
-  } catch {
-    alert('Failed to get new key');
-  } finally {
-    newKeyBtn.innerText = 'Obtain New Key';
+    keyDisplay.innerText = 'Error connecting to server';
   }
 });
-
-// initial load
-fetchKeys();
 </script>
 </body>
 </html>
