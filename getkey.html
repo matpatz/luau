@@ -52,7 +52,7 @@ const keyDisplay = document.getElementById('keyDisplay');
 getKeyBtn.addEventListener('click', async () => {
   keyDisplay.innerText = 'Fetching key...';
   try {
-    const res = await fetch('https://yourdomain.net/api/getkey', { method: 'POST' });
+    const res = await fetch('https://website-iota-ivory-12.vercel.app/getkey.html', { method: 'POST' });
     const data = await res.json();
     if (data.key) {
       keyDisplay.innerHTML = `
