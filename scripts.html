@@ -3,121 +3,73 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Voltex Scripts</title>
+<title>Scripts</title>
 <style>
-  body {
-    margin: 0;
-    font-family: 'Segoe UI', sans-serif;
-    background-color: #121212;
-    color: #ddd;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-  h1 {
-    margin-top: 40px;
-    font-size: 48px;
-    font-weight: bold;
-    text-align: center;
-    color: #fff;
-  }
-  .frame {
-    background-color: #1c1c1c;
-    width: 90%;
-    max-width: 900px;
-    border-radius: 8px;
-    padding: 20px;
-    margin-top: 40px;
-  }
-  .script-card {
-    background-color: #222;
-    padding: 15px;
-    margin-bottom: 15px;
-    border-radius: 6px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  button {
-    background-color: #333;
-    color: #fff;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 5px;
-    cursor: pointer;
-  }
-  button:hover {
-    background-color: #555;
-  }
-  .status {
-    padding: 3px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: bold;
-  }
-  .status.NEW { background-color: #2196f3; color: #fff; }
-  .status.UPDATED { background-color: #4caf50; color: #fff; }
-  .status.POPULAR { background-color: #ff9800; color: #fff; }
-  .status.PREMIUM { background-color: #f44336; color: #fff; }
-  .status.STABLE { background-color: #9c27b0; color: #fff; }
-  .status.UNIVERSAL { background-color: #ffc107; color: #000; }
+  body { background:#0f0f0f; color:#eee; font-family:sans-serif; padding:2rem; }
+  h1 { text-align:center; margin-bottom:2rem; }
+  .script-card { background:#222; padding:1rem; border-radius:6px; margin-bottom:1rem; display:flex; justify-content:space-between; flex-wrap:wrap; }
+  pre { background:#111; padding:0.5rem; border-radius:4px; overflow-x:auto; }
+  .btn { background:#333; color:#eee; border:none; padding:0.5rem 1rem; border-radius:5px; cursor:pointer; margin-top:0.5rem; }
+  .btn:hover { background:#555; }
+  .flex { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; }
+  .status { padding:0.2rem 0.5rem; border-radius:4px; font-size:0.8rem; font-weight:bold; margin-left:0.5rem; }
+  .NEW { background:#007bff; color:#fff; }
+  .UPDATED { background:#28a745; color:#fff; }
+  .PREMIUM { background:#dc3545; color:#fff; }
+  .POPULAR { background:#fd7e14; color:#fff; }
 </style>
 </head>
 <body>
-
-<h1>Voltex Scripts</h1>
-
-<div class="frame" id="scripts-frame">
-  <p>Available Scripts:</p>
-</div>
+<h1>Available Scripts</h1>
+<div id="scriptsContainer">Loading scripts...</div>
 
 <script>
-  console.log("Scripts page visited:", new Date().toISOString());
-
-  const scriptsFrame = document.getElementById("scripts-frame");
-
-  async function loadScripts() {
-    try {
-      const res = await fetch("/scripts");
-      const scripts = await res.json();
-
-      scripts.forEach(script => {
-        const card = document.createElement("div");
-        card.className = "script-card";
-
-        const info = document.createElement("div");
-        info.innerHTML = `<strong>${script.name}</strong><br>${script.description}`;
-
-        const right = document.createElement("div");
-        const status = document.createElement("span");
-        status.className = `status ${script.status}`;
-        status.textContent = script.status;
-
-        const copyBtn = document.createElement("button");
-        copyBtn.textContent = "Copy Loadstring";
-        copyBtn.onclick = () => {
-          navigator.clipboard.writeText(script.loadstring);
-          alert("Loadstring copied!");
-        };
-
-        right.appendChild(status);
-        right.appendChild(copyBtn);
-        right.style.display = "flex";
-        right.style.gap = "10px";
-
-        card.appendChild(info);
-        card.appendChild(right);
-
-        scriptsFrame.appendChild(card);
-      });
-    } catch (err) {
-      console.error(err);
-      scriptsFrame.innerHTML += "<p>Failed to load scripts.</p>";
-    }
+const scripts = [
+  {
+    name: "Adopt Me",
+    loadstring: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/VoltexHub/ExtraScripts/main/adoptme.lua"))()',
+    features: "Auto farm, Pet duplication, Trading enhancements",
+    status: "UPDATED"
+  },
+  {
+    name: "Blox Fruits",
+    loadstring: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/VoltexHub/ExtraScripts/main/bloxfruits.lua"))()',
+    features: "Auto farm, Devil fruit finder",
+    status: "POPULAR"
+  },
+  {
+    name: "Arsenal",
+    loadstring: 'loadstring(game:HttpGet("https://raw.githubusercontent.com/VoltexHub/ExtraScripts/main/arsenal.lua"))()',
+    features: "Aimbot, ESP, Weapon mods",
+    status: "PREMIUM"
   }
+];
 
-  loadScripts();
+const container = document.getElementById('scriptsContainer');
+container.innerHTML = '';
+
+scripts.forEach(script => {
+  const card = document.createElement('div');
+  card.className = 'script-card';
+  card.innerHTML = `
+    <div>
+      <h3>${script.name} <span class="status ${script.status}">${script.status}</span></h3>
+      <p><strong>Quick Features:</strong> ${script.features}</p>
+      <pre>${script.loadstring}</pre>
+    </div>
+    <div class="flex" style="flex-direction:column;">
+      <button class="btn copyBtn">Copy Loadstring</button>
+    </div>
+  `;
+  container.appendChild(card);
+
+  card.querySelector('.copyBtn').addEventListener('click', () => {
+    navigator.clipboard.writeText(script.loadstring).then(() => {
+      card.querySelector('.copyBtn').innerText = 'Copied!';
+      setTimeout(() => card.querySelector('.copyBtn').innerText = 'Copy Loadstring', 1500);
+    });
+  });
+});
 </script>
-
 </body>
 </html>
