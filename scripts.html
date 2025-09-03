@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voltex Scripts</title>
+<style>
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', sans-serif;
+    background-color: #121212;
+    color: #ddd;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  h1 {
+    margin-top: 40px;
+    font-size: 48px;
+    font-weight: bold;
+    text-align: center;
+    color: #fff;
+  }
+  .frame {
+    background-color: #1c1c1c;
+    width: 90%;
+    max-width: 900px;
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 40px;
+  }
+  .script-card {
+    background-color: #222;
+    padding: 15px;
+    margin-bottom: 15px;
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  button {
+    background-color: #333;
+    color: #fff;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  button:hover {
+    background-color: #555;
+  }
+  .status {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+  }
+  .status.NEW { background-color: #2196f3; color: #fff; }
+  .status.UPDATED { background-color: #4caf50; color: #fff; }
+  .status.POPULAR { background-color: #ff9800; color: #fff; }
+  .status.PREMIUM { background-color: #f44336; color: #fff; }
+  .status.STABLE { background-color: #9c27b0; color: #fff; }
+  .status.UNIVERSAL { background-color: #ffc107; color: #000; }
+</style>
+</head>
+<body>
+
+<h1>Voltex Scripts</h1>
+
+<div class="frame" id="scripts-frame">
+  <p>Available Scripts:</p>
+</div>
+
+<script>
+  console.log("Scripts page visited:", new Date().toISOString());
+
+  const scriptsFrame = document.getElementById("scripts-frame");
+
+  async function loadScripts() {
+    try {
+      const res = await fetch("/scripts");
+      const scripts = await res.json();
+
+      scripts.forEach(script => {
+        const card = document.createElement("div");
+        card.className = "script-card";
+
+        const info = document.createElement("div");
+        info.innerHTML = `<strong>${script.name}</strong><br>${script.description}`;
+
+        const right = document.createElement("div");
+        const status = document.createElement("span");
+        status.className = `status ${script.status}`;
+        status.textContent = script.status;
+
+        const copyBtn = document.createElement("button");
+        copyBtn.textContent = "Copy Loadstring";
+        copyBtn.onclick = () => {
+          navigator.clipboard.writeText(script.loadstring);
+          alert("Loadstring copied!");
+        };
+
+        right.appendChild(status);
+        right.appendChild(copyBtn);
+        right.style.display = "flex";
+        right.style.gap = "10px";
+
+        card.appendChild(info);
+        card.appendChild(right);
+
+        scriptsFrame.appendChild(card);
+      });
+    } catch (err) {
+      console.error(err);
+      scriptsFrame.innerHTML += "<p>Failed to load scripts.</p>";
+    }
+  }
+
+  loadScripts();
+</script>
+
+</body>
+</html>
