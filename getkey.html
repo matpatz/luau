@@ -5,11 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Get Key</title>
 <style>
-  body { background:#0f0f0f; color:#eee; font-family: sans-serif; display:flex; justify-content:center; align-items:center; height:100vh; }
+  body { 
+    background:#0f0f0f; 
+    color:#eee; 
+    font-family:sans-serif; 
+    display:flex; 
+    justify-content:center; 
+    align-items:center; 
+    height:100vh; 
+  }
   .container { text-align:center; }
-  .btn { background:#333; color:#eee; border:none; padding:0.5rem 1rem; border-radius:5px; cursor:pointer; }
+  .btn { 
+    background:#333; 
+    color:#eee; 
+    border:none; 
+    padding:0.5rem 1rem; 
+    border-radius:5px; 
+    cursor:pointer; 
+  }
   .btn:hover { background:#555; }
-  #keyDisplay { margin-top:1rem; display:block; }
+  #keyDisplay { margin-top:1rem; display:block; word-break:break-all; }
 </style>
 </head>
 <body>
@@ -26,14 +41,27 @@ const keyDisplay = document.getElementById('keyDisplay');
 getKeyBtn.addEventListener('click', async () => {
   keyDisplay.innerText = 'Fetching...';
   try {
-    const res = await fetch('/api/getkey', { method: 'POST' });
+    const res = await fetch('https://pandadevelopment.net/api/key', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer bc0fc0bba874ec172718721dee10920a3aa4afda6ff210ec7ed907189eecb07c'
+      },
+      body: JSON.stringify({ action: 'getKey' })
+    });
+
     const data = await res.json();
-    if(data.redirectUrl){
+
+    if(data.key){
+      keyDisplay.innerHTML = `<strong>Your key:</strong> ${data.key}`;
+    } else if(data.redirectUrl){
       keyDisplay.innerHTML = `<a href="${data.redirectUrl}" target="_blank">Click here to get your key</a>`;
     } else {
       keyDisplay.innerText = 'Failed to fetch key';
     }
-  } catch {
+
+  } catch (err) {
+    console.error(err);
     keyDisplay.innerText = 'Failed to fetch key';
   }
 });
