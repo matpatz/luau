@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User ID to Killcode Converter</title>
+    <title>Admin Command Interface</title>
     <style>
         * {
             box-sizing: border-box;
@@ -49,7 +49,7 @@
             margin-bottom: 1.5rem;
         }
         
-        .input-section {
+        .killcode-section {
             display: flex;
             flex-direction: column;
             gap: 1rem;
@@ -79,13 +79,6 @@
             color: #ccc;
         }
         
-        select {
-            background: rgba(255, 255, 255, 0.12);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            cursor: pointer;
-        }
-        
         button {
             background: linear-gradient(90deg, #00d4ff, #0072ff);
             color: white;
@@ -99,58 +92,80 @@
             box-shadow: 0 4px 12px rgba(0, 210, 255, 0.4);
         }
         
-        .result-section {
-            background: rgba(0, 0, 0, 0.2);
-            padding: 1.5rem;
-            border-radius: 8px;
+        .command-section {
+            margin-top: 2rem;
+        }
+        
+        .command-title {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: #00d4ff;
+            text-align: center;
+        }
+        
+        .command-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
             margin-bottom: 2rem;
         }
         
-        .result-title {
-            font-size: 1.2rem;
-            margin-bottom: 1rem;
-            color: #00d4ff;
-        }
-        
-        .killcode {
-            font-size: 2rem;
-            font-weight: bold;
-            text-align: center;
-            padding: 1rem;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 8px;
-            font-family: monospace;
-            color: #00ff9d;
-        }
-        
-        .formula {
-            margin-top: 1rem;
-            padding: 1rem;
+        .command-btn {
+            padding: 1.2rem;
             background: rgba(0, 0, 0, 0.2);
             border-radius: 8px;
-            font-family: monospace;
-            color: #ffb300;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
         
-        .instructions {
+        .command-btn:hover {
+            background: rgba(0, 0, 0, 0.3);
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .command-btn h3 {
+            color: #00d4ff;
+            margin-bottom: 0.5rem;
+        }
+        
+        .command-btn p {
+            color: #a0a0a0;
+            font-size: 0.9rem;
+        }
+        
+        .log-section {
             margin-top: 2rem;
             padding: 1.5rem;
             background: rgba(0, 0, 0, 0.2);
             border-radius: 8px;
         }
         
-        .instructions h2 {
+        .log-title {
             color: #00d4ff;
             margin-bottom: 1rem;
         }
         
-        .instructions ul {
-            padding-left: 1.5rem;
-            line-height: 1.6;
+        .log-content {
+            height: 150px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: monospace;
+            color: #00ff9d;
         }
         
-        .instructions li {
+        .log-entry {
             margin-bottom: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .timestamp {
+            color: #ffb300;
         }
         
         footer {
@@ -167,111 +182,182 @@
             h1 {
                 font-size: 2rem;
             }
+            
+            .command-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>User ID to Killcode Converter</h1>
-            <p class="subtitle">Convert Roblox user IDs or usernames to killcodes</p>
+            <h1>Admin Command Interface</h1>
+            <p class="subtitle">Execute commands for killcode system</p>
         </header>
         
-        <div class="input-section">
+        <div class="killcode-section">
             <div class="input-group">
-                <input type="text" id="userInput" placeholder="Enter user ID or username">
-                <select id="inputType">
-                    <option value="userid">User ID</option>
-                    <option value="username">Username</option>
-                </select>
-            </div>
-            <button id="convertBtn">Convert to Killcode</button>
-        </div>
-        
-        <div class="result-section">
-            <h2 class="result-title">Killcode Result</h2>
-            <div id="killcodeResult" class="killcode">-</div>
-            <div class="formula">
-                Formula: ks = math.round(userid / 1000000 + 1)
+                <input type="text" id="killcodeInput" placeholder="Enter killcode">
+                <button id="enterKillcode">Enter Killcode</button>
             </div>
         </div>
         
-        <div class="instructions">
-            <h2>How It Works</h2>
-            <ul>
-                <li>Enter either a Roblox User ID or Username</li>
-                <li>If you provide a username, the tool will first convert it to a User ID using the Roblox API</li>
-                <li>The killcode is calculated using the formula: ks = math.round(userid / 1000000 + 1)</li>
-                <li>This tool is for administrative purposes only</li>
-            </ul>
+        <div class="command-section">
+            <h2 class="command-title">Available Commands</h2>
+            <div class="command-grid">
+                <div class="command-btn" data-command="rban">
+                    <h3>rBan</h3>
+                    <p>Remote ban user</p>
+                </div>
+                <div class="command-btn" data-command="cban">
+                    <h3>cBan</h3>
+                    <p>Client ban user</p>
+                </div>
+                <div class="command-btn" data-command="reset">
+                    <h3>Reset</h3>
+                    <p>Reset user data</p>
+                </div>
+                <div class="command-btn" data-command="kick">
+                    <h3>Kick</h3>
+                    <p>Kick user from server</p>
+                </div>
+                <div class="command-btn" data-command="freeze">
+                    <h3>Freeze</h3>
+                    <p>Freeze user character</p>
+                </div>
+                <div class="command-btn" data-command="unfreeze">
+                    <h3>Unfreeze</h3>
+                    <p>Unfreeze user character</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="log-section">
+            <h2 class="log-title">Command Log</h2>
+            <div id="commandLog" class="log-content">
+                <div class="log-entry"><span class="timestamp">[System]</span> Enter a killcode to begin</div>
+            </div>
         </div>
     </div>
     
     <footer>
-        <p>Created for GitHub Pages | Admin Tool</p>
+        <p>Admin Command Interface | For authorized use only</p>
     </footer>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const userInput = document.getElementById('userInput');
-            const inputType = document.getElementById('inputType');
-            const convertBtn = document.getElementById('convertBtn');
-            const killcodeResult = document.getElementById('killcodeResult');
+            const killcodeInput = document.getElementById('killcodeInput');
+            const enterKillcodeBtn = document.getElementById('enterKillcode');
+            const commandLog = document.getElementById('commandLog');
+            const commandButtons = document.querySelectorAll('.command-btn');
             
-            convertBtn.addEventListener('click', async function() {
-                const input = userInput.value.trim();
-                const type = inputType.value;
+            let currentKillcode = null;
+            
+            enterKillcodeBtn.addEventListener('click', function() {
+                const killcode = killcodeInput.value.trim();
                 
-                if (!input) {
-                    alert('Please enter a User ID or Username');
+                if (!killcode) {
+                    addLogEntry('Please enter a valid killcode', 'error');
                     return;
                 }
                 
-                let userId;
+                currentKillcode = killcode;
+                addLogEntry(`Killcode ${killcode} entered successfully`, 'success');
                 
-                if (type === 'userid') {
-                    // Check if input is a valid number
-                    if (!/^\d+$/.test(input)) {
-                        alert('Please enter a valid numeric User ID');
-                        return;
-                    }
-                    userId = parseInt(input);
-                    calculateKillcode(userId);
-                } else {
-                    // Username type - we need to convert to userid first
-                    try {
-                        killcodeResult.textContent = 'Fetching...';
-                        userId = await getUserIdFromUsername(input);
-                        calculateKillcode(userId);
-                    } catch (error) {
-                        killcodeResult.textContent = 'Error';
-                        alert('Failed to fetch user ID. The username may not exist or there might be a network issue.');
-                        console.error(error);
-                    }
-                }
+                // Simulate connecting to server
+                simulateConnection(killcode);
             });
             
-            function calculateKillcode(userId) {
-                // Calculate killcode using the formula: math.round(userid / 1000000 + 1)
-                const killcode = Math.round(userId / 1000000 + 1);
-                killcodeResult.textContent = killcode;
+            commandButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    if (!currentKillcode) {
+                        addLogEntry('Please enter a killcode first', 'error');
+                        return;
+                    }
+                    
+                    const command = this.getAttribute('data-command');
+                    executeCommand(command, currentKillcode);
+                });
+            });
+            
+            function executeCommand(command, killcode) {
+                addLogEntry(`Executing ${command} command for killcode ${killcode}`, 'command');
+                
+                // Simulate server communication delay
+                setTimeout(() => {
+                    // Simulate different responses based on command
+                    let response;
+                    switch(command) {
+                        case 'rban':
+                            response = `Remote ban applied to user with killcode ${killcode}`;
+                            break;
+                        case 'cban':
+                            response = `Client ban applied to user with killcode ${killcode}`;
+                            break;
+                        case 'reset':
+                            response = `User data reset for killcode ${killcode}`;
+                            break;
+                        case 'kick':
+                            response = `User with killcode ${killcode} has been kicked`;
+                            break;
+                        case 'freeze':
+                            response = `Froze character for killcode ${killcode}`;
+                            break;
+                        case 'unfreeze':
+                            response = `Unfroze character for killcode ${killcode}`;
+                            break;
+                        default:
+                            response = `Command ${command} executed for killcode ${killcode}`;
+                    }
+                    
+                    addLogEntry(response, 'response');
+                }, 1000);
             }
             
-            async function getUserIdFromUsername(username) {
-                // Use Roblox API to get user ID from username
-                const response = await fetch(`https://api.roblox.com/users/get-by-username?username=${username}`);
+            function simulateConnection(killcode) {
+                addLogEntry(`Connecting to server for killcode ${killcode}...`, 'system');
                 
-                if (!response.ok) {
-                    throw new Error('User not found');
+                // Simulate connection delay
+                setTimeout(() => {
+                    addLogEntry('Connection established. Commands available.', 'success');
+                }, 1500);
+            }
+            
+            function addLogEntry(message, type) {
+                const timestamp = new Date().toLocaleTimeString();
+                const entry = document.createElement('div');
+                entry.className = 'log-entry';
+                
+                let prefix = '';
+                switch(type) {
+                    case 'error':
+                        prefix = '[Error]';
+                        entry.style.color = '#ff5252';
+                        break;
+                    case 'success':
+                        prefix = '[Success]';
+                        entry.style.color = '#4caf50';
+                        break;
+                    case 'command':
+                        prefix = '[Command]';
+                        entry.style.color = '#00d4ff';
+                        break;
+                    case 'response':
+                        prefix = '[Response]';
+                        entry.style.color = '#00ff9d';
+                        break;
+                    case 'system':
+                        prefix = '[System]';
+                        entry.style.color = '#ffb300';
+                        break;
                 }
                 
-                const data = await response.json();
+                entry.innerHTML = `<span class="timestamp">[${timestamp}] ${prefix}</span> ${message}`;
+                commandLog.appendChild(entry);
                 
-                if (data.Id) {
-                    return data.Id;
-                } else {
-                    throw new Error('User not found');
-                }
+                // Scroll to bottom
+                commandLog.scrollTop = commandLog.scrollHeight;
             }
         });
     </script>
