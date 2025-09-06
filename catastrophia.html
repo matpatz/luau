@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Command Interface</title>
+    <title>Server Command Interface</title>
     <style>
         * {
             margin: 0;
@@ -16,15 +16,13 @@
             background: linear-gradient(135deg, #1a1a2e, #16213e);
             color: #fff;
             min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
             padding: 20px;
         }
         
         .container {
             width: 100%;
-            max-width: 900px;
+            max-width: 1200px;
+            margin: 0 auto;
             background: rgba(25, 25, 48, 0.8);
             border-radius: 12px;
             padding: 20px;
@@ -42,10 +40,37 @@
             border-bottom: 2px solid #39396b;
         }
         
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        
+        @media (max-width: 900px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .panel {
+            background: rgba(30, 30, 60, 0.8);
+            border-radius: 8px;
+            padding: 15px;
+            border: 2px solid #39396b;
+        }
+        
+        .panel-title {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #00eeff;
+            text-align: center;
+        }
+        
         .input-section {
             display: flex;
             gap: 10px;
-            margin-bottom: 25px;
+            margin-bottom: 15px;
         }
         
         .input-field {
@@ -82,29 +107,77 @@
         }
         
         .commands-container {
-            background: rgba(30, 30, 60, 0.8);
+            background: rgba(40, 40, 80, 0.5);
             border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 25px;
-            border: 2px solid #39396b;
-            height: 100px;
+            padding: 10px;
+            margin-bottom: 15px;
         }
         
-        .commands-scroll {
-            display: flex;
-            overflow-x: auto;
-            gap: 20px;
-            padding: 5px;
+        .commands-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
         }
         
-        .command-label {
-            padding: 12px 20px;
+        @media (max-width: 600px) {
+            .commands-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        .command-btn {
+            padding: 10px;
             background: linear-gradient(135deg, #2b2b5e, #3d3d89);
             border-radius: 6px;
-            min-width: 120px;
             text-align: center;
+            cursor: pointer;
             border: 1px solid #5454a3;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s;
+        }
+        
+        .command-btn:hover {
+            background: linear-gradient(135deg, #3d3d89, #4e4eb8);
+            transform: translateY(-2px);
+        }
+        
+        .connected-players {
+            margin-top: 15px;
+        }
+        
+        .player-list {
+            max-height: 200px;
+            overflow-y: auto;
+            background: rgba(40, 40, 80, 0.5);
+            border-radius: 8px;
+            padding: 10px;
+        }
+        
+        .player-item {
+            padding: 8px;
+            margin-bottom: 5px;
+            background: rgba(50, 50, 100, 0.5);
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .player-info {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .player-name {
+            font-weight: bold;
+        }
+        
+        .player-killcode {
+            color: #00eeff;
+            font-weight: bold;
+        }
+        
+        .player-id {
+            color: #aaa;
+            font-size: 0.9em;
         }
         
         .log-container {
@@ -112,7 +185,7 @@
             border-radius: 8px;
             padding: 15px;
             border: 2px solid #39396b;
-            height: 250px;
+            height: 300px;
             overflow-y: auto;
         }
         
@@ -151,6 +224,10 @@
             color: #ffcc00;
         }
         
+        .server-msg {
+            color: #ff88cc;
+        }
+        
         /* Scrollbar styling */
         ::-webkit-scrollbar {
             width: 10px;
@@ -170,50 +247,61 @@
         ::-webkit-scrollbar-thumb:hover {
             background: linear-gradient(135deg, #00eeff, #008cff);
         }
-        
-        @media (max-width: 600px) {
-            .input-section {
-                flex-direction: column;
-            }
-            
-            .title {
-                font-size: 24px;
-            }
-            
-            .command-label {
-                min-width: 100px;
-                padding: 10px 15px;
-            }
-        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1 class="title">Commandz</h1>
+        <h1 class="title">Server Command Interface</h1>
         
-        <div class="input-section">
-            <input type="text" class="input-field" id="commandInput" placeholder="Enter killcode / command">
-            <button class="enter-btn" id="enterButton">Enter</button>
-        </div>
-
-        <div class="commands-container">
-            <div class="commands-scroll">
-                <div class="command-label">reset</div>
-                <div class="command-label">lag</div>
-                <div class="command-label">dbackpack</div>
-                <div class="command-label">leave</div>
-                <div class="command-label">crash</div>
-                <div class="command-label">console</div>
-                <div class="command-label">rconsole</div>
-                <div class="command-label">cban</div>
-                <div class="command-label">rban</div>
+        <div class="dashboard">
+            <div class="panel">
+                <h2 class="panel-title">Command Control</h2>
+                <div class="input-section">
+                    <input type="text" class="input-field" id="killcodeInput" placeholder="Enter player killcode">
+                    <button class="enter-btn" id="selectPlayer">Select Player</button>
+                </div>
+                
+                <div class="commands-container">
+                    <h3 class="panel-title">Available Commands</h3>
+                    <div class="commands-grid">
+                        <div class="command-btn" data-command="reset">Reset</div>
+                        <div class="command-btn" data-command="lag">Lag</div>
+                        <div class="command-btn" data-command="deletebackpack">Delete Backpack</div>
+                        <div class="command-btn" data-command="leave">Leave</div>
+                        <div class="command-btn" data-command="crash">Crash</div>
+                        <div class="command-btn" data-command="console">Console</div>
+                        <div class="command-btn" data-command="rconsole">RConsole</div>
+                        <div class="command-btn" data-command="cban">Client Ban</div>
+                        <div class="command-btn" data-command="rban">Remote Ban</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <h2 class="panel-title">Connected Players</h2>
+                <div class="connected-players">
+                    <div class="player-list" id="playerList">
+                        <!-- Player list will be populated by JavaScript -->
+                    </div>
+                </div>
+                
+                <div class="input-section" style="margin-top: 15px;">
+                    <input type="text" class="input-field" id="broadcastInput" placeholder="Broadcast to all players">
+                    <button class="enter-btn" id="broadcastBtn">Broadcast</button>
+                </div>
             </div>
         </div>
+        
+        <h2 class="panel-title">Server Log</h2>
         <div class="log-container">
             <div class="log-content" id="commandLog">
                 <div class="log-entry">
                     <span class="timestamp">[System]</span>
-                    <span class="system-msg">Enter a killcode to begin</span>
+                    <span class="system-msg">Server command interface initialized</span>
+                </div>
+                <div class="log-entry">
+                    <span class="timestamp">[Info]</span>
+                    <span class="system-msg">Players will appear here when they connect with their killcode</span>
                 </div>
             </div>
         </div>
@@ -221,18 +309,43 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const commandInput = document.getElementById('commandInput');
-            const enterButton = document.getElementById('enterButton');
+            const killcodeInput = document.getElementById('killcodeInput');
+            const selectPlayerBtn = document.getElementById('selectPlayer');
+            const broadcastInput = document.getElementById('broadcastInput');
+            const broadcastBtn = document.getElementById('broadcastBtn');
             const commandLog = document.getElementById('commandLog');
-            const userKillcode = document.getElementById('userKillcode');
+            const commandButtons = document.querySelectorAll('.command-btn');
+            const playerList = document.getElementById('playerList');
             
-            // Simulate getting the user's killcode (as in the Lua code)
-            const userId = Math.floor(Math.random() * 10000000) + 1; // Simulated user ID
-            const ks = Math.round((userId / 1000000) + 1);
-            userKillcode.textContent = ks;
+            let selectedPlayer = null;
+            let connectedPlayers = [];
             
-            let commandMode = false;
-            let lagging = false;
+            // Simulate server storage
+            const serverStorage = {
+                players: [],
+                
+                addPlayer: function(player) {
+                    // Check if player already exists
+                    const existingIndex = this.players.findIndex(p => p.killcode === player.killcode);
+                    if (existingIndex !== -1) {
+                        this.players[existingIndex] = player; // Update existing player
+                    } else {
+                        this.players.push(player); // Add new player
+                    }
+                    updatePlayerList();
+                    addLogEntry(`Player ${player.name} (${player.killcode}) connected`, 'success');
+                },
+                
+                removePlayer: function(killcode) {
+                    this.players = this.players.filter(player => player.killcode !== killcode);
+                    updatePlayerList();
+                    addLogEntry(`Player with killcode ${killcode} disconnected`, 'system');
+                },
+                
+                getPlayerByKillcode: function(killcode) {
+                    return this.players.find(player => player.killcode === killcode);
+                }
+            };
             
             // Add a log entry to the command log
             function addLogEntry(message, type = 'system') {
@@ -252,117 +365,172 @@
                 } else if (type === 'command') {
                     prefix = '[Command]';
                     msgClass = 'command-msg';
+                } else if (type === 'broadcast') {
+                    prefix = '[Broadcast]';
+                    msgClass = 'command-msg';
+                } else if (type === 'server') {
+                    prefix = '[Server]';
+                    msgClass = 'server-msg';
                 }
                 
-                entry.innerHTML = `<span class="timestamp">${prefix}</span> <span class="${msgClass}">${message}</span>`;
+                entry.innerHTML = `<span class="timestamp">[${timestamp}] ${prefix}</span> <span class="${msgClass}">${message}</span>`;
                 commandLog.appendChild(entry);
                 
                 // Scroll to bottom
                 commandLog.scrollTop = commandLog.scrollHeight;
             }
             
-            // Handle commands based on input
-            function handleCommand(command) {
-                command = command.toLowerCase();
+            // Update the player list UI
+            function updatePlayerList() {
+                playerList.innerHTML = '';
                 
-                if (!commandMode) {
-                    if (command === ks.toString()) {
-                        commandMode = true;
-                        addLogEntry('Killcode accepted. Command mode activated.', 'success');
-                        commandInput.placeholder = "Enter command";
-                    } else {
-                        addLogEntry('Invalid killcode. Try again.', 'error');
-                    }
+                if (serverStorage.players.length === 0) {
+                    playerList.innerHTML = '<div class="player-item">No players connected</div>';
                     return;
                 }
                 
-                // Process commands
-                switch(command) {
-                    case 'reset':
-                        addLogEntry('Executing reset command...', 'command');
-                        setTimeout(() => addLogEntry('Character reset successfully.', 'success'), 800);
-                        break;
-                        
-                    case 'lag':
-                        lagging = !lagging;
-                        if (lagging) {
-                            addLogEntry('Lag mode activated. Network disruption initiated.', 'command');
-                        } else {
-                            addLogEntry('Lag mode deactivated. Network restored.', 'command');
-                        }
-                        break;
-                        
-                    case 'deletebackpack':
-                        addLogEntry('Executing deletebackpack command...', 'command');
-                        setTimeout(() => addLogEntry('Backpack items deleted successfully.', 'success'), 800);
-                        break;
-                        
-                    case 'leave':
-                        addLogEntry('Executing leave command...', 'command');
-                        setTimeout(() => {
-                            addLogEntry('You have been kicked from the game.', 'error');
-                            addLogEntry('Connection lost. Please reconnect.', 'error');
-                        }, 1000);
-                        break;
-                        
-                    case 'crash':
-                        addLogEntry('Executing crash command...', 'command');
-                        setTimeout(() => {
-                            addLogEntry('System instability detected...', 'error');
-                            addLogEntry('CRITICAL ERROR: Game crash initiated', 'error');
-                        }, 1000);
-                        break;
-                        
-                    case 'console':
-                        addLogEntry('Console access requested...', 'command');
-                        setTimeout(() => addLogEntry('Console activated. Developer mode enabled.', 'success'), 800);
-                        break;
-                        
-                    case 'rconsole':
-                        addLogEntry('Remote console access requested...', 'command');
-                        setTimeout(() => addLogEntry('RConsole opened! Remote access established.', 'success'), 800);
-                        break;
-                        
-                    case 'cban':
-                        addLogEntry('Executing client ban command...', 'command');
-                        setTimeout(() => addLogEntry('Client ban applied successfully. User restricted.', 'success'), 800);
-                        break;
-                        
-                    case 'rban':
-                        addLogEntry('Executing remote ban command...', 'command');
-                        setTimeout(() => addLogEntry('Remote ban applied successfully. User banned across servers.', 'success'), 800);
-                        break;
-                        
-                    default:
-                        addLogEntry(`Unknown command: ${command}`, 'error');
-                        addLogEntry('Type one of the available commands from the list.', 'system');
+                serverStorage.players.forEach(player => {
+                    const playerItem = document.createElement('div');
+                    playerItem.className = 'player-item';
+                    playerItem.innerHTML = `
+                        <div class="player-info">
+                            <span class="player-name">${player.name}</span>
+                            <span class="player-id">ID: ${player.userId}</span>
+                        </div>
+                        <span class="player-killcode">${player.killcode}</span>
+                    `;
+                    
+                    // Add click event to select player
+                    playerItem.addEventListener('click', () => {
+                        selectedPlayer = player;
+                        killcodeInput.value = player.killcode;
+                        addLogEntry(`Selected player: ${player.name} (${player.killcode})`, 'success');
+                    });
+                    
+                    playerList.appendChild(playerItem);
+                });
+            }
+            
+            // Simulate player connection (in real scenario, this would come from your server API)
+            function simulatePlayerConnection() {
+                const names = ['Player1', 'Gamer123', 'ProPlayer', 'NoobSlayer', 'RobloxMaster'];
+                const randomName = names[Math.floor(Math.random() * names.length)];
+                const randomUserId = Math.floor(Math.random() * 10000000) + 1;
+                const killcode = Math.round((randomUserId / 1000000) + 1);
+                
+                const player = {
+                    name: randomName,
+                    userId: randomUserId,
+                    killcode: killcode.toString()
+                };
+                
+                serverStorage.addPlayer(player);
+                
+                // Schedule next connection simulation
+                setTimeout(simulatePlayerConnection, Math.random() * 10000 + 5000);
+            }
+            
+            // Send command to player (simulated)
+            function sendCommandToPlayer(killcode, command) {
+                const player = serverStorage.getPlayerByKillcode(killcode);
+                if (player) {
+                    addLogEntry(`Sending command "${command}" to ${player.name} (${killcode})`, 'command');
+                    
+                    // In a real scenario, this would be an API call to your server
+                    // which would then forward the command to the player's client
+                    
+                    // Simulate response from player's client
+                    setTimeout(() => {
+                        addLogEntry(`Command "${command}" executed by ${player.name}`, 'server');
+                    }, 1000);
+                } else {
+                    addLogEntry(`No player found with killcode: ${killcode}`, 'error');
                 }
             }
             
-            // Event listener for the Enter button
-            enterButton.addEventListener('click', function() {
-                const command = commandInput.value.trim();
-                if (command) {
-                    handleCommand(command);
-                    commandInput.value = '';
+            // Broadcast command to all players
+            function broadcastCommand(command) {
+                if (serverStorage.players.length === 0) {
+                    addLogEntry('No players to broadcast to', 'error');
+                    return;
                 }
-            });
+                
+                addLogEntry(`Broadcasting command "${command}" to all players`, 'broadcast');
+                
+                serverStorage.players.forEach(player => {
+                    setTimeout(() => {
+                        addLogEntry(`Command "${command}" sent to ${player.name} (${player.killcode})`, 'server');
+                    }, Math.random() * 1000 + 500);
+                });
+            }
             
-            // Also allow pressing Enter in the input field
-            commandInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    const command = commandInput.value.trim();
-                    if (command) {
-                        handleCommand(command);
-                        commandInput.value = '';
+            // Event listeners
+            selectPlayerBtn.addEventListener('click', function() {
+                const killcode = killcodeInput.value.trim();
+                if (killcode) {
+                    const player = serverStorage.getPlayerByKillcode(killcode);
+                    if (player) {
+                        selectedPlayer = player;
+                        addLogEntry(`Selected player: ${player.name} (${killcode})`, 'success');
+                    } else {
+                        addLogEntry(`No player found with killcode: ${killcode}`, 'error');
+                    selectedPlayer = null;
+                    killcodeInput.value = '';
+                    killcodeInput.focus();
+                    return;
                     }
+                } else {
+                    addLogEntry('Please enter a killcode', 'error');
                 }
             });
             
-            // Add some initial log entries
-            setTimeout(() => {
-                addLogEntry('System initialized. Waiting for input.', 'system');
-            }, 500);
+            commandButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const command = this.getAttribute('data-command');
+                    if (selectedPlayer) {
+                        sendCommandToPlayer(selectedPlayer.killcode, command);
+                    } else {
+                        const killcode = killcodeInput.value.trim();
+                        if (killcode) {
+                            sendCommandToPlayer(killcode, command);
+                        } else {
+                            addLogEntry('Please select a player first', 'error');
+                        }
+                    }
+                });
+            });
+            
+            broadcastBtn.addEventListener('click', function() {
+                const command = broadcastInput.value.trim();
+                if (command) {
+                    broadcastCommand(command);
+                    broadcastInput.value = '';
+                } else {
+                    addLogEntry('Please enter a command to broadcast', 'error');
+                }
+            });
+            
+            // Also allow pressing Enter in the input fields
+            killcodeInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    selectPlayerBtn.click();
+                }
+            });
+            
+            broadcastInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    broadcastBtn.click();
+                }
+            });
+            
+            // Initialize the UI
+            updatePlayerList();
+            
+            // Start simulating player connections
+            setTimeout(simulatePlayerConnection, 2000);
+            
+            // Add initial log entry
+            addLogEntry('Server ready. Waiting for player connections...', 'system');
         });
     </script>
 </body>
