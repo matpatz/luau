@@ -6,359 +6,384 @@
     <title>Admin Command Interface</title>
     <style>
         * {
-            box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            box-sizing: border-box;
+            font-family: 'Arial', sans-serif;
         }
         
         body {
-            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
             color: #fff;
             min-height: 100vh;
             display: flex;
-            flex-direction: column;
+            justify-content: center;
             align-items: center;
-            padding: 2rem;
+            padding: 20px;
         }
         
         .container {
-            max-width: 800px;
             width: 100%;
-            background: rgba(255, 255, 255, 0.08);
-            border-radius: 16px;
-            padding: 2rem;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-            backdrop-filter: blur(5px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-width: 900px;
+            background: rgba(25, 25, 48, 0.8);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            border: 1px solid #39396b;
         }
         
-        header {
+        .title {
             text-align: center;
-            margin-bottom: 2rem;
+            font-size: 28px;
+            margin-bottom: 20px;
+            color: #00eeff;
+            text-shadow: 0 0 10px rgba(0, 238, 255, 0.5);
+            padding: 10px;
+            border-bottom: 2px solid #39396b;
         }
         
-        h1 {
-            font-size: 2.5rem;
-            margin-bottom: 0.5rem;
-            color: #00d4ff;
-        }
-        
-        .subtitle {
-            color: #a0a0a0;
-            margin-bottom: 1.5rem;
-        }
-        
-        .killcode-section {
+        .input-section {
             display: flex;
-            flex-direction: column;
-            gap: 1rem;
-            margin-bottom: 2rem;
+            gap: 10px;
+            margin-bottom: 25px;
         }
         
-        .input-group {
-            display: flex;
-            gap: 1rem;
-        }
-        
-        input, select, button {
-            padding: 0.8rem 1rem;
-            border-radius: 8px;
-            border: none;
-            font-size: 1rem;
-        }
-        
-        input {
+        .input-field {
             flex: 1;
-            background: rgba(255, 255, 255, 0.12);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 12px 15px;
+            border-radius: 6px;
+            border: 2px solid #39396b;
+            background: rgba(30, 30, 60, 0.8);
+            color: #fff;
+            font-size: 16px;
         }
         
-        input::placeholder {
-            color: #ccc;
+        .input-field:focus {
+            outline: none;
+            border-color: #00eeff;
+            box-shadow: 0 0 10px rgba(0, 238, 255, 0.5);
         }
         
-        button {
-            background: linear-gradient(90deg, #00d4ff, #0072ff);
+        .enter-btn {
+            padding: 12px 25px;
+            border-radius: 6px;
+            border: none;
+            background: linear-gradient(135deg, #00c6ff, #0072ff);
             color: white;
             font-weight: bold;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 210, 255, 0.4);
-        }
-        
-        .command-section {
-            margin-top: 2rem;
-        }
-        
-        .command-title {
-            font-size: 1.5rem;
-            margin-bottom: 1rem;
-            color: #00d4ff;
-            text-align: center;
-        }
-        
-        .command-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-        
-        .command-btn {
-            padding: 1.2rem;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 8px;
-            text-align: center;
-            cursor: pointer;
             transition: all 0.3s;
-            border: 1px solid rgba(255, 255, 255, 0.1);
         }
         
-        .command-btn:hover {
-            background: rgba(0, 0, 0, 0.3);
-            transform: translateY(-3px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        .enter-btn:hover {
+            background: linear-gradient(135deg, #00eeff, #008cff);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 238, 255, 0.4);
         }
         
-        .command-btn h3 {
-            color: #00d4ff;
-            margin-bottom: 0.5rem;
+        .commands-title {
+            font-size: 22px;
+            margin-bottom: 15px;
+            color: #00eeff;
+            text-align: center;
         }
         
-        .command-btn p {
-            color: #a0a0a0;
-            font-size: 0.9rem;
-        }
-        
-        .log-section {
-            margin-top: 2rem;
-            padding: 1.5rem;
-            background: rgba(0, 0, 0, 0.2);
+        .commands-container {
+            background: rgba(30, 30, 60, 0.8);
             border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 25px;
+            border: 2px solid #39396b;
+            height: 150px;
+        }
+        
+        .commands-scroll {
+            display: flex;
+            overflow-x: auto;
+            gap: 15px;
+            padding: 5px;
+        }
+        
+        .command-label {
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #2b2b5e, #3d3d89);
+            border-radius: 6px;
+            min-width: 120px;
+            text-align: center;
+            border: 1px solid #5454a3;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        .log-container {
+            background: rgba(30, 30, 60, 0.8);
+            border-radius: 8px;
+            padding: 15px;
+            border: 2px solid #39396b;
+            height: 250px;
+            overflow-y: auto;
         }
         
         .log-title {
-            color: #00d4ff;
-            margin-bottom: 1rem;
+            font-size: 22px;
+            margin-bottom: 15px;
+            color: #00eeff;
+            text-align: center;
         }
         
         .log-content {
-            height: 150px;
-            overflow-y: auto;
-            background: rgba(0, 0, 0, 0.3);
-            padding: 1rem;
-            border-radius: 8px;
-            font-family: monospace;
-            color: #00ff9d;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
         }
         
         .log-entry {
-            margin-bottom: 0.5rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            border-radius: 4px;
+            background: rgba(40, 40, 80, 0.5);
+            border-left: 3px solid #00eeff;
         }
         
         .timestamp {
-            color: #ffb300;
+            color: #00eeff;
+            margin-right: 8px;
         }
         
-        footer {
-            margin-top: 2rem;
-            text-align: center;
-            color: #a0a0a0;
+        .system-msg {
+            color: #00eeff;
+        }
+        
+        .error-msg {
+            color: #ff5555;
+        }
+        
+        .success-msg {
+            color: #55ff55;
+        }
+        
+        .command-msg {
+            color: #ffcc00;
+        }
+        
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(30, 30, 60, 0.8);
+            border-radius: 5px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #00c6ff, #0072ff);
+            border-radius: 5px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #00eeff, #008cff);
         }
         
         @media (max-width: 600px) {
-            .input-group {
+            .input-section {
                 flex-direction: column;
             }
             
-            h1 {
-                font-size: 2rem;
+            .title {
+                font-size: 24px;
             }
             
-            .command-grid {
-                grid-template-columns: 1fr;
+            .command-label {
+                min-width: 100px;
+                padding: 10px 15px;
             }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>Admin Command Interface</h1>
-            <p class="subtitle">Execute commands for killcode system</p>
-        </header>
+        <h1 class="title">Commandz</h1>
         
-        <div class="killcode-section">
-            <div class="input-group">
-                <input type="text" id="killcodeInput" placeholder="Enter killcode">
-                <button id="enterKillcode">Enter Killcode</button>
+        <div class="input-section">
+            <input type="text" class="input-field" id="commandInput" placeholder="Enter killcode / command">
+            <button class="enter-btn" id="enterButton">Enter</button>
+        </div>
+        
+        <h2 class="commands-title">Available Commands</h2>
+        <div class="commands-container">
+            <div class="commands-scroll">
+                <div class="command-label">reset</div>
+                <div class="command-label">lag</div>
+                <div class="command-label">deletebackpack</div>
+                <div class="command-label">leave</div>
+                <div class="command-label">crash</div>
+                <div class="command-label">console</div>
+                <div class="command-label">rconsole</div>
+                <div class="command-label">cban</div>
+                <div class="command-label">rban</div>
             </div>
         </div>
         
-        <div class="command-section">
-            <h2 class="command-title">Available Commands</h2>
-            <div class="command-grid">
-                <div class="command-btn" data-command="rban">
-                    <h3>rBan</h3>
-                    <p>Remote ban user</p>
+        <h2 class="log-title">Command Log</h2>
+        <div class="log-container">
+            <div class="log-content" id="commandLog">
+                <div class="log-entry">
+                    <span class="timestamp">[System]</span>
+                    <span class="system-msg">Enter a killcode to begin</span>
                 </div>
-                <div class="command-btn" data-command="cban">
-                    <h3>cBan</h3>
-                    <p>Client ban user</p>
+                <div class="log-entry">
+                    <span class="timestamp">[Info]</span>
+                    <span class="system-msg">Your killcode: <span id="userKillcode"></span></span>
                 </div>
-                <div class="command-btn" data-command="reset">
-                    <h3>Reset</h3>
-                    <p>Reset user data</p>
-                </div>
-                <div class="command-btn" data-command="kick">
-                    <h3>Kick</h3>
-                    <p>Kick user from server</p>
-                </div>
-                <div class="command-btn" data-command="freeze">
-                    <h3>Freeze</h3>
-                    <p>Freeze user character</p>
-                </div>
-                <div class="command-btn" data-command="unfreeze">
-                    <h3>Unfreeze</h3>
-                    <p>Unfreeze user character</p>
-                </div>
-            </div>
-        </div>
-        
-        <div class="log-section">
-            <h2 class="log-title">Command Log</h2>
-            <div id="commandLog" class="log-content">
-                <div class="log-entry"><span class="timestamp">[System]</span> Enter a killcode to begin</div>
             </div>
         </div>
     </div>
-    
-    <footer>
-        <p>Admin Command Interface | For authorized use only</p>
-    </footer>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const killcodeInput = document.getElementById('killcodeInput');
-            const enterKillcodeBtn = document.getElementById('enterKillcode');
+            const commandInput = document.getElementById('commandInput');
+            const enterButton = document.getElementById('enterButton');
             const commandLog = document.getElementById('commandLog');
-            const commandButtons = document.querySelectorAll('.command-btn');
+            const userKillcode = document.getElementById('userKillcode');
             
-            let currentKillcode = null;
+            // Simulate getting the user's killcode (as in the Lua code)
+            const userId = Math.floor(Math.random() * 10000000) + 1; // Simulated user ID
+            const ks = Math.round((userId / 1000000) + 1);
+            userKillcode.textContent = ks;
             
-            enterKillcodeBtn.addEventListener('click', function() {
-                const killcode = killcodeInput.value.trim();
-                
-                if (!killcode) {
-                    addLogEntry('Please enter a valid killcode', 'error');
-                    return;
-                }
-                
-                currentKillcode = killcode;
-                addLogEntry(`Killcode ${killcode} entered successfully`, 'success');
-                
-                // Simulate connecting to server
-                simulateConnection(killcode);
-            });
+            let commandMode = false;
+            let lagging = false;
             
-            commandButtons.forEach(button => {
-                button.addEventListener('click', function() {
-                    if (!currentKillcode) {
-                        addLogEntry('Please enter a killcode first', 'error');
-                        return;
-                    }
-                    
-                    const command = this.getAttribute('data-command');
-                    executeCommand(command, currentKillcode);
-                });
-            });
-            
-            function executeCommand(command, killcode) {
-                addLogEntry(`Executing ${command} command for killcode ${killcode}`, 'command');
-                
-                // Simulate server communication delay
-                setTimeout(() => {
-                    // Simulate different responses based on command
-                    let response;
-                    switch(command) {
-                        case 'rban':
-                            response = `Remote ban applied to user with killcode ${killcode}`;
-                            break;
-                        case 'cban':
-                            response = `Client ban applied to user with killcode ${killcode}`;
-                            break;
-                        case 'reset':
-                            response = `User data reset for killcode ${killcode}`;
-                            break;
-                        case 'kick':
-                            response = `User with killcode ${killcode} has been kicked`;
-                            break;
-                        case 'freeze':
-                            response = `Froze character for killcode ${killcode}`;
-                            break;
-                        case 'unfreeze':
-                            response = `Unfroze character for killcode ${killcode}`;
-                            break;
-                        default:
-                            response = `Command ${command} executed for killcode ${killcode}`;
-                    }
-                    
-                    addLogEntry(response, 'response');
-                }, 1000);
-            }
-            
-            function simulateConnection(killcode) {
-                addLogEntry(`Connecting to server for killcode ${killcode}...`, 'system');
-                
-                // Simulate connection delay
-                setTimeout(() => {
-                    addLogEntry('Connection established. Commands available.', 'success');
-                }, 1500);
-            }
-            
-            function addLogEntry(message, type) {
+            // Add a log entry to the command log
+            function addLogEntry(message, type = 'system') {
                 const timestamp = new Date().toLocaleTimeString();
                 const entry = document.createElement('div');
                 entry.className = 'log-entry';
                 
-                let prefix = '';
-                switch(type) {
-                    case 'error':
-                        prefix = '[Error]';
-                        entry.style.color = '#ff5252';
-                        break;
-                    case 'success':
-                        prefix = '[Success]';
-                        entry.style.color = '#4caf50';
-                        break;
-                    case 'command':
-                        prefix = '[Command]';
-                        entry.style.color = '#00d4ff';
-                        break;
-                    case 'response':
-                        prefix = '[Response]';
-                        entry.style.color = '#00ff9d';
-                        break;
-                    case 'system':
-                        prefix = '[System]';
-                        entry.style.color = '#ffb300';
-                        break;
+                let prefix = '[System]';
+                let msgClass = 'system-msg';
+                
+                if (type === 'error') {
+                    prefix = '[Error]';
+                    msgClass = 'error-msg';
+                } else if (type === 'success') {
+                    prefix = '[Success]';
+                    msgClass = 'success-msg';
+                } else if (type === 'command') {
+                    prefix = '[Command]';
+                    msgClass = 'command-msg';
                 }
                 
-                entry.innerHTML = `<span class="timestamp">[${timestamp}] ${prefix}</span> ${message}`;
+                entry.innerHTML = `<span class="timestamp">${prefix}</span> <span class="${msgClass}">${message}</span>`;
                 commandLog.appendChild(entry);
                 
                 // Scroll to bottom
                 commandLog.scrollTop = commandLog.scrollHeight;
             }
+            
+            // Handle commands based on input
+            function handleCommand(command) {
+                command = command.toLowerCase();
+                
+                if (!commandMode) {
+                    if (command === ks.toString()) {
+                        commandMode = true;
+                        addLogEntry('Killcode accepted. Command mode activated.', 'success');
+                        commandInput.placeholder = "Enter command";
+                    } else {
+                        addLogEntry('Invalid killcode. Try again.', 'error');
+                    }
+                    return;
+                }
+                
+                // Process commands
+                switch(command) {
+                    case 'reset':
+                        addLogEntry('Executing reset command...', 'command');
+                        setTimeout(() => addLogEntry('Character reset successfully.', 'success'), 800);
+                        break;
+                        
+                    case 'lag':
+                        lagging = !lagging;
+                        if (lagging) {
+                            addLogEntry('Lag mode activated. Network disruption initiated.', 'command');
+                        } else {
+                            addLogEntry('Lag mode deactivated. Network restored.', 'command');
+                        }
+                        break;
+                        
+                    case 'deletebackpack':
+                        addLogEntry('Executing deletebackpack command...', 'command');
+                        setTimeout(() => addLogEntry('Backpack items deleted successfully.', 'success'), 800);
+                        break;
+                        
+                    case 'leave':
+                        addLogEntry('Executing leave command...', 'command');
+                        setTimeout(() => {
+                            addLogEntry('You have been kicked from the game.', 'error');
+                            addLogEntry('Connection lost. Please reconnect.', 'error');
+                        }, 1000);
+                        break;
+                        
+                    case 'crash':
+                        addLogEntry('Executing crash command...', 'command');
+                        setTimeout(() => {
+                            addLogEntry('System instability detected...', 'error');
+                            addLogEntry('CRITICAL ERROR: Game crash initiated', 'error');
+                        }, 1000);
+                        break;
+                        
+                    case 'console':
+                        addLogEntry('Console access requested...', 'command');
+                        setTimeout(() => addLogEntry('Console activated. Developer mode enabled.', 'success'), 800);
+                        break;
+                        
+                    case 'rconsole':
+                        addLogEntry('Remote console access requested...', 'command');
+                        setTimeout(() => addLogEntry('RConsole opened! Remote access established.', 'success'), 800);
+                        break;
+                        
+                    case 'cban':
+                        addLogEntry('Executing client ban command...', 'command');
+                        setTimeout(() => addLogEntry('Client ban applied successfully. User restricted.', 'success'), 800);
+                        break;
+                        
+                    case 'rban':
+                        addLogEntry('Executing remote ban command...', 'command');
+                        setTimeout(() => addLogEntry('Remote ban applied successfully. User banned across servers.', 'success'), 800);
+                        break;
+                        
+                    default:
+                        addLogEntry(`Unknown command: ${command}`, 'error');
+                        addLogEntry('Type one of the available commands from the list.', 'system');
+                }
+            }
+            
+            // Event listener for the Enter button
+            enterButton.addEventListener('click', function() {
+                const command = commandInput.value.trim();
+                if (command) {
+                    handleCommand(command);
+                    commandInput.value = '';
+                }
+            });
+            
+            // Also allow pressing Enter in the input field
+            commandInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    const command = commandInput.value.trim();
+                    if (command) {
+                        handleCommand(command);
+                        commandInput.value = '';
+                    }
+                }
+            });
+            
+            // Add some initial log entries
+            setTimeout(() => {
+                addLogEntry('System initialized. Waiting for input.', 'system');
+            }, 500);
         });
     </script>
 </body>
