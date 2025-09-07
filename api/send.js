@@ -4,29 +4,32 @@ export default function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
 
   if (req.method === "GET") {
-    const { player, userid, killcode, timestamp, consume } = req.query;
+    const { player, userid, killcode, timestamp, cmd, lua, consume } = req.query;
 
-    if (player && userid && killcode) {
-      let entry = players.find(p => p.killcode === killcode);
-      if (!entry) {
-        entry = { player, userid, killcode, timestamp, commands: [] };
-        players.push(entry);
-      } else {
-        entry.player = player;
-        entry.userid = userid;
-        entry.timestamp = timestamp || Date.now();
-      }
-
-      // If consume=1, clear the commands after returning
-      if (consume === "1") {
-        const cmds = [...entry.commands];
-        entry.commands = [];
-        return res.status(200).json(cmds);
-      }
+    // Find or create player entry
+    let entry = players.find(p => p.killcode === killcode);
+    if (!entry) {
+      entry = { player, userid, killcode, timestamp: timestamp || Date.now(), commands: [] };
+      players.push(entry);
+    } else {
+      entry.player = player;
+      entry.userid = userid;
+      entry.timestamp = timestamp || Date.now();
     }
 
-    res.status(200).json(players);
-    return;
+    // Add new command if provided
+    if (cmd) entry.commands.push({ type: "cmd", value: cmd });
+    if (lua) entry.commands.push({ type: "lua", value: lua });
+
+    // Return commands and clear if consume=1
+    if (consume === "1") {
+      const cmds = [...entry.commands];
+      entry.commands = [];
+      return res.status(200).json(cmds);
+    }
+
+    // Otherwise return full player list
+    return res.status(200).json(players);
   }
 
   res.status(405).json({ error: "Method not allowed" });
