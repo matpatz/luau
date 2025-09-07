@@ -2,68 +2,42 @@
 let players = [];
 
 export default function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader('Access-Control-Allow-Origin', '*');
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-
-  if (req.method === "GET") {
-    const { player, userid, killcode, timestamp } = req.query;
+  if (req.method === 'GET') {
+    const { player, userid, killcode, timestamp, commands } = req.query;
 
     if (player && userid && killcode) {
-      const entry = {
-        player,
-        userid,
-        killcode,
-        timestamp: timestamp || Date.now(),
-        commands: [],
-      };
-
-      const i = players.findIndex((p) => p.killcode === killcode);
+      const i = players.findIndex(p => p.killcode === killcode);
       if (i >= 0) {
-        // keep existing commands if any
-        entry.commands = players[i].commands || [];
-        players[i] = entry;
+        // update existing player
+        players[i].player = player;
+        players[i].userid = userid;
+        players[i].timestamp = timestamp || Date.now();
+        if (commands) {
+          try {
+            const cmds = JSON.parse(commands);
+            if (!Array.isArray(players[i].commands)) players[i].commands = [];
+            players[i].commands.push(...cmds);
+          } catch (e) {
+            console.error("Invalid commands JSON:", e);
+          }
+        }
       } else {
-        players.push(entry);
+        // add new player
+        players.push({
+          player,
+          userid,
+          killcode,
+          timestamp: timestamp || Date.now(),
+          commands: []
+        });
       }
     }
 
-    // snapshot for response
-    const snapshot = players.map((p) => ({
-      player: p.player,
-      userid: p.userid,
-      killcode: p.killcode,
-      timestamp: p.timestamp,
-      commands: p.commands,
-    }));
-
-    // clear commands after sending them out
-    players.forEach((p) => (p.commands = []));
-
-    res.status(200).json(snapshot);
+    res.status(200).json(players);
     return;
   }
 
-  if (req.method === "POST") {
-    try {
-      const { killcode, type, value } = req.body;
-      const i = players.findIndex((p) => p.killcode === killcode);
-      if (i >= 0) {
-        if (!players[i].commands) players[i].commands = [];
-        players[i].commands.push({ type, value });
-        res.status(200).json({ ok: true });
-      } else {
-        res.status(404).json({ error: "Player not found" });
-      }
-    } catch (e) {
-      res.status(400).json({ error: "Invalid body" });
-    }
-    return;
-  }
-
-  res.status(405).json({ error: "Method not allowed" });
+  res.status(405).json({ error: 'Method not allowed' });
 }
