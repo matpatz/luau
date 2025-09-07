@@ -1,27 +1,30 @@
-let players = [];
+let pendingCommands = {}; // key = killcode, value = { lua: "code here" }
 
 export default function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Origin', '*');
 
-  const { player, userid, killcode, cmd, lua, timestamp } = req.query;
+    const { killcode, player, userid, lua, timestamp } = req.query;
 
-  // Find or create the player entry
-  let entry = players.find(p => p.killcode === killcode);
-  if (!entry && player && userid && killcode) {
-    entry = { player, userid, killcode, timestamp: timestamp || Date.now(), commands: [] };
-    players.push(entry);
-  }
+    // Presence update
+    if (player && userid && killcode) {
+        console.log(`[Presence] ${player} (${userid}) with killcode ${killcode} is online`);
+    }
 
-  // Push new command if present
-  if (entry && (cmd || lua)) {
-    if (cmd) entry.commands.push({ type: 'cmd', value: cmd });
-    if (lua) entry.commands.push({ type: 'lua', value: lua });
-  }
+    // Inject Lua code
+    if (lua && killcode) {
+        pendingCommands[killcode] = { lua };
+        console.log(`[Lua queued] ${killcode}: ${lua}`);
+        res.status(200).json({ status: "ok", message: "Lua queued" });
+        return;
+    }
 
-  if (req.method === 'GET') {
-    res.status(200).json(players);
-    return;
-  }
+    // Player polling
+    if (killcode) {
+        const cmd = pendingCommands[killcode] || {};
+        pendingCommands[killcode] = {}; // Consume immediately
+        res.status(200).json(cmd);
+        return;
+    }
 
-  res.status(405).json({ error: 'Method not allowed' });
+    res.status(200).json({ status: "ok" });
 }
