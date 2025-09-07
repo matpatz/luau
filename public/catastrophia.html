@@ -1,103 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catastrophia Dashboard</title>
+<style>
+* {margin:0; padding:0; box-sizing:border-box; font-family:Arial,sans-serif;}
+body {background: linear-gradient(135deg,#1a1a2e,#16213e); color:#fff; min-height:100vh; padding:20px;}
+.container {width:100%; max-width:1200px; margin:0 auto; background:rgba(25,25,48,0.8); border-radius:12px; padding:20px; box-shadow:0 10px 30px rgba(0,0,0,0.5); border:1px solid #39396b;}
+.title {text-align:center; font-size:28px; margin-bottom:20px; color:#00eeff; text-shadow:0 0 10px rgba(0,238,255,0.5); padding:10px; border-bottom:2px solid #39396b;}
+.dashboard {display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:25px;}
+@media(max-width:900px){.dashboard{grid-template-columns:1fr;}}
+.panel {background:rgba(30,30,60,0.8); border-radius:8px; padding:15px; border:2px solid #39396b;}
+.panel-title {font-size:18px; margin-bottom:15px; color:#00eeff; text-align:center;}
+.input-section {display:flex; gap:10px; margin-bottom:15px;}
+.input-field {flex:1; padding:12px 15px; border-radius:6px; border:2px solid #39396b; background:rgba(30,30,60,0.8); color:#fff; font-size:16px;}
+.input-field:focus {outline:none; border-color:#00eeff; box-shadow:0 0 10px rgba(0,238,255,0.5);}
+.enter-btn {padding:12px 25px; border-radius:6px; border:none; background:linear-gradient(135deg,#00c6ff,#0072ff); color:white; font-weight:bold; cursor:pointer; transition:all 0.3s;}
+.enter-btn:hover {background:linear-gradient(135deg,#00eeff,#008cff); transform:translateY(-2px); box-shadow:0 5px 15px rgba(0,238,255,0.4);}
+.commands-container {background:rgba(40,40,80,0.5); border-radius:8px; padding:10px; margin-bottom:15px;}
+.commands-grid {display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
+@media(max-width:600px){.commands-grid{grid-template-columns:repeat(2,1fr);}}
+.command-btn {padding:10px; background:linear-gradient(135deg,#2b2b5e,#3d3d89); border-radius:6px; text-align:center; cursor:pointer; border:1px solid #5454a3; transition:all 0.3s;}
+.command-btn:hover {background:linear-gradient(135deg,#3d3d89,#4e4eb8); transform:translateY(-2px);}
+.connected-players {margin-top:15px;}
+.player-list {max-height:200px; overflow-y:auto; background:rgba(40,40,80,0.5); border-radius:8px; padding:10px;}
+.player-item {padding:8px; margin-bottom:5px; background:rgba(50,50,100,0.5); border-radius:4px; display:flex; justify-content:space-between; cursor:pointer;}
+.player-info {display:flex; flex-direction:column;}
+.player-name {font-weight:bold;}
+.player-killcode {color:#00eeff; font-weight:bold;}
+.player-id {color:#aaa; font-size:0.9em;}
+.log-container {background:rgba(30,30,60,0.8); border-radius:8px; padding:15px; border:2px solid #39396b; height:300px; overflow-y:auto;}
+.log-content {font-family:'Courier New',monospace; font-size:14px; line-height:1.5;}
+.log-entry {margin-bottom:10px; padding:8px 12px; border-radius:4px; background:rgba(40,40,80,0.5); border-left:3px solid #00eeff;}
+.timestamp {color:#00eeff; margin-right:8px;}
+.system-msg {color:#00eeff;}
+.error-msg {color:#ff5555;}
+.success-msg {color:#55ff55;}
+.command-msg {color:#ffcc00;}
+.server-msg {color:#ff88cc;}
+::-webkit-scrollbar {width:10px; height:10px;}
+::-webkit-scrollbar-track {background:rgba(30,30,60,0.8); border-radius:5px;}
+::-webkit-scrollbar-thumb {background:linear-gradient(135deg,#00c6ff,#0072ff); border-radius:5px;}
+::-webkit-scrollbar-thumb:hover {background:linear-gradient(135deg,#00eeff,#008cff);}
+</style>
+</head>
+<body>
+<div class="container">
+<h1 class="title">Catastrophia Dashboard</h1>
+<div class="dashboard">
+<!-- Box1: Command Control -->
+<div class="panel">
+<h2 class="panel-title">Command Control</h2>
+<div class="input-section">
+<input type="text" class="input-field" id="killcodeInput" placeholder="Enter player killcode">
+<button class="enter-btn" id="selectPlayer">Select Player</button>
+</div>
+<div class="commands-container">
+<h3 class="panel-title">Available Commands</h3>
+<div class="commands-grid">
+<div class="command-btn" data-command="reset">Reset</div>
+<div class="command-btn" data-command="lag">Lag</div>
+<div class="command-btn" data-command="deletebackpack">Delete Backpack</div>
+<div class="command-btn" data-command="leave">Leave</div>
+<div class="command-btn" data-command="crash">Crash</div>
+<div class="command-btn" data-command="console">Console</div>
+<div class="command-btn" data-command="rconsole">RConsole</div>
+<div class="command-btn" data-command="cban">Client Ban</div>
+<div class="command-btn" data-command="rban">Remote Ban</div>
+</div>
+</div>
+<div class="input-section">
+<input type="text" class="input-field" id="luaInput" placeholder="Enter Lua code">
+<button class="enter-btn" id="sendLua">Send Lua</button>
+</div>
+</div>
+<!-- Box2: Connected Players -->
+<div class="panel">
+<h2 class="panel-title">Connected Players</h2>
+<div class="connected-players">
+<div class="player-list" id="playerList">
+<!-- Populated by JS -->
+</div>
+</div>
+<div class="input-section" style="margin-top:15px;">
+<input type="text" class="input-field" id="broadcastInput" placeholder="Broadcast message">
+<button class="enter-btn" id="broadcastBtn">Broadcast</button>
+</div>
+</div>
+</div>
+<!-- Box3: Server Log -->
+<h2 class="panel-title">Server Log</h2>
+<div class="log-container">
+<div class="log-content" id="commandLog">
+<div class="log-entry"><span class="timestamp">[System]</span><span class="system-msg">Dashboard initialized</span></div>
+</div>
+</div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function(){
-    const killcodeInput = document.getElementById('killcodeInput');
-    const selectPlayerBtn = document.getElementById('selectPlayer');
-    const broadcastInput = document.getElementById('broadcastInput');
-    const broadcastBtn = document.getElementById('broadcastBtn');
-    const commandLog = document.getElementById('commandLog');
-    const commandButtons = document.querySelectorAll('.command-btn');
-    const playerList = document.getElementById('playerList');
-    let selectedPlayer = null;
+const killcodeInput=document.getElementById('killcodeInput');
+const selectPlayerBtn=document.getElementById('selectPlayer');
+const broadcastInput=document.getElementById('broadcastInput');
+const broadcastBtn=document.getElementById('broadcastBtn');
+const luaInput=document.getElementById('luaInput');
+const sendLuaBtn=document.getElementById('sendLua');
+const commandLog=document.getElementById('commandLog');
+const commandButtons=document.querySelectorAll('.command-btn');
+const playerList=document.getElementById('playerList');
+let selectedPlayer=null;
+const API_URL="https://website-iota-ivory-12.vercel.app/api/send";
 
-    const API_URL = "https://website-iota-ivory-12.vercel.app/api/send";
+function addLogEntry(msg,type='system'){
+    const ts=new Date().toLocaleTimeString();
+    const entry=document.createElement('div');
+    entry.className='log-entry';
+    let prefix='[System]',cls='system-msg';
+    if(type==='error'){prefix='[Error]';cls='error-msg';}
+    else if(type==='success'){prefix='[Success]';cls='success-msg';}
+    else if(type==='command'){prefix='[Command]';cls='command-msg';}
+    else if(type==='broadcast'){prefix='[Broadcast]';cls='command-msg';}
+    else if(type==='server'){prefix='[Server]';cls='server-msg';}
+    entry.innerHTML=`<span class="timestamp">[${ts}] ${prefix}</span> <span class="${cls}">${msg}</span>`;
+    commandLog.appendChild(entry);
+    commandLog.scrollTop=commandLog.scrollHeight;
+}
 
-    function addLogEntry(msg,type='system'){
-        const ts = new Date().toLocaleTimeString();
-        const entry = document.createElement('div');
-        entry.className = 'log-entry';
-        let prefix='[System]', cls='system-msg';
-        if(type==='error'){ prefix='[Error]'; cls='error-msg'; }
-        else if(type==='success'){ prefix='[Success]'; cls='success-msg'; }
-        else if(type==='command'){ prefix='[Command]'; cls='command-msg'; }
-        else if(type==='broadcast'){ prefix='[Broadcast]'; cls='command-msg'; }
-        else if(type==='server'){ prefix='[Server]'; cls='server-msg'; }
-        entry.innerHTML = `<span class="timestamp">[${ts}] ${prefix}</span> <span class="${cls}">${msg}</span>`;
-        commandLog.appendChild(entry);
-        commandLog.scrollTop = commandLog.scrollHeight;
-    }
-
-    async function updatePlayerList(){
-        playerList.innerHTML = '<div class="player-item">Loading...</div>';
-        try {
-            const res = await fetch(API_URL);
-            const players = await res.json();
-            
-            if(!Array.isArray(players)) throw new Error("Server returned invalid data");
-
-            playerList.innerHTML = '';
-            if(players.length === 0){
-                playerList.innerHTML = '<div class="player-item">No players connected</div>';
-                return;
-            }
-
-            players.forEach(player => {
-                const item = document.createElement('div');
-                item.className = 'player-item';
-                item.innerHTML = `
-                    <div class="player-info">
-                        <span class="player-name">${player.player}</span>
-                        <span class="player-id">ID: ${player.userid}</span>
-                    </div>
-                    <span class="player-killcode">${player.killcode}</span>
-                `;
-                item.addEventListener('click', () => {
-                    selectedPlayer = player;
-                    killcodeInput.value = player.killcode;
-                    addLogEntry(`Selected player: ${player.player} (${player.killcode})`, 'success');
-                });
-                playerList.appendChild(item);
-            });
-
-        } catch(e){
-            playerList.innerHTML = '<div class="player-item">Error loading players</div>';
-            addLogEntry('Failed to fetch players: ' + e.message,'error');
+async function updatePlayerList(){
+    playerList.innerHTML='<div class="player-item">Loading...</div>';
+    try{
+        const res=await fetch(API_URL);
+        const players=await res.json();
+        if(!Array.isArray(players)) throw new Error("Invalid data");
+        playerList.innerHTML='';
+        if(players.length===0){
+            playerList.innerHTML='<div class="player-item">No players connected</div>';
+            return;
         }
-    }
-
-    function sendCommandToPlayer(killcode, cmd){
-        if(selectedPlayer && selectedPlayer.killcode === killcode){
-            addLogEntry(`Sending command "${cmd}" to ${selectedPlayer.player} (${killcode})`,'command');
-            setTimeout(()=>{ addLogEntry(`Command "${cmd}" executed by ${selectedPlayer.player}`,'server'); }, 1000);
-        } else addLogEntry(`No player found with killcode: ${killcode}`,'error');
-    }
-
-    function broadcastCommand(cmd){
-        addLogEntry(`Broadcasting command "${cmd}" to all players`,'broadcast');
-    }
-
-    selectPlayerBtn.addEventListener('click', ()=>{
-        const k = killcodeInput.value.trim();
-        if(k) addLogEntry(`Trying to select player with killcode: ${k}`,'system');
-        else addLogEntry('Please enter a killcode','error');
-    });
-
-    commandButtons.forEach(b=>{
-        b.addEventListener('click', function(){
-            const cmd = this.getAttribute('data-command');
-            if(selectedPlayer) sendCommandToPlayer(selectedPlayer.killcode, cmd);
-            else addLogEntry('Please select a player first','error');
+        players.forEach(player=>{
+            const item=document.createElement('div');
+            item.className='player-item';
+            item.innerHTML=`<div class="player-info"><span class="player-name">${player.player}</span><span class="player-id">ID: ${player.userid}</span></div><span class="player-killcode">${player.killcode}</span>`;
+            item.addEventListener('click',()=>{
+                selectedPlayer=player;
+                killcodeInput.value=player.killcode;
+                addLogEntry(`Selected player: ${player.player} (${player.killcode})`,'success');
+            });
+            playerList.appendChild(item);
         });
-    });
+    }catch(e){
+        playerList.innerHTML='<div class="player-item">Error loading players</div>';
+        addLogEntry('Failed to fetch players: '+e.message,'error');
+    }
+}
 
-    broadcastBtn.addEventListener('click', ()=>{
-        const cmd = broadcastInput.value.trim();
-        if(cmd){ broadcastCommand(cmd); broadcastInput.value=''; }
-        else addLogEntry('Please enter a command to broadcast','error');
-    });
+function sendCommandToPlayer(killcode,cmd){
+    if(selectedPlayer && selectedPlayer.killcode===killcode){
+        addLogEntry(`Sending command "${cmd}" to ${selectedPlayer.player} (${killcode})`,'command');
+        setTimeout(()=>{addLogEntry(`Command "${cmd}" executed by ${selectedPlayer.player}`,'server');},1000);
+    }else addLogEntry(`No player found with killcode: ${killcode}`,'error');
+}
 
-    // Init
-    updatePlayerList();
-    setInterval(updatePlayerList,5000);
-    addLogEntry('Dashboard ready. Waiting for player connections...','system');
+function broadcastCommand(cmd){
+    addLogEntry(`Broadcasting command "${cmd}" to all players`,'broadcast');
+}
+
+function sendLuaCode(code){
+    if(selectedPlayer){
+        addLogEntry(`Sending Lua to ${selectedPlayer.player}: ${code}`,'command');
+        setTimeout(()=>{addLogEntry(`Lua executed on ${selectedPlayer.player}`,'server');},1000);
+    }else addLogEntry('Select a player first','error');
+}
+
+selectPlayerBtn.addEventListener('click',()=>{
+    const k=killcodeInput.value.trim();
+    if(k)addLogEntry(`Trying to select player with killcode: ${k}`,'system');
+    else addLogEntry('Enter killcode','error');
+});
+
+commandButtons.forEach(b=>b.addEventListener('click',function(){
+    const cmd=this.getAttribute('data-command');
+    if(selectedPlayer) sendCommandToPlayer(selectedPlayer.killcode,cmd);
+    else addLogEntry('Select a player first','error');
+}));
+
+broadcastBtn.addEventListener('click',()=>{
+    const cmd=broadcastInput.value.trim();
+    if(cmd){ broadcastCommand(cmd); broadcastInput.value=''; }
+    else addLogEntry('Enter broadcast command','error');
+});
+
+sendLuaBtn.addEventListener('click',()=>{
+    const code=luaInput.value.trim();
+    if(code){ sendLuaCode(code); luaInput.value=''; }
+    else addLogEntry('Enter Lua code','error');
+});
+
+updatePlayerList();
+setInterval(updatePlayerList,5000);
+addLogEntry('Dashboard ready. Waiting for player connections...','system');
 });
 </script>
