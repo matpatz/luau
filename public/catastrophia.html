@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Catastrophia Dashboard</title>
 <style>
+/* === KEEP ALL YOUR ORIGINAL CSS AS-IS === */
 * {margin:0; padding:0; box-sizing:border-box; font-family:Arial,sans-serif;}
 body {background: linear-gradient(135deg,#1a1a2e,#16213e); color:#fff; min-height:100vh; padding:20px;}
 .container {width:100%; max-width:1200px; margin:0 auto; background:rgba(25,25,48,0.8); border-radius:12px; padding:20px; box-shadow:0 10px 30px rgba(0,0,0,0.5); border:1px solid #39396b;}
@@ -49,7 +50,6 @@ body {background: linear-gradient(135deg,#1a1a2e,#16213e); color:#fff; min-heigh
 <div class="container">
 <h1 class="title">Catastrophia Dashboard</h1>
 <div class="dashboard">
-<!-- Box1: Command Control -->
 <div class="panel">
 <h2 class="panel-title">Command Control</h2>
 <div class="input-section">
@@ -70,7 +70,6 @@ body {background: linear-gradient(135deg,#1a1a2e,#16213e); color:#fff; min-heigh
 <button class="enter-btn" id="sendLua">Send Lua</button>
 </div>
 </div>
-<!-- Box2: Connected Players -->
 <div class="panel">
 <h2 class="panel-title">Connected Players</h2>
 <div class="connected-players">
@@ -78,7 +77,6 @@ body {background: linear-gradient(135deg,#1a1a2e,#16213e); color:#fff; min-heigh
 </div>
 </div>
 </div>
-<!-- Box3: Server Log -->
 <h2 class="panel-title">Server Log</h2>
 <div class="log-container">
 <div class="log-content" id="commandLog">
@@ -87,6 +85,7 @@ body {background: linear-gradient(135deg,#1a1a2e,#16213e); color:#fff; min-heigh
 </div>
 </div>
 
+<!-- === SCRIPT === -->
 <script>
 document.addEventListener('DOMContentLoaded', function(){
     const killcodeInput = document.getElementById('killcodeInput');
