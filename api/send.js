@@ -1,41 +1,42 @@
-let players = [];
+async function updatePlayerList() {
+    playerList.innerHTML = '<div class="player-item">Loading...</div>';
+    try {
+        const res = await fetch(API_URL);
+        let players = await res.json();
 
-export default function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+        // Ensure players is always an array
+        if (!Array.isArray(players)) {
+            // wrap single object into array
+            if (typeof players === 'object' && players !== null) players = [players];
+            else throw new Error("Invalid player data from server");
+        }
 
-  if (req.method === "GET") {
-    const { player, userid, killcode, timestamp, cmd, lua, consume } = req.query;
+        playerList.innerHTML = '';
+        if (players.length === 0) {
+            playerList.innerHTML = '<div class="player-item">No players connected</div>';
+            return;
+        }
 
-    // Only continue if player, userid, killcode exist
-    if (!player || !userid || !killcode) {
-      return res.status(400).json({ error: "Missing required fields" });
+        players.forEach(player => {
+            const item = document.createElement('div');
+            item.className = 'player-item';
+            item.innerHTML = `
+                <div class="player-info">
+                    <span class="player-name">${player.player}</span>
+                    <span class="player-id">ID: ${player.userid}</span>
+                </div>
+                <span class="player-killcode">${player.killcode}</span>
+            `;
+            item.addEventListener('click', () => {
+                selectedPlayer = player;
+                killcodeInput.value = player.killcode;
+                addLogEntry(`Selected player: ${player.player} (${player.killcode})`, 'success');
+            });
+            playerList.appendChild(item);
+        });
+
+    } catch(e) {
+        playerList.innerHTML = '<div class="player-item">Error loading players</div>';
+        addLogEntry('Failed to fetch players: ' + e.message, 'error');
     }
-
-    // Find or create player entry
-    let entry = players.find(p => p.killcode === killcode);
-    if (!entry) {
-      entry = { player, userid, killcode, timestamp: timestamp || Date.now(), commands: [] };
-      players.push(entry);
-    } else {
-      entry.player = player;      // Update player name if changed
-      entry.userid = userid;      // Update userid
-      entry.timestamp = timestamp || Date.now();
-    }
-
-    // Add new command if provided
-    if (cmd) entry.commands.push({ type: "cmd", value: cmd });
-    if (lua) entry.commands.push({ type: "lua", value: lua });
-
-    // Return commands and clear if consume=1
-    if (consume === "1") {
-      const cmds = [...entry.commands];
-      entry.commands = [];
-      return res.status(200).json(cmds);
-    }
-
-    // Otherwise return full player list
-    return res.status(200).json(players);
-  }
-
-  res.status(405).json({ error: "Method not allowed" });
 }
