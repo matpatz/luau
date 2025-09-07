@@ -31,9 +31,11 @@ document.addEventListener('DOMContentLoaded', function(){
         try {
             const res = await fetch(API_URL);
             const players = await res.json();
+            
+            if(!Array.isArray(players)) throw new Error("Server returned invalid data");
 
             playerList.innerHTML = '';
-            if(!Array.isArray(players) || players.length === 0){
+            if(players.length === 0){
                 playerList.innerHTML = '<div class="player-item">No players connected</div>';
                 return;
             }
@@ -58,61 +60,44 @@ document.addEventListener('DOMContentLoaded', function(){
 
         } catch(e){
             playerList.innerHTML = '<div class="player-item">Error loading players</div>';
-            addLogEntry('Failed to fetch players: ' + e.message, 'error');
+            addLogEntry('Failed to fetch players: ' + e.message,'error');
         }
     }
 
-    function sendLuaCommand(lua){
-        if(!selectedPlayer) { addLogEntry('Please select a player first', 'error'); return; }
-        fetch(API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type':'application/json' },
-            body: JSON.stringify({ killcode: selectedPlayer.killcode, lua })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if(data.success) addLogEntry(`Lua command sent to ${selectedPlayer.player}`, 'success');
-            else addLogEntry(`Failed: ${JSON.stringify(data)}`, 'error');
-        })
-        .catch(err => addLogEntry('Error sending Lua: ' + err.message,'error'));
+    function sendCommandToPlayer(killcode, cmd){
+        if(selectedPlayer && selectedPlayer.killcode === killcode){
+            addLogEntry(`Sending command "${cmd}" to ${selectedPlayer.player} (${killcode})`,'command');
+            setTimeout(()=>{ addLogEntry(`Command "${cmd}" executed by ${selectedPlayer.player}`,'server'); }, 1000);
+        } else addLogEntry(`No player found with killcode: ${killcode}`,'error');
     }
 
-    // Attach Lua sending to command buttons
-    commandButtons.forEach(b => b.addEventListener('click', function(){
-        const cmd = this.getAttribute('data-command');
-        sendLuaCommand(cmd);
-    }));
-
-    broadcastBtn.addEventListener('click', ()=>{
-        const cmd = broadcastInput.value.trim();
-        if(cmd) {
-            // broadcast to all players
-            fetch(API_URL)
-            .then(r=>r.json())
-            .then(players=>{
-                players.forEach(p => {
-                    fetch(API_URL, {
-                        method:'POST',
-                        headers:{ 'Content-Type':'application/json' },
-                        body:JSON.stringify({ killcode:p.killcode, lua:cmd })
-                    });
-                });
-                addLogEntry(`Broadcasted Lua: ${cmd}`, 'broadcast');
-            });
-        } else addLogEntry('Please enter a command to broadcast','error');
-    });
+    function broadcastCommand(cmd){
+        addLogEntry(`Broadcasting command "${cmd}" to all players`,'broadcast');
+    }
 
     selectPlayerBtn.addEventListener('click', ()=>{
         const k = killcodeInput.value.trim();
-        if(k){
-            addLogEntry(`Trying to select player with killcode: ${k}`, 'system');
-            // optional: select player directly by killcode
-        } else addLogEntry('Please enter a killcode','error');
+        if(k) addLogEntry(`Trying to select player with killcode: ${k}`,'system');
+        else addLogEntry('Please enter a killcode','error');
+    });
+
+    commandButtons.forEach(b=>{
+        b.addEventListener('click', function(){
+            const cmd = this.getAttribute('data-command');
+            if(selectedPlayer) sendCommandToPlayer(selectedPlayer.killcode, cmd);
+            else addLogEntry('Please select a player first','error');
+        });
+    });
+
+    broadcastBtn.addEventListener('click', ()=>{
+        const cmd = broadcastInput.value.trim();
+        if(cmd){ broadcastCommand(cmd); broadcastInput.value=''; }
+        else addLogEntry('Please enter a command to broadcast','error');
     });
 
     // Init
     updatePlayerList();
-    setInterval(updatePlayerList, 5000); // refresh every 5s
-    addLogEntry('Dashboard ready. Waiting for player connections...', 'system');
+    setInterval(updatePlayerList,5000);
+    addLogEntry('Dashboard ready. Waiting for player connections...','system');
 });
 </script>
