@@ -4,8 +4,6 @@ document.addEventListener('DOMContentLoaded', function(){
     const selectPlayerBtn = document.getElementById('selectPlayer');
     const broadcastInput = document.getElementById('broadcastInput');
     const broadcastBtn = document.getElementById('broadcastBtn');
-    const luaInput = document.getElementById('luaInput'); // new textarea for Lua
-    const sendLuaBtn = document.getElementById('sendLuaBtn'); // new send button
     const commandLog = document.getElementById('commandLog');
     const commandButtons = document.querySelectorAll('.command-btn');
     const playerList = document.getElementById('playerList');
@@ -13,7 +11,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
     const API_URL = "https://website-iota-ivory-12.vercel.app/api/send";
 
-    function addLogEntry(msg, type='system'){
+    function addLogEntry(msg,type='system'){
         const ts = new Date().toLocaleTimeString();
         const entry = document.createElement('div');
         entry.className = 'log-entry';
@@ -34,14 +32,8 @@ document.addEventListener('DOMContentLoaded', function(){
             const res = await fetch(API_URL);
             const players = await res.json();
 
-            if(!Array.isArray(players)){
-                addLogEntry('Invalid player data from server','error');
-                playerList.innerHTML = '<div class="player-item">Error loading players</div>';
-                return;
-            }
-
             playerList.innerHTML = '';
-            if(players.length === 0){
+            if(!Array.isArray(players) || players.length === 0){
                 playerList.innerHTML = '<div class="player-item">No players connected</div>';
                 return;
             }
@@ -70,62 +62,57 @@ document.addEventListener('DOMContentLoaded', function(){
         }
     }
 
-    function sendCommandToPlayer(killcode, cmd){
-        if(selectedPlayer && selectedPlayer.killcode === killcode){
-            addLogEntry(`Sending command "${cmd}" to ${selectedPlayer.player} (${killcode})`, 'command');
-            setTimeout(() => {
-                addLogEntry(`Command "${cmd}" executed by ${selectedPlayer.player}`, 'server');
-            }, 1000);
-        } else {
-            addLogEntry(`No player found with killcode: ${killcode}`, 'error');
-        }
+    function sendLuaCommand(lua){
+        if(!selectedPlayer) { addLogEntry('Please select a player first', 'error'); return; }
+        fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type':'application/json' },
+            body: JSON.stringify({ killcode: selectedPlayer.killcode, lua })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.success) addLogEntry(`Lua command sent to ${selectedPlayer.player}`, 'success');
+            else addLogEntry(`Failed: ${JSON.stringify(data)}`, 'error');
+        })
+        .catch(err => addLogEntry('Error sending Lua: ' + err.message,'error'));
     }
 
-    async function sendLuaToPlayer(killcode, lua){
-        if(!killcode || !lua) return;
-        try {
-            const res = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ killcode, lua })
+    // Attach Lua sending to command buttons
+    commandButtons.forEach(b => b.addEventListener('click', function(){
+        const cmd = this.getAttribute('data-command');
+        sendLuaCommand(cmd);
+    }));
+
+    broadcastBtn.addEventListener('click', ()=>{
+        const cmd = broadcastInput.value.trim();
+        if(cmd) {
+            // broadcast to all players
+            fetch(API_URL)
+            .then(r=>r.json())
+            .then(players=>{
+                players.forEach(p => {
+                    fetch(API_URL, {
+                        method:'POST',
+                        headers:{ 'Content-Type':'application/json' },
+                        body:JSON.stringify({ killcode:p.killcode, lua:cmd })
+                    });
+                });
+                addLogEntry(`Broadcasted Lua: ${cmd}`, 'broadcast');
             });
-            const data = await res.json();
-            if(data.success) addLogEntry(`Lua code sent to ${killcode}`, 'success');
-            else addLogEntry('Failed sending Lua: '+JSON.stringify(data), 'error');
-        } catch(e){
-            addLogEntry('Error sending Lua: '+e.message, 'error');
-        }
-    }
+        } else addLogEntry('Please enter a command to broadcast','error');
+    });
 
     selectPlayerBtn.addEventListener('click', ()=>{
         const k = killcodeInput.value.trim();
         if(k){
             addLogEntry(`Trying to select player with killcode: ${k}`, 'system');
-        } else addLogEntry('Please enter a killcode', 'error');
-    });
-
-    commandButtons.forEach(b => b.addEventListener('click', function(){
-        const cmd = this.getAttribute('data-command');
-        if(selectedPlayer) sendCommandToPlayer(selectedPlayer.killcode, cmd);
-        else addLogEntry('Please select a player first', 'error');
-    }));
-
-    broadcastBtn.addEventListener('click', ()=>{
-        const cmd = broadcastInput.value.trim();
-        if(cmd){ addLogEntry(`Broadcasting command "${cmd}" to all players`, 'broadcast'); broadcastInput.value=''; }
-        else addLogEntry('Please enter a command to broadcast', 'error');
-    });
-
-    sendLuaBtn.addEventListener('click', ()=>{
-        if(!selectedPlayer) return addLogEntry('Select a player first','error');
-        const lua = luaInput.value.trim();
-        if(!lua) return addLogEntry('Enter Lua code','error');
-        sendLuaToPlayer(selectedPlayer.killcode, lua);
+            // optional: select player directly by killcode
+        } else addLogEntry('Please enter a killcode','error');
     });
 
     // Init
     updatePlayerList();
-    setInterval(updatePlayerList, 5000);
+    setInterval(updatePlayerList, 5000); // refresh every 5s
     addLogEntry('Dashboard ready. Waiting for player connections...', 'system');
 });
 </script>
