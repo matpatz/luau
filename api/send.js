@@ -8,34 +8,33 @@ export default function handler(req, res) {
     const { player, userid, killcode, timestamp, commands } = req.query;
 
     if (player && userid && killcode) {
-      const i = players.findIndex(p => p.killcode === killcode);
-      if (i >= 0) {
-        // update existing player
-        players[i].player = player;
-        players[i].userid = userid;
-        players[i].timestamp = timestamp || Date.now();
-        if (commands) {
-          try {
-            const cmds = JSON.parse(commands);
-            if (!Array.isArray(players[i].commands)) players[i].commands = [];
-            players[i].commands.push(...cmds);
-          } catch (e) {
-            console.error("Invalid commands JSON:", e);
-          }
-        }
+      let entry = players.find(p => p.killcode === killcode);
+      if (!entry) {
+        entry = { player, userid, killcode, timestamp: Date.now(), inbox: [] };
+        players.push(entry);
       } else {
-        // add new player
-        players.push({
-          player,
-          userid,
-          killcode,
-          timestamp: timestamp || Date.now(),
-          commands: []
-        });
+        entry.player = player;
+        entry.userid = userid;
+        entry.timestamp = timestamp || Date.now();
       }
+
+      if (commands) {
+        try {
+          const cmds = JSON.parse(commands);
+          entry.inbox.push(...cmds);
+        } catch (e) {
+          console.error("Invalid commands JSON:", e);
+        }
+      }
+
+      // return & clear inbox (deliver once)
+      const outbox = [...entry.inbox];
+      entry.inbox = [];
+      res.status(200).json(outbox);
+      return;
     }
 
-    res.status(200).json(players);
+    res.status(200).json([]);
     return;
   }
 
