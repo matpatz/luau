@@ -1,16 +1,15 @@
-// /api/send.js
 let players = [];
 
 export default function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader("Access-Control-Allow-Origin", "*");
 
-  if (req.method === 'GET') {
-    const { player, userid, killcode, timestamp, commands } = req.query;
+  if (req.method === "GET") {
+    const { player, userid, killcode, timestamp, consume } = req.query;
 
     if (player && userid && killcode) {
       let entry = players.find(p => p.killcode === killcode);
       if (!entry) {
-        entry = { player, userid, killcode, timestamp: Date.now(), inbox: [] };
+        entry = { player, userid, killcode, timestamp, commands: [] };
         players.push(entry);
       } else {
         entry.player = player;
@@ -18,25 +17,17 @@ export default function handler(req, res) {
         entry.timestamp = timestamp || Date.now();
       }
 
-      if (commands) {
-        try {
-          const cmds = JSON.parse(commands);
-          entry.inbox.push(...cmds);
-        } catch (e) {
-          console.error("Invalid commands JSON:", e);
-        }
+      // If consume=1, clear the commands after returning
+      if (consume === "1") {
+        const cmds = [...entry.commands];
+        entry.commands = [];
+        return res.status(200).json(cmds);
       }
-
-      // return & clear inbox (deliver once)
-      const outbox = [...entry.inbox];
-      entry.inbox = [];
-      res.status(200).json(outbox);
-      return;
     }
 
-    res.status(200).json([]);
+    res.status(200).json(players);
     return;
   }
 
-  res.status(405).json({ error: 'Method not allowed' });
+  res.status(405).json({ error: "Method not allowed" });
 }
