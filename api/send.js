@@ -6,14 +6,19 @@ export default function handler(req, res) {
   if (req.method === "GET") {
     const { player, userid, killcode, timestamp, cmd, lua, consume } = req.query;
 
+    // Only continue if player, userid, killcode exist
+    if (!player || !userid || !killcode) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
     // Find or create player entry
     let entry = players.find(p => p.killcode === killcode);
     if (!entry) {
       entry = { player, userid, killcode, timestamp: timestamp || Date.now(), commands: [] };
       players.push(entry);
     } else {
-      entry.player = player;
-      entry.userid = userid;
+      entry.player = player;      // Update player name if changed
+      entry.userid = userid;      // Update userid
       entry.timestamp = timestamp || Date.now();
     }
 
