@@ -1,97 +1,110 @@
 <script>
 document.addEventListener('DOMContentLoaded', function(){
-const killcodeInput=document.getElementById('killcodeInput');
-const selectPlayerBtn=document.getElementById('selectPlayer');
-const broadcastInput=document.getElementById('broadcastInput');
-const broadcastBtn=document.getElementById('broadcastBtn');
-const commandLog=document.getElementById('commandLog');
-const commandButtons=document.querySelectorAll('.command-btn');
-const playerList=document.getElementById('playerList');
-let selectedPlayer=null;
+    const killcodeInput = document.getElementById('killcodeInput');
+    const selectPlayerBtn = document.getElementById('selectPlayer');
+    const broadcastInput = document.getElementById('broadcastInput');
+    const broadcastBtn = document.getElementById('broadcastBtn');
+    const commandLog = document.getElementById('commandLog');
+    const commandButtons = document.querySelectorAll('.command-btn');
+    const playerList = document.getElementById('playerList');
+    let selectedPlayer = null;
 
-const API_URL = "https://website-iota-ivory-12.vercel.app/api/send";
+    const API_URL = "https://website-iota-ivory-12.vercel.app/api/send";
 
-// Add log entry
-function addLogEntry(msg,type='system'){
-    const ts=new Date().toLocaleTimeString();
-    const entry=document.createElement('div');
-    entry.className='log-entry';
-    let prefix='[System]';
-    let cls='system-msg';
-    if(type==='error'){prefix='[Error]';cls='error-msg';}
-    else if(type==='success'){prefix='[Success]';cls='success-msg';}
-    else if(type==='command'){prefix='[Command]';cls='command-msg';}
-    else if(type==='broadcast'){prefix='[Broadcast]';cls='command-msg';}
-    else if(type==='server'){prefix='[Server]';cls='server-msg';}
-    entry.innerHTML=`<span class="timestamp">[${ts}] ${prefix}</span> <span class="${cls}">${msg}</span>`;
-    commandLog.appendChild(entry);
-    commandLog.scrollTop=commandLog.scrollHeight;
-}
+    function addLogEntry(msg, type='system'){
+        const ts = new Date().toLocaleTimeString();
+        const entry = document.createElement('div');
+        entry.className = 'log-entry';
+        let prefix='[System]', cls='system-msg';
+        if(type==='error'){ prefix='[Error]'; cls='error-msg'; }
+        else if(type==='success'){ prefix='[Success]'; cls='success-msg'; }
+        else if(type==='command'){ prefix='[Command]'; cls='command-msg'; }
+        else if(type==='broadcast'){ prefix='[Broadcast]'; cls='command-msg'; }
+        else if(type==='server'){ prefix='[Server]'; cls='server-msg'; }
+        entry.innerHTML = `<span class="timestamp">[${ts}] ${prefix}</span> <span class="${cls}">${msg}</span>`;
+        commandLog.appendChild(entry);
+        commandLog.scrollTop = commandLog.scrollHeight;
+    }
 
-// Fetch and update players from API
-async function updatePlayerList(){
-    playerList.innerHTML = '<div class="player-item">Loading...</div>';
-    try {
-        const res = await fetch(API_URL);
-        const players = await res.json();
-        playerList.innerHTML='';
-        if(players.length===0){
-            playerList.innerHTML='<div class="player-item">No players connected</div>';
-            return;
-        }
-        players.forEach(player=>{
-            const item=document.createElement('div');
-            item.className='player-item';
-            item.innerHTML=`<div class="player-info"><span class="player-name">${player.player}</span><span class="player-id">ID: ${player.userid}</span></div><span class="player-killcode">${player.killcode}</span>`;
-            item.addEventListener('click',()=>{
-                selectedPlayer=player;
-                killcodeInput.value=player.killcode;
-                addLogEntry(`Selected player: ${player.player} (${player.killcode})`,'success');
+    async function updatePlayerList(){
+        playerList.innerHTML = '<div class="player-item">Loading...</div>';
+        try {
+            const res = await fetch(API_URL);
+            const players = await res.json();
+
+            if(!Array.isArray(players)){
+                addLogEntry('Invalid player data from server','error');
+                playerList.innerHTML = '<div class="player-item">Error loading players</div>';
+                return;
+            }
+
+            playerList.innerHTML = '';
+            if(players.length === 0){
+                playerList.innerHTML = '<div class="player-item">No players connected</div>';
+                return;
+            }
+
+            players.forEach(player => {
+                const item = document.createElement('div');
+                item.className = 'player-item';
+                item.innerHTML = `
+                    <div class="player-info">
+                        <span class="player-name">${player.player}</span>
+                        <span class="player-id">ID: ${player.userid}</span>
+                    </div>
+                    <span class="player-killcode">${player.killcode}</span>
+                `;
+                item.addEventListener('click', () => {
+                    selectedPlayer = player;
+                    killcodeInput.value = player.killcode;
+                    addLogEntry(`Selected player: ${player.player} (${player.killcode})`, 'success');
+                });
+                playerList.appendChild(item);
             });
-            playerList.appendChild(item);
-        });
-    } catch(e){
-        playerList.innerHTML='<div class="player-item">Error loading players</div>';
-        addLogEntry('Failed to fetch players','error');
+
+        } catch(e){
+            playerList.innerHTML = '<div class="player-item">Error loading players</div>';
+            addLogEntry('Failed to fetch players: ' + e.message, 'error');
+        }
     }
-}
 
-// Command sending (just logs locally for now)
-function sendCommandToPlayer(killcode,cmd){
-    if(selectedPlayer && selectedPlayer.killcode===killcode){
-        addLogEntry(`Sending command "${cmd}" to ${selectedPlayer.player} (${killcode})`,'command');
-        setTimeout(()=>{addLogEntry(`Command "${cmd}" executed by ${selectedPlayer.player}`,'server');},1000);
-    } else {
-        addLogEntry(`No player found with killcode: ${killcode}`,'error');
+    function sendCommandToPlayer(killcode, cmd){
+        if(selectedPlayer && selectedPlayer.killcode === killcode){
+            addLogEntry(`Sending command "${cmd}" to ${selectedPlayer.player} (${killcode})`, 'command');
+            setTimeout(() => {
+                addLogEntry(`Command "${cmd}" executed by ${selectedPlayer.player}`, 'server');
+            }, 1000);
+        } else {
+            addLogEntry(`No player found with killcode: ${killcode}`, 'error');
+        }
     }
-}
 
-// Broadcast
-function broadcastCommand(cmd){
-    addLogEntry(`Broadcasting command "${cmd}" to all players`,'broadcast');
-}
+    function broadcastCommand(cmd){
+        addLogEntry(`Broadcasting command "${cmd}" to all players`, 'broadcast');
+    }
 
-// Events
-selectPlayerBtn.addEventListener('click',()=>{
-    const k=killcodeInput.value.trim();
-    if(k){
-        addLogEntry(`Trying to select player with killcode: ${k}`,'system');
-    } else addLogEntry('Please enter a killcode','error');
-});
-commandButtons.forEach(b=>b.addEventListener('click',function(){
-    const cmd=this.getAttribute('data-command');
-    if(selectedPlayer)sendCommandToPlayer(selectedPlayer.killcode,cmd);
-    else addLogEntry('Please select a player first','error');
-}));
-broadcastBtn.addEventListener('click',()=>{
-    const cmd=broadcastInput.value.trim();
-    if(cmd){broadcastCommand(cmd);broadcastInput.value='';}
-    else addLogEntry('Please enter a command to broadcast','error');
-});
+    selectPlayerBtn.addEventListener('click', ()=>{
+        const k = killcodeInput.value.trim();
+        if(k){
+            addLogEntry(`Trying to select player with killcode: ${k}`, 'system');
+        } else addLogEntry('Please enter a killcode', 'error');
+    });
 
-// Init
-updatePlayerList();
-setInterval(updatePlayerList, 5000); // refresh every 5s
-addLogEntry('Dashboard ready. Waiting for player connections...','system');
+    commandButtons.forEach(b => b.addEventListener('click', function(){
+        const cmd = this.getAttribute('data-command');
+        if(selectedPlayer) sendCommandToPlayer(selectedPlayer.killcode, cmd);
+        else addLogEntry('Please select a player first', 'error');
+    }));
+
+    broadcastBtn.addEventListener('click', ()=>{
+        const cmd = broadcastInput.value.trim();
+        if(cmd){ broadcastCommand(cmd); broadcastInput.value=''; }
+        else addLogEntry('Please enter a command to broadcast', 'error');
+    });
+
+    // Init
+    updatePlayerList();
+    setInterval(updatePlayerList, 5000); // refresh every 5s
+    addLogEntry('Dashboard ready. Waiting for player connections...', 'system');
 });
 </script>
