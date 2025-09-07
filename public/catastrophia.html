@@ -2,14 +2,12 @@
 document.addEventListener('DOMContentLoaded', function(){
     const killcodeInput = document.getElementById('killcodeInput');
     const selectPlayerBtn = document.getElementById('selectPlayer');
-    const broadcastInput = document.getElementById('broadcastInput');
-    const broadcastBtn = document.getElementById('broadcastBtn');
     const luaInput = document.getElementById('luaInput');
     const sendLuaBtn = document.getElementById('sendLua');
     const commandLog = document.getElementById('commandLog');
+    const commandButtons = document.querySelectorAll('.command-btn');
 
     let selectedKillcode = null;
-
     const API_URL = "https://website-iota-ivory-12.vercel.app/api/send";
 
     function addLogEntry(msg, type='system'){
@@ -20,61 +18,46 @@ document.addEventListener('DOMContentLoaded', function(){
         if(type==='error'){prefix='[Error]'; cls='error-msg';}
         else if(type==='success'){prefix='[Success]'; cls='success-msg';}
         else if(type==='command'){prefix='[Command]'; cls='command-msg';}
-        else if(type==='broadcast'){prefix='[Broadcast]'; cls='command-msg';}
-        else if(type==='server'){prefix='[Server]'; cls='server-msg';}
         entry.innerHTML = `<span class="timestamp">[${ts}] ${prefix}</span> <span class="${cls}">${msg}</span>`;
         commandLog.appendChild(entry);
         commandLog.scrollTop = commandLog.scrollHeight;
     }
 
-    // Select player by killcode
     selectPlayerBtn.addEventListener('click', ()=>{
         const k = killcodeInput.value.trim();
         if(k){
             selectedKillcode = k;
             addLogEntry(`Selected player with killcode: ${k}`,'success');
-        } else {
-            addLogEntry('Enter a killcode','error');
-        }
+        } else addLogEntry('Enter a killcode','error');
     });
 
-    // Send Lua code to the selected player
-    async function sendLuaCode(code){
+    async function sendCommand(cmd, type="cmd"){
         if(!selectedKillcode){
             addLogEntry('Select a player first','error');
             return;
         }
-        try{
-            const qs = `?killcode=${encodeURIComponent(selectedKillcode)}&lua=${encodeURIComponent(code)}`;
+        try {
+            const qs = `?killcode=${encodeURIComponent(selectedKillcode)}&${type}=${encodeURIComponent(cmd)}`;
             await fetch(API_URL + qs);
-            addLogEntry(`Lua sent to ${selectedKillcode}: ${code}`,'command');
+            addLogEntry(`${type.toUpperCase()} sent to ${selectedKillcode}: ${cmd}`,'command');
         } catch(e){
-            addLogEntry('Failed to send Lua: '+e.message,'error');
+            addLogEntry('Failed to send: '+e.message,'error');
         }
     }
+
+    commandButtons.forEach(b=>{
+        b.addEventListener('click', ()=>{
+            const cmd = b.getAttribute('data-command');
+            sendCommand(cmd);
+        });
+    });
 
     sendLuaBtn.addEventListener('click', ()=>{
         const code = luaInput.value.trim();
         if(code){
-            sendLuaCode(code);
-            luaInput.value = '';
+            sendCommand(code, "lua");
+            luaInput.value='';
         } else addLogEntry('Enter Lua code','error');
-    });
-
-    // Predefined commands
-    document.querySelectorAll('.command-btn').forEach(btn=>{
-        btn.addEventListener('click', ()=>{
-            const cmd = btn.getAttribute('data-command');
-            sendLuaCode(cmd); // Send command as Lua (or you can handle separately)
-        });
-    });
-
-    broadcastBtn.addEventListener('click', ()=>{
-        const code = broadcastInput.value.trim();
-        if(code){
-            sendLuaCode(code);
-            broadcastInput.value='';
-        } else addLogEntry('Enter broadcast code','error');
     });
 
     addLogEntry('Dashboard ready. Waiting for player connections...','system');
