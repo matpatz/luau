@@ -1,82 +1,127 @@
-<div class="input-section">
-  <input type="text" id="killcodeInput" placeholder="Enter player killcode">
-  <button id="selectPlayer">Select Player</button>
-</div>
+<div class="container">
+  <h1 class="title">Catastrophia Dashboard</h1>
+  <div class="dashboard">
+    <!-- Player Selection -->
+    <div class="panel">
+      <h2 class="panel-title">Connected Players</h2>
+      <div class="player-list" id="playerList">Loading...</div>
+      <div class="input-section" style="margin-top:10px;">
+        <input type="text" class="input-field" id="killcodeInput" placeholder="Enter player killcode">
+        <button class="enter-btn" id="selectPlayer">Select Player</button>
+      </div>
+    </div>
 
-<div class="input-section">
-  <textarea id="luaInput" placeholder="Enter Lua code here"></textarea>
-  <button id="sendLuaBtn">Send Lua</button>
-</div>
+    <!-- Commands -->
+    <div class="panel">
+      <h2 class="panel-title">Commands / Lua</h2>
+      <div class="commands-container">
+        <h3 class="panel-title">Quick Commands</h3>
+        <div class="commands-grid">
+          <div class="command-btn" data-command="reset">Reset</div>
+          <div class="command-btn" data-command="lag">Lag</div>
+          <div class="command-btn" data-command="deletebackpack">Delete Backpack</div>
+          <div class="command-btn" data-command="crash">Crash</div>
+        </div>
+      </div>
+      <div class="input-section" style="margin-top:15px;">
+        <textarea class="input-field" id="luaInput" placeholder="Enter Lua code here"></textarea>
+        <button class="enter-btn" id="sendLuaBtn">Send Lua</button>
+      </div>
+    </div>
+  </div>
 
-<div id="playerList"></div>
-<div id="commandLog"></div>
+  <!-- Server Log -->
+  <h2 class="panel-title">Server Log</h2>
+  <div class="log-container">
+    <div class="log-content" id="commandLog"></div>
+  </div>
+</div>
 
 <script>
-const API_URL = "https://website-iota-ivory-12.vercel.app/api/send";
-let selectedPlayer = null;
+document.addEventListener('DOMContentLoaded', function(){
+  const API_URL = "https://website-iota-ivory-12.vercel.app/api/send";
+  const playerList = document.getElementById('playerList');
+  const killcodeInput = document.getElementById('killcodeInput');
+  const selectPlayerBtn = document.getElementById('selectPlayer');
+  const luaInput = document.getElementById('luaInput');
+  const sendLuaBtn = document.getElementById('sendLuaBtn');
+  const commandButtons = document.querySelectorAll('.command-btn');
+  const commandLog = document.getElementById('commandLog');
 
-function addLogEntry(msg, type='system'){
-  const ts = new Date().toLocaleTimeString();
-  const log = document.getElementById('commandLog');
-  const div = document.createElement('div');
-  div.innerHTML = `[${ts}] ${type.toUpperCase()}: ${msg}`;
-  log.appendChild(div);
-  log.scrollTop = log.scrollHeight;
-}
+  let selectedPlayer = null;
 
-async function updatePlayerList(){
-  const list = document.getElementById('playerList');
-  list.innerHTML = 'Loading...';
-  try {
-    const res = await fetch(API_URL);
-    const players = await res.json();
-    list.innerHTML = '';
-    if(!Array.isArray(players) || players.length===0){
-      list.innerHTML = 'No players connected';
-      return;
-    }
-    players.forEach(p => {
-      const item = document.createElement('div');
-      item.textContent = `${p.player} (${p.killcode})`;
-      item.addEventListener('click', ()=>{
-        selectedPlayer = p;
-        document.getElementById('killcodeInput').value = p.killcode;
-        addLogEntry(`Selected player: ${p.player}`, 'success');
+  function addLogEntry(msg,type='system'){
+    const ts = new Date().toLocaleTimeString();
+    const entry = document.createElement('div');
+    entry.className = 'log-entry';
+    entry.innerHTML = `[${ts}] [${type.toUpperCase()}] ${msg}`;
+    commandLog.appendChild(entry);
+    commandLog.scrollTop = commandLog.scrollHeight;
+  }
+
+  async function updatePlayerList(){
+    playerList.innerHTML = 'Loading...';
+    try{
+      const res = await fetch(API_URL);
+      const players = await res.json();
+      playerList.innerHTML = '';
+      if(!Array.isArray(players) || players.length===0){
+        playerList.innerHTML = 'No players connected';
+        return;
+      }
+      players.forEach(p=>{
+        const item = document.createElement('div');
+        item.className='player-item';
+        item.innerHTML = `<span>${p.player} (${p.killcode})</span>`;
+        item.addEventListener('click',()=>{
+          selectedPlayer = p;
+          killcodeInput.value = p.killcode;
+          addLogEntry(`Selected player: ${p.player} (${p.killcode})`, 'success');
+        });
+        playerList.appendChild(item);
       });
-      list.appendChild(item);
-    });
-  } catch(e){
-    list.innerHTML = 'Error fetching players';
-    addLogEntry('Error: '+e.message,'error');
+    }catch(e){
+      playerList.innerHTML='Error fetching players';
+      addLogEntry('Error fetching players: '+e.message,'error');
+    }
   }
-}
 
-document.getElementById('selectPlayer').addEventListener('click', ()=>{
-  const killcode = document.getElementById('killcodeInput').value.trim();
-  if(!killcode) return addLogEntry('Enter killcode','error');
-  selectedPlayer = { killcode }; // simple select
-  addLogEntry(`Selected killcode: ${killcode}`,'success');
-});
+  selectPlayerBtn.addEventListener('click', ()=>{
+    const k = killcodeInput.value.trim();
+    if(!k) return addLogEntry('Enter a killcode','error');
+    selectedPlayer = { killcode: k };
+    addLogEntry(`Selected killcode: ${k}`,'success');
+  });
 
-document.getElementById('sendLuaBtn').addEventListener('click', async ()=>{
-  if(!selectedPlayer) return addLogEntry('Select a player first','error');
-  const lua = document.getElementById('luaInput').value.trim();
-  if(!lua) return addLogEntry('Enter Lua code','error');
-  try {
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ killcode: selectedPlayer.killcode, lua })
+  sendLuaBtn.addEventListener('click', async ()=>{
+    if(!selectedPlayer) return addLogEntry('Select a player first','error');
+    const lua = luaInput.value.trim();
+    if(!lua) return addLogEntry('Enter Lua code','error');
+    try{
+      const res = await fetch(API_URL,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ killcode: selectedPlayer.killcode, lua })
+      });
+      const data = await res.json();
+      if(data.success) addLogEntry(`Lua sent to ${selectedPlayer.killcode}`,'success');
+      else addLogEntry('Failed: '+JSON.stringify(data),'error');
+    }catch(e){
+      addLogEntry('Error: '+e.message,'error');
+    }
+  });
+
+  commandButtons.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if(!selectedPlayer) return addLogEntry('Select a player first','error');
+      const cmd = btn.getAttribute('data-command');
+      luaInput.value = `-- ${cmd} command executed`; // placeholder
+      sendLuaBtn.click();
     });
-    const data = await res.json();
-    if(data.success) addLogEntry(`Lua sent to ${selectedPlayer.killcode}`,'success');
-    else addLogEntry('Error sending Lua: '+JSON.stringify(data),'error');
-  } catch(e){
-    addLogEntry('Error: '+e.message,'error');
-  }
-});
+  });
 
-// auto-refresh
-updatePlayerList();
-setInterval(updatePlayerList,5000);
+  updatePlayerList();
+  setInterval(updatePlayerList,5000);
+  addLogEntry('Dashboard ready. Waiting for player connections...','system');
+});
 </script>
