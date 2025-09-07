@@ -110,9 +110,6 @@ const serverStorage={players:[],addPlayer:function(player){const i=this.players.
 function addLogEntry(msg,type='system'){const ts=new Date().toLocaleTimeString();const entry=document.createElement('div');entry.className='log-entry';let prefix='[System]';let cls='system-msg';if(type==='error'){prefix='[Error]';cls='error-msg';}else if(type==='success'){prefix='[Success]';cls='success-msg';}else if(type==='command'){prefix='[Command]';cls='command-msg';}else if(type==='broadcast'){prefix='[Broadcast]';cls='command-msg';}else if(type==='server'){prefix='[Server]';cls='server-msg';}entry.innerHTML=`<span class="timestamp">[${ts}] ${prefix}</span> <span class="${cls}">${msg}</span>`;commandLog.appendChild(entry);commandLog.scrollTop=commandLog.scrollHeight;}
 function updatePlayerList(){playerList.innerHTML='';if(serverStorage.players.length===0){playerList.innerHTML='<div class="player-item">No players connected</div>';return;}serverStorage.players.forEach(player=>{const item=document.createElement('div');item.className='player-item';item.innerHTML=`<div class="player-info"><span class="player-name">${player.name}</span><span class="player-id">ID: ${player.userId}</span></div><span class="player-killcode">${player.killcode}</span>`;item.addEventListener('click',()=>{selectedPlayer=player;killcodeInput.value=player.killcode;addLogEntry(`Selected player: ${player.name} (${player.killcode})`,'success');});playerList.appendChild(item);});}
 
-// Simulate connections
-function simulatePlayerConnection(){const names=['Player1','Gamer123','ProPlayer','NoobSlayer','RobloxMaster'];const name=names[Math.floor(Math.random()*names.length)];const userId=Math.floor(Math.random()*10000000)+1;const killcode=Math.round((userId/1000000)+1);const player={name:name,userId:userId,killcode:killcode.toString()};serverStorage.addPlayer(player);setTimeout(simulatePlayerConnection,Math.random()*10000+5000);}
-
 // Send command (simulated)
 function sendCommandToPlayer(killcode,cmd){const player=serverStorage.getPlayerByKillcode(killcode);if(player){addLogEntry(`Sending command "${cmd}" to ${player.name} (${killcode})`,'command');setTimeout(()=>{addLogEntry(`Command "${cmd}" executed by ${player.name}`,'server');},1000);}else addLogEntry(`No player found with killcode: ${killcode}`,'error');}
 
@@ -128,7 +125,6 @@ broadcastInput.addEventListener('keypress',e=>{if(e.key==='Enter')broadcastBtn.c
 
 // Init
 updatePlayerList();
-setTimeout(simulatePlayerConnection,2000);
 addLogEntry('Dashboard ready. Waiting for player connections...','system');
 });
 </script>
