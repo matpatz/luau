@@ -4,26 +4,34 @@
   <meta charset="UTF-8">
   <title>Catastrophia Dashboard</title>
   <style>
-    body { background:#111; color:#eee; font-family:monospace; }
-    #playerList { max-height:200px; overflow-y:auto; border:1px solid #444; margin-bottom:10px; }
+    body { background:#111; color:#eee; font-family:monospace; display:flex; flex-direction:row; height:100vh; margin:0; }
+    #sidebar { width:250px; border-right:1px solid #333; padding:10px; box-sizing:border-box; overflow-y:auto; }
+    #main { flex:1; display:flex; flex-direction:column; padding:10px; box-sizing:border-box; }
+    h2 { margin-top:0; }
     .player-item { padding:6px; border-bottom:1px solid #333; cursor:pointer; }
     .player-item:hover { background:#222; }
-    #commandLog { height:200px; overflow-y:auto; border:1px solid #444; margin-top:10px; padding:4px; }
+    #commandLog { flex:1; overflow-y:auto; border:1px solid #444; padding:6px; margin-top:10px; background:#000; }
     .log-entry { margin:2px 0; }
     .system-msg{color:#ccc;} .error-msg{color:#f55;} .success-msg{color:#5f5;} .command-msg{color:#7cf;} .server-msg{color:#ff5;}
-    #luaInput { width:80%; padding:4px; }
-    #sendLuaBtn { padding:4px 8px; margin-left:6px; }
+    #controls { margin-top:10px; }
+    #controls input, #controls button { margin:4px 0; padding:6px; width:100%; box-sizing:border-box; }
   </style>
 </head>
 <body>
-  <h2>Catastrophia Dashboard</h2>
-  <div id="playerList"></div>
-  <input type="text" id="killcodeInput" placeholder="Killcode">
-  <button id="selectPlayer">Select Player</button>
-  <br><br>
-  <input type="text" id="luaInput" placeholder="Enter Lua code here">
-  <button id="sendLuaBtn">Send Lua</button>
-  <div id="commandLog"></div>
+  <div id="sidebar">
+    <h2>Players</h2>
+    <div id="playerList"></div>
+  </div>
+  <div id="main">
+    <h2>Control Panel</h2>
+    <div id="controls">
+      <input type="text" id="killcodeInput" placeholder="Killcode">
+      <button id="selectPlayer">Select Player</button>
+      <input type="text" id="luaInput" placeholder="Enter Lua code here">
+      <button id="sendLuaBtn">Send Lua</button>
+    </div>
+    <div id="commandLog"></div>
+  </div>
 
   <script>
     const killcodeInput = document.getElementById('killcodeInput');
@@ -67,15 +75,15 @@
           item.className = 'player-item';
           item.innerHTML = `
             <div class="player-info">
-              <span class="player-name">${player.player}</span>
-              <span class="player-id">ID: ${player.userid}</span>
+              <span class="player-name">${player.player}</span><br>
+              <span class="player-id">ID: ${player.userid}</span><br>
+              <span class="player-killcode">Killcode: ${player.killcode}</span>
             </div>
-            <span class="player-killcode">${player.killcode}</span>
           `;
           item.addEventListener('click', () => {
             selectedPlayer = player;
             killcodeInput.value = player.killcode;
-            addLogEntry(`Selected player: ${player.player} (${player.killcode})`, 'success');
+            addLogEntry(\`Selected player: \${player.player} (\${player.killcode})\`, 'success');
           });
           playerList.appendChild(item);
         });
@@ -94,18 +102,18 @@
           body: JSON.stringify({ killcode, type:"lua", value: code })
         });
         if(res.ok){
-          addLogEntry(`Sent Lua to ${killcode}: ${code}`, 'command');
+          addLogEntry(\`Sent Lua to \${killcode}: \${code}\`, 'command');
         } else {
-          addLogEntry(`Failed to send Lua (${res.status})`, 'error');
+          addLogEntry(\`Failed to send Lua (\${res.status})\`, 'error');
         }
       } catch(e){
-        addLogEntry(`Error sending Lua: ${e.message}`, 'error');
+        addLogEntry(\`Error sending Lua: \${e.message}\`, 'error');
       }
     }
 
     selectPlayerBtn.addEventListener('click', ()=>{
       const k = killcodeInput.value.trim();
-      if(k) addLogEntry(`Selected killcode manually: ${k}`, 'system');
+      if(k) addLogEntry(\`Selected killcode manually: \${k}\`, 'system');
       else addLogEntry('Please enter a killcode', 'error');
     });
 
