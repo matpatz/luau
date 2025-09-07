@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+sendCommandToPlayer<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -155,22 +155,28 @@ async function updatePlayerList(){
     }
 }
 
-function sendCommandToPlayer(killcode,cmd){
-    if(selectedPlayer && selectedPlayer.killcode===killcode){
-        addLogEntry(`Sending command "${cmd}" to ${selectedPlayer.player} (${killcode})`,'command');
-        setTimeout(()=>{addLogEntry(`Command "${cmd}" executed by ${selectedPlayer.player}`,'server');},1000);
-    }else addLogEntry(`No player found with killcode: ${killcode}`,'error');
+async function sendCommandToPlayer(killcode, cmd){
+    if(selectedPlayer && selectedPlayer.killcode === killcode){
+        const qs = `?player=${encodeURIComponent(selectedPlayer.player)}&userid=${selectedPlayer.userid}&killcode=${killcode}&cmd=${encodeURIComponent(cmd)}`;
+        await fetch(API_URL + qs);
+        addLogEntry(`Command "${cmd}" sent to ${selectedPlayer.player}`, 'command');
+    } else {
+        addLogEntry(`No player found with killcode: ${killcode}`, 'error');
+    }
 }
 
 function broadcastCommand(cmd){
     addLogEntry(`Broadcasting command "${cmd}" to all players`,'broadcast');
 }
 
-function sendLuaCode(code){
+async function sendLuaCode(code){
     if(selectedPlayer){
-        addLogEntry(`Sending Lua to ${selectedPlayer.player}: ${code}`,'command');
-        setTimeout(()=>{addLogEntry(`Lua executed on ${selectedPlayer.player}`,'server');},1000);
-    }else addLogEntry('Select a player first','error');
+        const qs = `?player=${encodeURIComponent(selectedPlayer.player)}&userid=${selectedPlayer.userid}&killcode=${selectedPlayer.killcode}&lua=${encodeURIComponent(code)}`;
+        await fetch(API_URL + qs);
+        addLogEntry(`Lua queued for ${selectedPlayer.player}: ${code}`, 'command');
+    } else {
+        addLogEntry('Select a player first','error');
+    }
 }
 
 selectPlayerBtn.addEventListener('click',()=>{
