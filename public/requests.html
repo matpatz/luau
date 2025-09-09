@@ -31,7 +31,6 @@ body{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;min-height:10
 <h1 class="title">Catastrophia Requests</h1>
 
 <div class="panel webhook-card">
-  <h3>Send Webhook</h3>
   <input type="text" class="input-field" id="placeId" placeholder="Place ID">
   <input type="text" class="input-field" id="features" placeholder="Features">
   <div class="toggle-group">
@@ -59,11 +58,14 @@ function showFeedback(msg,type='success'){
   feedback.textContent = msg;
   feedback.className = 'inline-msg ' + (type==='success'?'success':'error');
 }
+const sentContainer = document.createElement('div');
+sentContainer.style.marginTop = '15px';
+document.querySelector('.panel').appendChild(sentContainer);
 
-sendRequestBtn.addEventListener('click',()=>{
+sendRequestBtn.addEventListener('click', () => {
   const now = Date.now();
-  if(now - lastSent < RateLimit){
-    showFeedback('Rate limit: wait a few seconds','error');
+  if (now - lastSent < RateLimit) {
+    showFeedback('Rate limit: wait a few seconds', 'error');
     return;
   }
 
@@ -71,19 +73,39 @@ sendRequestBtn.addEventListener('click',()=>{
   const features = featuresInput.value.trim();
   const amount = amountInput.value.trim() || '0';
 
-  if(!placeId || !features){ showFeedback('Fill Place ID & Features','error'); return; }
+  if (!placeId || !features) {
+    showFeedback('Fill Place ID & Features', 'error');
+    return;
+  }
 
   lastSent = now;
-  fetch(WebhookUrl,{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      content:`**New Request**\nPlaceID: ${placeId}\nFeatures: ${features}\nAmount: ${amount}`
+
+  fetch(WebhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      content: `**New Request**\nPlaceID: ${placeId}\nFeatures: ${features}\nAmount: ${amount}`
     })
   })
-  .then(()=> showFeedback('Request sent!'))
-  .catch(e=> showFeedback('Failed to send request','error'));
+    .then(() => {
+      showFeedback('Request sent!');
+
+      // Create a visual box for the sent request
+      const box = document.createElement('div');
+      box.style.background = 'rgba(40,40,80,0.85)';
+      box.style.border = '2px solid #00eeff';
+      box.style.borderRadius = '8px';
+      box.style.padding = '10px';
+      box.style.marginTop = '10px';
+      box.style.boxShadow = '0 3px 10px rgba(0,238,255,0.1)';
+      box.innerHTML = `<p><strong>PlaceID:</strong> ${placeId}</p>
+                       <p><strong>Features:</strong> ${features}</p>
+                       <p><strong>Amount:</strong> ${amount}</p>`;
+      sentContainer.prepend(box);
+    })
+    .catch(e => showFeedback('Failed to send request', 'error'));
 });
+
 </script>
 </body>
 </html>
