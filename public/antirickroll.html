@@ -7,7 +7,7 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:Arial,sans-serif;}
 body{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;min-height:100vh;display:flex;justify-content:center;align-items:center;padding:20px;}
-.container{width:100%;max-width:500px;background:rgba(25,25,48,0.9);border-radius:12px;padding:20px;box-shadow:0 10px 30px rgba(0,0,0,0.5);border:1px solid #39396b;}
+.container{width:100%;max-width:500px;padding:20px;}
 .title{text-align:center;font-size:28px;margin-bottom:20px;color:#00eeff;text-shadow:0 0 10px rgba(0,238,255,0.5);}
 .panel{display:flex;flex-direction:column;gap:15px;}
 .input-field{padding:12px 15px;border-radius:6px;border:2px solid #39396b;background:rgba(30,30,60,0.8);color:#fff;font-size:16px;}
@@ -17,17 +17,14 @@ body{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;min-height:10
 .inline-msg{margin-top:5px;font-size:14px;}
 .inline-msg.success{color:#55ff55;}
 .inline-msg.error{color:#ff5555;}
-.result-card{background:rgba(30,30,60,0.85);border-radius:10px;padding:15px;border:2px solid #00eeff;box-shadow:0 5px 15px rgba(0,238,255,0.2);}
-.result-card h3{margin-bottom:10px;color:#00eeff;}
-.result-card p{margin:5px 0;}
 </style>
 </head>
 <body>
 <div class="container">
 <h1 class="title">Rickroll Scanner</h1>
 
-<div class="panel result-card">
-  <input type="text" class="input-field" id="urlInput" placeholder="Enter URL">
+<div class="panel">
+  <input type="text" class="input-field" id="urlInput" placeholder="Enter URL to scan">
   <button class="enter-btn" id="scanBtn">Scan</button>
   <div id="feedback" class="inline-msg"></div>
   <div id="result" class="inline-msg"></div>
@@ -50,28 +47,36 @@ function showResult(msg){
   result.textContent = msg;
 }
 
-function isRickroll(url){
-  url = url.toLowerCase();
-  return url.includes('rickroll') || url.includes('rickastley') || url.includes('dQw4w9WgXcQ');
+const rickSigns = ["rick astley","never gonna give you up","dQw4w9WgXcQ"];
+
+async function scanURL(url){
+  try{
+    showFeedback("Scanning...");
+    result.textContent = "";
+    const response = await fetch(url, {mode:'cors'});
+    const text = await response.text();
+    const found = rickSigns.some(sign => text.toLowerCase().includes(sign));
+    if(found){
+      showResult("Rickroll detected!");
+      showFeedback("Scan complete", "success");
+    } else {
+      showResult("Safe URL");
+      showFeedback("Scan complete", "success");
+    }
+  } catch(e){
+    showFeedback("Failed to fetch URL", "error");
+    result.textContent = "";
+  }
 }
 
 scanBtn.addEventListener('click', () => {
   const url = urlInput.value.trim();
   if(!url){
-    showFeedback('Enter a URL', 'error');
-    showResult('');
+    showFeedback("Enter a URL", "error");
+    result.textContent = "";
     return;
   }
-  showFeedback('Scanning...');
-  setTimeout(() => {
-    if(isRickroll(url)){
-      showResult('⚠️ Rickroll detected!');
-      showFeedback('Scan complete', 'success');
-    } else {
-      showResult('✅ Safe URL');
-      showFeedback('Scan complete', 'success');
-    }
-  }, 800);
+  scanURL(url);
 });
 </script>
 </body>
