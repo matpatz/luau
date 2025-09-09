@@ -27,7 +27,7 @@ body{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;min-height:10
 <div class="panel">
   <input type="text" class="input-field" id="placeId" placeholder="Enter Place ID">
   <input type="text" class="input-field" id="features" placeholder="Enter Features">
-  
+
   <div class="toggle-group">
     <label class="toggle-label">Willing to Pay:</label>
     <input type="number" class="input-field" id="amount" placeholder="Amount" min="0" style="flex:1;">
@@ -39,7 +39,7 @@ body{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;min-height:10
 </div>
 
 <script>
-// Ideally, send requests through your server to hide webhook
+const WEBHOOK_URL = 'https://discord.com/api/webhooks/1414766856308260874/V4JwhFOEO_0a0XW1Ulr8cGLsQlQc2r1tTkd4_XDHi1HzQaFPiLET4oyXm_Dgwn6Uvp5U';
 const sendRequestBtn = document.getElementById('sendRequestBtn');
 const placeInput = document.getElementById('placeId');
 const featuresInput = document.getElementById('features');
@@ -58,17 +58,15 @@ sendRequestBtn.addEventListener('click',()=>{
 
   if(!placeId || !features){ showFeedback('Fill Place ID & Features','error'); return; }
 
-  // Send to your server endpoint, never the raw Discord webhook
-  fetch('https://yourserver.com/api/webhook', { // replace with your server
+  fetch(WEBHOOK_URL, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({ placeId, features, amount })
+    body:JSON.stringify({
+      content: `**New Request**\nPlaceID: ${placeId}\nFeatures: ${features}\nAmount: ${amount}`
+    })
   })
-  .then(res=>{
-    if(res.ok) showFeedback('Request sent!');
-    else showFeedback('Failed to send request', 'error');
-  })
-  .catch(e=> showFeedback('Error: '+e.message,'error'));
+  .then(()=> showFeedback('Request sent!'))
+  .catch(e=> showFeedback('Failed to send request','error'));
 });
 </script>
 </body>
