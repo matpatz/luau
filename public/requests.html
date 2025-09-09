@@ -5,7 +5,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Catastrophia Requests</title>
+<title>Script Requests</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:Arial,sans-serif;}
 body{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;min-height:100vh;display:flex;justify-content:center;align-items:center;padding:20px;}
@@ -58,11 +58,8 @@ function showFeedback(msg,type='success'){
   feedback.textContent = msg;
   feedback.className = 'inline-msg ' + (type==='success'?'success':'error');
 }
-const sentContainer = document.createElement('div');
-sentContainer.style.marginTop = '15px';
-document.querySelector('.panel').appendChild(sentContainer);
 
-sendRequestBtn.addEventListener('click', () => {
+  sendRequestBtn.addEventListener('click', () => {
   const now = Date.now();
   if (now - lastSent < RateLimit) {
     showFeedback('Rate limit: wait a few seconds', 'error');
@@ -84,27 +81,24 @@ sendRequestBtn.addEventListener('click', () => {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      content: `**New Request**\nPlaceID: ${placeId}\nFeatures: ${features}\nAmount: ${amount}`
+      embeds: [
+        {
+          title: "New Request",
+          color: 0x00eeff,
+          fields: [
+            { name: "Place ID", value: placeId, inline: true },
+            { name: "Features", value: features, inline: true },
+            { name: "Amount", value: amount, inline: true }
+          ],
+          timestamp: new Date().toISOString()
+        }
+      ]
     })
   })
-    .then(() => {
-      showFeedback('Request sent!');
-
-      // Create a visual box for the sent request
-      const box = document.createElement('div');
-      box.style.background = 'rgba(40,40,80,0.85)';
-      box.style.border = '2px solid #00eeff';
-      box.style.borderRadius = '8px';
-      box.style.padding = '10px';
-      box.style.marginTop = '10px';
-      box.style.boxShadow = '0 3px 10px rgba(0,238,255,0.1)';
-      box.innerHTML = `<p><strong>PlaceID:</strong> ${placeId}</p>
-                       <p><strong>Features:</strong> ${features}</p>
-                       <p><strong>Amount:</strong> ${amount}</p>`;
-      sentContainer.prepend(box);
-    })
-    .catch(e => showFeedback('Failed to send request', 'error'));
+  .then(() => showFeedback('Request sent!'))
+  .catch(e => showFeedback('Failed to send request', 'error'));
 });
+
 
 </script>
 </body>
