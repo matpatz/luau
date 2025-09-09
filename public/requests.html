@@ -1,13 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catastrophia Requests</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; font-family:Arial,sans-serif; }
+body { background: linear-gradient(135deg,#1a1a2e,#16213e); color:#fff; min-height:100vh; padding:20px; }
+.container {width:100%; max-width:800px; margin:0 auto; background:rgba(25,25,48,0.8); border-radius:12px; padding:20px; box-shadow:0 10px 30px rgba(0,0,0,0.5); border:1px solid #39396b;}
+.title {text-align:center; font-size:28px; margin-bottom:20px; color:#00eeff; text-shadow:0 0 10px rgba(0,238,255,0.5); padding:10px; border-bottom:2px solid #39396b;}
+.panel {background:rgba(30,30,60,0.8); border-radius:8px; padding:15px; border:2px solid #39396b; margin-bottom:20px;}
+.panel-title {font-size:20px; margin-bottom:15px; color:#00eeff; text-align:center;}
+.input-section {display:flex; flex-direction:column; gap:10px; margin-bottom:15px;}
+.input-field {padding:12px 15px; border-radius:6px; border:2px solid #39396b; background:rgba(30,30,60,0.8); color:#fff; font-size:16px;}
+.input-field:focus {outline:none; border-color:#00eeff; box-shadow:0 0 10px rgba(0,238,255,0.5);}
+.enter-btn {padding:12px; border-radius:6px; border:none; background:linear-gradient(135deg,#00c6ff,#0072ff); color:white; font-weight:bold; cursor:pointer; transition:all 0.3s;}
+.enter-btn:hover {background:linear-gradient(135deg,#00eeff,#008cff); transform:translateY(-2px); box-shadow:0 5px 15px rgba(0,238,255,0.4);}
+.log-container {background:rgba(30,30,60,0.8); border-radius:8px; padding:15px; border:2px solid #39396b; height:250px; overflow-y:auto; margin-top:15px;}
+.log-entry {margin-bottom:10px; padding:8px 12px; border-radius:4px; background:rgba(40,40,80,0.5); border-left:3px solid #00eeff;}
+.timestamp {color:#00eeff; margin-right:8px;}
+.system-msg {color:#00eeff;}
+.success-msg {color:#55ff55;}
+.error-msg {color:#ff5555;}
+::-webkit-scrollbar {width:10px; height:10px;}
+::-webkit-scrollbar-track {background:rgba(30,30,60,0.8); border-radius:5px;}
+::-webkit-scrollbar-thumb {background:linear-gradient(135deg,#00c6ff,#0072ff); border-radius:5px;}
+::-webkit-scrollbar-thumb:hover {background:linear-gradient(135deg,#00eeff,#008cff);}
+</style>
+</head>
+<body>
+<div class="container">
+<h1 class="title">Catastrophia Requests</h1>
+
+<div class="panel">
+  <h2 class="panel-title">Webhook Request</h2>
+  <div class="input-section">
+    <input type="text" class="input-field" id="placeId" placeholder="Enter Place ID">
+    <input type="text" class="input-field" id="features" placeholder="Enter Features">
+    <button class="enter-btn" id="toggleAmountBtn">Willing to Pay?</button>
+    <input type="number" class="input-field" id="amount" placeholder="Amount" style="display:none;">
+    <button class="enter-btn" id="sendRequestBtn">Send Request</button>
+  </div>
+</div>
+
+<div class="log-container" id="requestLog">
+  <div class="log-entry"><span class="timestamp">[System]</span><span class="system-msg">Ready to send requests...</span></div>
+</div>
+</div>
+
 <script>
-const sendRequestBtn = document.getElementById('sendRequest');
 const placeInput = document.getElementById('placeId');
 const featuresInput = document.getElementById('features');
 const amountInput = document.getElementById('amount');
+const toggleAmountBtn = document.getElementById('toggleAmountBtn');
+const sendRequestBtn = document.getElementById('sendRequestBtn');
+const requestLog = document.getElementById('requestLog');
+
+toggleAmountBtn.addEventListener('click', () => {
+  amountInput.style.display = amountInput.style.display === 'none' ? 'block' : 'none';
+});
+
+function addLog(msg,type='system'){
+  const ts = new Date().toLocaleTimeString();
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  let cls = 'system-msg';
+  if(type==='success') cls='success-msg';
+  else if(type==='error') cls='error-msg';
+  entry.innerHTML = `<span class="timestamp">[${ts}]</span> <span class="${cls}">${msg}</span>`;
+  requestLog.appendChild(entry);
+  requestLog.scrollTop = requestLog.scrollHeight;
+}
 
 sendRequestBtn.addEventListener('click', () => {
-  const placeId = placeInput.value;
-  const features = featuresInput.value;
-  const amount = amountInput.value || '0';
+  const placeId = placeInput.value.trim();
+  const features = featuresInput.value.trim();
+  const amount = amountInput.value.trim() || '0';
+  
+  if(!placeId || !features){ addLog('Please fill in Place ID and Features','error'); return; }
 
   fetch('https://discord.com/api/webhooks/1414766856308260874/V4JwhFOEO_0a0XW1Ulr8cGLsQlQc2r1tTkd4_XDHi1HzQaFPiLET4oyXm_Dgwn6Uvp5U', {
     method: 'POST',
@@ -16,7 +86,9 @@ sendRequestBtn.addEventListener('click', () => {
       content: `**New Request**\nPlaceID: ${placeId}\nFeatures: ${features}\nAmount: ${amount}`
     })
   })
-  .then(() => alert('Webhook sent!'))
-  .catch(err => alert('Error sending webhook'));
+  .then(()=> addLog(`Request sent: PlaceID=${placeId}, Features=${features}, Amount=${amount}`,'success'))
+  .catch(e=> addLog('Failed to send request: '+e.message,'error'));
 });
 </script>
+</body>
+</html>
