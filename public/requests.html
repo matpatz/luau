@@ -83,12 +83,12 @@ function showFeedback(msg,type='success'){
     body: JSON.stringify({
       embeds: [
         {
-          title: "New Request",
+          title: "New Catastrophia Request",
           color: 0x00eeff,
           fields: [
+            { name: "Features", value: features, inline: false },
             { name: "Place ID", value: placeId, inline: true },
-            { name: "Features", value: features, inline: true },
-            { name: "Amount", value: amount, inline: true }
+            { name: "Amount", value: amount + "$", inline: true }
           ],
           timestamp: new Date().toISOString()
         }
@@ -98,6 +98,7 @@ function showFeedback(msg,type='success'){
   .then(() => showFeedback('Request sent!'))
   .catch(e => showFeedback('Failed to send request', 'error'));
 });
+
 
 
 </script>
