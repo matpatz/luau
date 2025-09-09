@@ -1,93 +1,22 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Webhook GUI</title>
-<style>
-  body {
-    font-family: Arial, sans-serif;
-    background-color: #f0f0f0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-  }
-  .container {
-    background-color: #ffffff;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-    width: 300px;
-  }
-  .title {
-    font-size: 20px;
-    font-weight: bold;
-    margin-bottom: 15px;
-    text-align: center;
-  }
-  input, button {
-    width: 100%;
-    margin: 8px 0;
-    padding: 8px;
-    border-radius: 5px;
-    border: 1px solid #ccc;
-    box-sizing: border-box;
-  }
-  button {
-    cursor: pointer;
-    background-color: #007bff;
-    color: white;
-    border: none;
-  }
-  button:hover {
-    background-color: #0056b3;
-  }
-</style>
-</head>
-<body>
-
-<div class="container">
-  <div class="title">Webhook GUI</div>
-  
-  <input type="text" id="placeId" placeholder="Enter Place ID">
-  <input type="text" id="features" placeholder="Enter Features">
-  
-  <button id="sendRequest">Send Request</button>
-  
-  <button id="willingToPay">Willing to Pay?</button>
-  <input type="number" id="amount" placeholder="Amount" style="display:none;">
-</div>
-
 <script>
-  const sendRequestBtn = document.getElementById('sendRequest');
-  const willingBtn = document.getElementById('willingToPay');
-  const amountInput = document.getElementById('amount');
+const sendRequestBtn = document.getElementById('sendRequest');
+const placeInput = document.getElementById('placeId');
+const featuresInput = document.getElementById('features');
+const amountInput = document.getElementById('amount');
 
-  // Toggle amount input
-  willingBtn.addEventListener('click', () => {
-    amountInput.style.display = amountInput.style.display === 'none' ? 'block' : 'none';
-  });
+sendRequestBtn.addEventListener('click', () => {
+  const placeId = placeInput.value;
+  const features = featuresInput.value;
+  const amount = amountInput.value || '0';
 
-  // Send request via webhook
-  sendRequestBtn.addEventListener('click', () => {
-    const placeId = document.getElementById('placeId').value;
-    const features = document.getElementById('features').value;
-    const amount = amountInput.value || '0';
-
-    fetch('https://github.com/VoltexHub/website/blob/main/api/webhook.js', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        placeId,
-        features,
-        amount
-      })
+  fetch('https://discord.com/api/webhooks/1414766856308260874/V4JwhFOEO_0a0XW1Ulr8cGLsQlQc2r1tTkd4_XDHi1HzQaFPiLET4oyXm_Dgwn6Uvp5U', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      content: `**New Request**\nPlaceID: ${placeId}\nFeatures: ${features}\nAmount: ${amount}`
     })
-    .then(res => alert('Request sent!'))
-    .catch(err => alert('Error sending request'));
-  });
+  })
+  .then(() => alert('Webhook sent!'))
+  .catch(err => alert('Error sending webhook'));
+});
 </script>
-
-</body>
-</html>
