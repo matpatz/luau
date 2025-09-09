@@ -1,3 +1,5 @@
+// why hello good sir nothing to see here ... \\
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -43,7 +45,7 @@ body{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;min-height:10
 </div>
 
 <script>
-const WEBHOOK_URL = 'https://discord.com/api/webhooks/1414766856308260874/V4JwhFOEO_0a0XW1Ulr8cGLsQlQc2r1tTkd4_XDHi1HzQaFPiLET4oyXm_Dgwn6Uvp5U';
+const WebhookUrl = 'https://discord.com/api/webhooks/1414766856308260874/V4JwhFOEO_0a0XW1Ulr8cGLsQlQc2r1tTkd4_XDHi1HzQaFPiLET4oyXm_Dgwn6Uvp5U';
 const sendRequestBtn = document.getElementById('sendRequestBtn');
 const placeInput = document.getElementById('placeId');
 const featuresInput = document.getElementById('features');
@@ -51,7 +53,7 @@ const amountInput = document.getElementById('amount');
 const feedback = document.getElementById('feedback');
 
 let lastSent = 0;
-const RATE_LIMIT_MS = 5000; // 1 request per 5 seconds
+const RateLimit = 500000;
 
 function showFeedback(msg,type='success'){
   feedback.textContent = msg;
@@ -60,7 +62,7 @@ function showFeedback(msg,type='success'){
 
 sendRequestBtn.addEventListener('click',()=>{
   const now = Date.now();
-  if(now - lastSent < RATE_LIMIT_MS){
+  if(now - lastSent < RateLimit){
     showFeedback('Rate limit: wait a few seconds','error');
     return;
   }
@@ -71,8 +73,8 @@ sendRequestBtn.addEventListener('click',()=>{
 
   if(!placeId || !features){ showFeedback('Fill Place ID & Features','error'); return; }
 
-  lastSent = now; // update timestamp
-  fetch(WEBHOOK_URL,{
+  lastSent = now;
+  fetch(WebhookUrl,{
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
