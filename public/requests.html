@@ -28,7 +28,7 @@ body{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;min-height:10
 </head>
 <body>
 <div class="container">
-<h1 class="title">Catastrophia Requests</h1>
+<h1 class="title">Script Requests</h1>
 
 <div class="panel webhook-card">
   <input type="text" class="input-field" id="placeId" placeholder="Place ID">
@@ -83,7 +83,7 @@ function showFeedback(msg,type='success'){
     body: JSON.stringify({
       embeds: [
         {
-          title: "New Catastrophia Request",
+          title: "New Request",
           color: 0x00eeff,
           fields: [
             { name: "Features", value: features, inline: false },
