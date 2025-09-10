@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lua Tools</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;font-family:Arial,sans-serif;}
+  body{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;min-height:100vh;display:flex;justify-content:center;align-items:flex-start;padding:20px;}
+  .container{width:100%;max-width:900px;padding:20px;}
+  h1{text-align:center;margin-bottom:20px;color:#00eeff;text-shadow:0 0 10px rgba(0,238,255,0.5);}
+  
+  /* Tabs */
+  .tabs{display:flex;gap:5px;margin-bottom:20px;}
+  .tab{padding:10px 20px;background:#222244;border-radius:6px;cursor:pointer;transition:0.2s;}
+  .tab.active{background:#00c6ff;color:#000;font-weight:bold;}
+  
+  /* Panels */
+  .panel{display:none;flex-direction:column;gap:10px;}
+  .panel.active{display:flex;}
+  
+  textarea{padding:12px;border-radius:6px;border:2px solid #39396b;background:rgba(30,30,60,0.8);color:#fff;font-size:14px;font-family:monospace;width:100%;min-height:250px;resize:vertical;}
+  .btn{padding:10px;border-radius:6px;border:none;background:linear-gradient(135deg,#00c6ff,#0072ff);color:white;font-weight:bold;cursor:pointer;transition:all 0.3s;}
+  .btn:hover{background:linear-gradient(135deg,#00eeff,#008cff);transform:translateY(-2px);box-shadow:0 5px 15px rgba(0,238,255,0.4);}
+  .feedback{font-size:14px;}
+  .feedback.success{color:#55ff55;}
+  .feedback.error{color:#ff5555;}
+  .button-group{display:flex;gap:10px;}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Lua Tools</h1>
+
+<div class="tabs">
+  <div class="tab active" data-tab="obfuscator">Obfuscator</div>
+  <div class="tab" data-tab="minifier">Minifier/Formatter</div>
+  <div class="tab" data-tab="snippets">Snippet Manager</div>
+  <div class="tab" data-tab="executor">Executor Helper</div>
+</div>
+
+<!-- Obfuscator -->
+<div class="panel active" id="obfuscator">
+  <textarea id="obsCode" placeholder="Paste Lua code..."></textarea>
+  <div class="button-group">
+    <button class="btn" id="obsBtn">Obfuscate</button>
+    <button class="btn" id="obsUndo">Undo</button>
+  </div>
+  <div id="obsFeedback" class="feedback"></div>
+</div>
+
+<!-- Minifier -->
+<div class="panel" id="minifier">
+  <textarea id="minCode" placeholder="Paste Lua code..."></textarea>
+  <div class="button-group">
+    <button class="btn" id="minBtn">Minify</button>
+    <button class="btn" id="minUndo">Undo</button>
+  </div>
+  <div id="minFeedback" class="feedback"></div>
+</div>
+
+<!-- Snippets -->
+<div class="panel" id="snippets">
+  <textarea id="snipCode" placeholder="Write or paste Lua code..."></textarea>
+  <input type="text" id="snipName" placeholder="Snippet name..." style="padding:8px;border-radius:6px;border:none;width:200px;">
+  <div class="button-group">
+    <button class="btn" id="snipSave">Save Snippet</button>
+    <button class="btn" id="snipLoad">Load Snippet</button>
+    <button class="btn" id="snipClear">Clear Snippet</button>
+  </div>
+  <div id="snipFeedback" class="feedback"></div>
+</div>
+
+<!-- Executor Helper -->
+<div class="panel" id="executor">
+  <textarea id="execCode" placeholder="Test Lua code..."></textarea>
+  <div class="button-group">
+    <button class="btn" id="execRun">Run Code</button>
+    <button class="btn" id="execClear">Clear Output</button>
+  </div>
+  <textarea id="execOutput" placeholder="Output..." readonly style="min-height:150px;"></textarea>
+</div>
+
+<script>
+// TAB SWITCHING
+const tabs = document.querySelectorAll('.tab');
+const panels = document.querySelectorAll('.panel');
+tabs.forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    tabs.forEach(t=>t.classList.remove('active'));
+    panels.forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.tab).classList.add('active');
+  });
+});
+
+// Feedback helper
+function showFeedback(el,msg,type='success'){
+  el.textContent = msg;
+  el.className = 'feedback '+(type==='success'?'success':'error');
+}
+
+// --- Obfuscator ---
+let obsOriginal="";
+function randomVar(){ return "_v"+Math.floor(Math.random()*10000); }
+function obfuscateLua(code){
+  code = code.replace(/--\[==*\[.*?\]==*\]/gs,"").replace(/--.*$/gm,""); // remove comments
+  code = code.replace(/\s+/g," ").trim(); // normalize spaces
+
+  // Identifier rename
+  const map={};
+  code = code.replace(/\b(local\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\b/g,(m,loc,name)=>{
+    if(["function","end","if","then","else","for","in","do","while","repeat","until","return","break","true","false","nil","getgenv","game","workspace"].includes(name)) return m;
+    if(!map[name]) map[name]=randomVar();
+    return (loc||"")+map[name];
+  });
+
+  // Insert junk functions
+  for(let i=0;i<3;i++){
+    code += ` function ${randomVar()}() return ${Math.floor(Math.random()*100)} end`;
+  }
+  return code;
+}
+
+document.getElementById('obsBtn').addEventListener('click',()=>{
+  const code = document.getElementById('obsCode').value.trim();
+  if(!code){ showFeedback(document.getElementById('obsFeedback'),"Paste Lua code!","error"); return; }
+  obsOriginal = code;
+  document.getElementById('obsCode').value = obfuscateLua(code);
+  showFeedback(document.getElementById('obsFeedback'),"Obfuscation complete","success");
+});
+document.getElementById('obsUndo').addEventListener('click',()=>{
+  if(obsOriginal) document.getElementById('obsCode').value = obsOriginal;
+});
+
+// --- Minifier ---
+let minOriginal="";
+function minifyLua(code){
+  return code.replace(/--\[==*\[.*?\]==*\]/gs,"").replace(/--.*$/gm,"").replace(/\s+/g," ").trim();
+}
+document.getElementById('minBtn').addEventListener('click',()=>{
+  const code = document.getElementById('minCode').value.trim();
+  if(!code){ showFeedback(document.getElementById('minFeedback'),"Paste Lua code!","error"); return; }
+  minOriginal = code;
+  document.getElementById('minCode').value = minifyLua(code);
+  showFeedback(document.getElementById('minFeedback'),"Minify complete","success");
+});
+document.getElementById('minUndo').addEventListener('click',()=>{
+  if(minOriginal) document.getElementById('minCode').value = minOriginal;
+});
+
+// --- Snippets ---
+function getSnippets(){ return JSON.parse(localStorage.getItem('luaSnippets')||'{}'); }
+function saveSnippets(snips){ localStorage.setItem('luaSnippets',JSON.stringify(snips)); }
+
+document.getElementById('snipSave').addEventListener('click',()=>{
+  const code=document.getElementById('snipCode').value.trim();
+  const name=document.getElementById('snipName').value.trim();
+  if(!code||!name){ showFeedback(document.getElementById('snipFeedback'),"Enter code & name","error"); return; }
+  const snips=getSnippets();
+  snips[name]=code;
+  saveSnippets(snips);
+  showFeedback(document.getElementById('snipFeedback'),`Saved snippet "${name}"`);
+});
+document.getElementById('snipLoad').addEventListener('click',()=>{
+  const name=document.getElementById('snipName').value.trim();
+  const snips=getSnippets();
+  if(snips[name]) document.getElementById('snipCode').value = snips[name];
+});
+document.getElementById('snipClear').addEventListener('click',()=>{
+  document.getElementById('snipCode').value="";
+  document.getElementById('snipName').value="";
+});
+
+// --- Executor Helper ---
+document.getElementById('execRun').addEventListener('click',()=>{
+  const code=document.getElementById('execCode').value;
+  try{
+    let result = Function('"use strict";return ('+code+')')();
+    document.getElementById('execOutput').value += "> "+result+"\n";
+  }catch(e){
+    document.getElementById('execOutput').value += "> ERROR: "+e+"\n";
+  }
+});
+document.getElementById('execClear').addEventListener('click',()=>{
+  document.getElementById('execOutput').value="";
+});
+</script>
+</body>
+</html>
