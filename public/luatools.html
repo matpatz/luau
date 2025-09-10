@@ -15,12 +15,16 @@ h1{text-align:center;margin-bottom:20px;color:#00eeff;text-shadow:0 0 10px rgba(
 .panel{display:none;flex-direction:column;gap:10px;}
 .panel.active{display:flex;}
 textarea, input{padding:12px;border-radius:6px;border:2px solid #39396b;background:rgba(30,30,60,0.8);color:#fff;font-size:14px;font-family:monospace;width:100%;min-height:250px;resize:vertical;}
+input[type=text]{min-height:40px;}
 .btn{padding:10px;border-radius:6px;border:none;background:linear-gradient(135deg,#00c6ff,#0072ff);color:white;font-weight:bold;cursor:pointer;transition:all 0.3s;}
 .btn:hover{background:linear-gradient(135deg,#00eeff,#008cff);transform:translateY(-2px);box-shadow:0 5px 15px rgba(0,238,255,0.4);}
 .feedback{font-size:14px;}
 .feedback.success{color:#55ff55;}
 .feedback.error{color:#ff5555;}
 .button-group{display:flex;gap:10px;flex-wrap:wrap;}
+.script-result{display:flex;gap:10px;padding:10px;border:1px solid #39396b;border-radius:6px;background:rgba(20,20,40,0.8);}
+.script-result img{width:80px;height:80px;border-radius:6px;object-fit:cover;}
+.script-text{display:flex;flex-direction:column;gap:4px;}
 </style>
 </head>
 <body>
@@ -33,7 +37,7 @@ textarea, input{padding:12px;border-radius:6px;border:2px solid #39396b;backgrou
   <div class="tab" data-tab="search">Script Search</div>
 </div>
 
-<!-- Obfuscator / Deobfuscator -->
+<!-- Tab 1: Obfuscator -->
 <div class="panel active" id="obf">
   <textarea id="obfCode" placeholder="Paste Lua code..."></textarea>
   <div class="button-group">
@@ -43,7 +47,7 @@ textarea, input{padding:12px;border-radius:6px;border:2px solid #39396b;backgrou
   <div id="obfFeedback" class="feedback"></div>
 </div>
 
-<!-- Formatter / Code Run -->
+<!-- Tab 2: Formatter / Code Run -->
 <div class="panel" id="fmt">
   <textarea id="fmtCode" placeholder="Paste Lua code..."></textarea>
   <div class="button-group">
@@ -54,13 +58,13 @@ textarea, input{padding:12px;border-radius:6px;border:2px solid #39396b;backgrou
   <div id="fmtFeedback" class="feedback"></div>
 </div>
 
-<!-- Script Search -->
+<!-- Tab 3: Script Search -->
 <div class="panel" id="search">
-  <input type="text" id="searchQuery" placeholder="Search ScriptBlox..." style="padding:10px;border-radius:6px;border:none;width:300px;">
   <div class="button-group">
+    <input type="text" id="searchQuery" placeholder="Search ScriptBlox...">
     <button class="btn" id="searchBtn">Search</button>
   </div>
-  <textarea id="searchResults" placeholder="Search results..." readonly style="min-height:250px;"></textarea>
+  <div id="searchResults" style="display:flex;flex-direction:column;gap:10px;margin-top:10px;"></div>
 </div>
 
 <script>
@@ -110,34 +114,47 @@ document.getElementById('runBtn').addEventListener('click',()=>{
   const output = document.getElementById('runOutput');
   output.value = ""; // clear previous logs
   try{
-    // basic Lua-like emulation using JS eval
-    let result=eval(code.replace(/local\s+/g,"var ")); // converts local->var
+    let result=eval(code.replace(/local\s+/g,"var "));
     output.value+="> Success: "+result+"\n";
   } catch(e){
     output.value+="> ERROR: "+e+"\n";
   }
 });
 
-// --- Script Search using ScriptBlox API ---
+// --- Script Search ---
+async function fetchScripts(page=1,max=20){
+  const resp = await fetch(`https://scriptblox.com/api/script/fetch?page=${page}&max=${max}`);
+  return await resp.json();
+}
 document.getElementById('searchBtn').addEventListener('click',async()=>{
-  const query = document.getElementById('searchQuery').value.trim();
+  const query = document.getElementById('searchQuery').value.trim().toLowerCase();
   const results = document.getElementById('searchResults');
-  if(!query){ results.value="Enter a search query."; return; }
-
+  results.innerHTML = "Loading...";
   try{
-    const resp = await fetch(`https://scriptblox.com/api/script/fetch?sortBy=updatedAt&order=desc`);
-    const data = await resp.json();
+    const data = await fetchScripts();
+    results.innerHTML = "";
     if(data.result && data.result.scripts){
-      results.value="";
+      let found=false;
       data.result.scripts.forEach(s=>{
-        if(s.title.toLowerCase().includes(query.toLowerCase())){
-          results.value+=`Title: ${s.title}\nGame: ${s.game.name}\nSlug: ${s.slug}\nVerified: ${s.verified}\nKey: ${s.key}\n\n`;
+        if(s.title.toLowerCase().includes(query)){
+          found=true;
+          const div=document.createElement('div');
+          div.className="script-result";
+          div.innerHTML = `<img src="${s.game.imageUrl || ''}" alt="game image">
+            <div class="script-text">
+              <strong>${s.title}</strong>
+              <span>Game: ${s.game.name}</span>
+              <span>Slug: ${s.slug}</span>
+              <span>Verified: ${s.verified}</span>
+              <span>Key: ${s.key}</span>
+            </div>`;
+          results.appendChild(div);
         }
       });
-      if(results.value==="") results.value="No scripts found for that query.";
-    } else results.value="No scripts found.";
+      if(!found) results.innerHTML="No scripts found for that query.";
+    } else results.innerHTML="No scripts found.";
   } catch(err){
-    results.value="Error fetching scripts: "+err;
+    results.innerHTML="Error fetching scripts: "+err;
   }
 });
 </script>
