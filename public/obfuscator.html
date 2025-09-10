@@ -21,7 +21,7 @@ body{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;min-height:10
 </head>
 <body>
 <div class="container">
-<h1 class="title">Lua Obfuscator</h1>
+<h1 class="title">Advanced Lua Obfuscator</h1>
 <div class="panel">
   <textarea class="textarea-field" id="luaBox" placeholder="Paste your Lua script here..."></textarea>
   <div class="button-box">
@@ -41,26 +41,43 @@ function showFeedback(msg,type='success'){
   feedback.className = 'inline-msg ' + (type==='success'?'success':'error');
 }
 
-// Random variable names
-function randomVar(){ return "_v"+Math.floor(Math.random()*100000 + Math.random()*1000); }
+function randomVar(){ return "_v"+Math.floor(Math.random()*100000+Math.random()*1000); }
 
-// Base64 encode Lua strings
 function encodeStrings(lua){
   return lua.replace(/(["'])(.*?)\1/g,(m,q,s)=>{
     return `decode64("${btoa(s)}")`;
   });
 }
 
-// Main obfuscation function
+function encodeNumbers(lua){
+  return lua.replace(/\b\d+(\.\d+)?\b/g,n=>{
+    const num = parseFloat(n);
+    const a = Math.floor(Math.random()*num);
+    const b = num - a;
+    return `(${a}+${b})`;
+  });
+}
+
+function addJunkCode(lua){
+  const junk = [
+    `local ${randomVar()} = math.random()`,
+    `local ${randomVar()} = {} for i=1,5 do table.insert(${randomVar()},i) end`,
+    `local ${randomVar()} = "${btoa("junk")}"`,
+  ];
+  const lines = lua.split(";");
+  for(let i=0;i<lines.length;i+=2){
+    if(Math.random()<0.3) lines[i] += `;${junk[Math.floor(Math.random()*junk.length)]}`;
+  }
+  return lines.join(";");
+}
+
 function obfuscateLua(lua){
   try{
-    // Remove comments
+    // Remove comments & whitespace
     lua = lua.replace(/--\[==*\[.*?\]==*\]/gs,"").replace(/--.*$/gm,"");
-
-    // Remove extra whitespace & newlines
     lua = lua.replace(/\s+/g," ").trim();
 
-    // Map for renaming identifiers
+    // Randomize identifiers
     const identifiers = {};
     lua = lua.replace(/\b(local\s+)?(function\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\b/g,(m,localKw,funcKw,name)=>{
       const reserved = ["function","end","if","then","else","for","in","do","while","repeat","until","return","break","true","false","nil","getgenv","game","workspace"];
@@ -69,10 +86,14 @@ function obfuscateLua(lua){
       return (localKw||"") + (funcKw||"") + identifiers[name];
     });
 
-    // Encode strings
+    // Encode strings & numbers
     lua = encodeStrings(lua);
+    lua = encodeNumbers(lua);
 
-    // Add decode64 function if there are encoded strings
+    // Add junk/no-op code
+    lua = addJunkCode(lua);
+
+    // Add decode64 function
     if(lua.includes('decode64')){
       lua = `local decode64=function(s) return game:GetService("HttpService"):Base64Decode(s) end\n` + lua;
     }
