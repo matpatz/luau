@@ -2,98 +2,62 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lua Obfuscator</title>
+<title>Roblox Lua Obfuscator</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box;font-family:Arial,sans-serif;}
-body{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;min-height:100vh;display:flex;justify-content:center;align-items:center;padding:20px;}
-.container{width:100%;max-width:700px;padding:20px;}
-.title{text-align:center;font-size:28px;margin-bottom:20px;color:#00eeff;text-shadow:0 0 10px rgba(0,238,255,0.5);}
-.panel{display:flex;flex-direction:column;gap:15px;}
-.textarea-field{padding:12px;border-radius:6px;border:2px solid #39396b;background:rgba(30,30,60,0.8);color:#fff;font-size:14px;font-family:monospace;width:100%;min-height:400px;resize:vertical;}
-.enter-btn{padding:12px;border-radius:6px;border:none;background:linear-gradient(135deg,#00c6ff,#0072ff);color:white;font-weight:bold;cursor:pointer;transition:all 0.3s;}
-.enter-btn:hover{background:linear-gradient(135deg,#00eeff,#008cff);transform:translateY(-2px);box-shadow:0 5px 15px rgba(0,238,255,0.4);}
-.inline-msg{margin-top:5px;font-size:14px;}
-.inline-msg.success{color:#55ff55;}
-.inline-msg.error{color:#ff5555;}
-.button-group{display:flex;gap:10px;justify-content:center;}
+body { font-family: Arial; padding: 20px; background: #1e1e1e; color: #fff; }
+textarea { width: 100%; height: 250px; background: #2d2d2d; color: #fff; border: none; padding: 10px; font-family: monospace; }
+button { padding: 10px 20px; margin-top: 10px; background: #4caf50; border: none; cursor: pointer; color: #fff; }
+button:hover { background: #45a049; }
 </style>
 </head>
 <body>
-<div class="container">
-<h1 class="title">Lua Obfuscator</h1>
-<div class="panel">
-  <textarea class="textarea-field" id="luaBox" placeholder="Paste your Lua script here..."></textarea>
-  <div class="button-group">
-    <button class="enter-btn" id="obfuscateBtn">Obfuscate</button>
-    <button class="enter-btn" id="undoBtn">Undo</button>
-  </div>
-  <div id="feedback" class="inline-msg"></div>
-</div>
-</div>
+<h2>Roblox Lua Obfuscator</h2>
+<textarea id="input" placeholder="Paste your Lua script here"></textarea>
+<button onclick="obfuscate()">Obfuscate</button>
+<textarea id="output" placeholder="Obfuscated output"></textarea>
 
 <script>
-const luaBox = document.getElementById('luaBox');
-const obfuscateBtn = document.getElementById('obfuscateBtn');
-const undoBtn = document.getElementById('undoBtn');
-const feedback = document.getElementById('feedback');
-
-let originalCode = "";
-
-function showFeedback(msg,type='success'){
-  feedback.textContent = msg;
-  feedback.className = 'inline-msg ' + (type==='success'?'success':'error');
+function randomVar(len=6){
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let str = '';
+    for(let i=0;i<len;i++) str += chars[Math.floor(Math.random()*chars.length)];
+    return '_'+str;
 }
 
-// Generate random variable names like _v1234
-function randomVar(){ return "_v" + Math.floor(Math.random()*10000); }
-
-// Obfuscate Lua code
-function obfuscateLua(lua){
-  try{
-    // Remove multiline and single-line comments
-    lua = lua.replace(/--\[==*\[.*?\]==*\]/gs,"");
-    lua = lua.replace(/--.*$/gm,"");
-
-    // Remove extra whitespace
-    lua = lua.replace(/\s+/g," ").trim();
-
-    // Keep a map of renamed identifiers
-    const identifiers = {};
-    lua = lua.replace(/\b(local\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\b/g,(m,localKeyword,name)=>{
-      // Skip Lua keywords and important globals
-      if(["function","end","if","then","else","for","in","do","while","repeat","until","return","break","true","false","nil","getgenv","game","workspace"].includes(name)) return m;
-      if(!identifiers[name]) identifiers[name] = randomVar();
-      return (localKeyword||"") + identifiers[name];
+function obfuscate(){
+    let code = document.getElementById('input').value;
+    
+    // remove comments
+    code = code.replace(/--.*$/gm, '');
+    
+    // remove extra whitespace
+    code = code.replace(/\n\s*\n/g,'\n').trim();
+    
+    // find all locals/globals
+    let varNames = [...new Set(code.match(/\blocal\s+([a-zA-Z_][a-zA-Z0-9_]*)/g)?.map(x=>x.split(' ')[1]) || [])];
+    
+    // replace all variable names with random ones
+    let mapping = {};
+    for(let v of varNames){
+        mapping[v] = randomVar(4 + Math.floor(Math.random()*4));
+    }
+    for(let orig in mapping){
+        let re = new RegExp(`\\b${orig}\\b`, 'g');
+        code = code.replace(re, mapping[orig]);
+    }
+    
+    // optionally base64 encode strings
+    code = code.replace(/(["'])(.*?)\1/g, (m,q,s)=>{
+        return `decode64("${btoa(s)}")`;
     });
-
-    return lua;
-  }catch(e){
-    showFeedback("Obfuscation failed", "error");
-    return "";
-  }
+    
+    // add decode64 function at the top if used
+    if(code.includes('decode64')){
+        code = `local decode64=function(s) return game:GetService("HttpService"):Base64Decode(s) end\n` + code;
+    }
+    
+    document.getElementById('output').value = code;
 }
-
-obfuscateBtn.addEventListener('click', ()=>{
-  const code = luaBox.value.trim();
-  if(!code){
-    showFeedback("Paste a Lua script first","error");
-    return;
-  }
-  originalCode = code;
-  const obf = obfuscateLua(code);
-  luaBox.value = obf;
-  showFeedback("Obfuscation complete","success");
-});
-
-undoBtn.addEventListener('click', ()=>{
-  if(originalCode){
-    luaBox.value = originalCode;
-    showFeedback("Restored original code","success");
-  } else {
-    showFeedback("Nothing to undo","error");
-  }
-});
 </script>
 </body>
 </html>
