@@ -21,7 +21,7 @@ body{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;min-height:10
 </head>
 <body>
 <div class="container">
-
+  
 <div class="panel">
   <input type="text" class="input-field" id="urlInput" placeholder="Enter URL to scan">
   <button class="enter-btn" id="scanBtn">Scan</button>
@@ -37,6 +37,10 @@ const urlInput = document.getElementById('urlInput');
 const feedback = document.getElementById('feedback');
 const result = document.getElementById('result');
 
+const rickSigns = ["rick astley","never gonna give you up","dQw4w9WgXcQ"];
+
+const CORS_PROXY = "https://api.allorigins.win/get?url=";
+
 function showFeedback(msg,type='success'){
   feedback.textContent = msg;
   feedback.className = 'inline-msg ' + (type==='success'?'success':'error');
@@ -46,20 +50,31 @@ function showResult(msg){
   result.textContent = msg;
 }
 
-const rickSigns = ["rick astley","never gonna give you up","dQw4w9WgXcQ"];
-
 async function scanURL(url){
   try{
     showFeedback("Scanning...");
     result.textContent = "";
-    const response = await fetch(url, {mode:'cors'});
-    const text = await response.text();
+
+    let fetchUrl = url;
+    if(!url.startsWith(window.location.origin)){
+      fetchUrl = CORS_PROXY + encodeURIComponent(url);
+    }
+
+    const response = await fetch(fetchUrl);
+    let text = "";
+    if(fetchUrl.startsWith(CORS_PROXY)){
+      const data = await response.json();
+      text = data.contents;
+    } else {
+      text = await response.text();
+    }
+
     const found = rickSigns.some(sign => text.toLowerCase().includes(sign));
     if(found){
-      showResult("Rickroll detected!");
+      showResult("Scan complete: Rickroll detected");
       showFeedback("Scan complete", "success");
     } else {
-      showResult("Safe URL");
+      showResult("Scan complete: Safe");
       showFeedback("Scan complete", "success");
     }
   } catch(e){
