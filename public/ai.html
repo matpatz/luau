@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Lua Obfuscator</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:Arial,sans-serif;}
+body{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;min-height:100vh;display:flex;justify-content:center;align-items:center;padding:20px;}
+.container{width:100%;max-width:700px;padding:20px;}
+.title{text-align:center;font-size:28px;margin-bottom:20px;color:#00eeff;text-shadow:0 0 10px rgba(0,238,255,0.5);}
+.panel{display:flex;flex-direction:column;gap:15px;}
+.textarea-field{padding:12px;border-radius:6px;border:2px solid #39396b;background:rgba(30,30,60,0.8);color:#fff;font-size:14px;font-family:monospace;width:100%;min-height:400px;resize:vertical;}
+.button-box{background:rgba(0,238,255,0.1);border-radius:8px;padding:5px;display:flex;gap:10px;justify-content:center;}
+.enter-btn{padding:12px 20px;border-radius:6px;border:none;background:linear-gradient(135deg,#00c6ff,#0072ff);color:white;font-weight:bold;cursor:pointer;transition:all 0.3s;}
+.enter-btn:hover{background:linear-gradient(135deg,#00eeff,#008cff);transform:translateY(-2px);box-shadow:0 5px 15px rgba(0,238,255,0.4);}
+.inline-msg{margin-top:5px;font-size:14px;text-align:center;}
+.inline-msg.success{color:#55ff55;}
+.inline-msg.error{color:#ff5555;}
+</style>
+</head>
+<body>
+<div class="container">
+<h1 class="title">AI Lua Obfuscator</h1>
+<div class="panel">
+  <textarea class="textarea-field" id="luaBox" placeholder="Paste your Lua script here..."></textarea>
+  <div class="button-box">
+    <button class="enter-btn" id="obfuscateBtn">Obfuscate</button>
+  </div>
+  <div id="feedback" class="inline-msg"></div>
+</div>
+</div>
+
+<script>
+const luaBox=document.getElementById("luaBox"),
+      obfuscateBtn=document.getElementById("obfuscateBtn"),
+      feedback=document.getElementById("feedback");
+
+function showFeedback(msg,type='success'){
+    feedback.textContent=msg;
+    feedback.className='inline-msg '+(type==='success'?'success':'error');
+}
+
+function randVar(){return "_v"+Math.floor(Math.random()*1e7);}
+function encodeBase64(s){return btoa(unescape(encodeURIComponent(s)));}
+function decodeBase64Lua(){return 'local decodeBase64=function(s)return game:HttpService():Base64Decode(s)end';}
+
+function ultraObfuscate(lua){
+    try{
+        lua=lua.replace(/--\[==*\[.*?\]==*\]/gs,"")
+               .replace(/--.*$/gm,"")
+               .replace(/\s+/g," ").trim();
+
+        const ids={};
+        lua=lua.replace(/\b(local\s+)?(function\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\b/g,(m,lk,fk,name)=>{
+            const reserved=["function","end","if","then","else","for","in","do","while","repeat","until","return","break","true","false","nil","getgenv","game","workspace"];
+            if(reserved.includes(name)) return m;
+            if(!ids[name]) ids[name]=randVar();
+            return (lk||"")+(fk||"")+ids[name];
+        });
+
+        // encode strings
+        lua=lua.replace(/(["'])(.*?)\1/g,(m,q,s)=>`decodeBase64("${encodeBase64(s)}")`);
+
+        // add junk array
+        let junk="local _tbl={";
+        for(let i=0;i<50;i++){junk+=`"${encodeBase64(randVar())}",`;};
+        junk=junk.slice(0,-1)+"};";
+
+        lua=`${decodeBase64Lua()}; return (function(...) ${junk} ${lua} end)()`;
+        return lua;
+    }catch(e){showFeedback("Obfuscation failed","error"); return "";}
+}
+
+obfuscateBtn.addEventListener('click',()=>{
+    const code=luaBox.value.trim();
+    if(!code){showFeedback("Paste a Lua script first","error");return;}
+    const obf=ultraObfuscate(code);
+    luaBox.value=obf;
+    showFeedback("Ultra obfuscation complete","success");
+});
+</script>
+</body>
+</html>
