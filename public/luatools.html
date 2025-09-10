@@ -14,7 +14,7 @@ h1{text-align:center;margin-bottom:20px;color:#00eeff;text-shadow:0 0 10px rgba(
 .tab.active{background:#00c6ff;color:#000;font-weight:bold;}
 .panel{display:none;flex-direction:column;gap:10px;}
 .panel.active{display:flex;}
-textarea{padding:12px;border-radius:6px;border:2px solid #39396b;background:rgba(30,30,60,0.8);color:#fff;font-size:14px;font-family:monospace;width:100%;min-height:250px;resize:vertical;}
+textarea, input{padding:12px;border-radius:6px;border:2px solid #39396b;background:rgba(30,30,60,0.8);color:#fff;font-size:14px;font-family:monospace;width:100%;min-height:250px;resize:vertical;}
 .btn{padding:10px;border-radius:6px;border:none;background:linear-gradient(135deg,#00c6ff,#0072ff);color:white;font-weight:bold;cursor:pointer;transition:all 0.3s;}
 .btn:hover{background:linear-gradient(135deg,#00eeff,#008cff);transform:translateY(-2px);box-shadow:0 5px 15px rgba(0,238,255,0.4);}
 .feedback{font-size:14px;}
@@ -30,7 +30,6 @@ textarea{padding:12px;border-radius:6px;border:2px solid #39396b;background:rgba
 <div class="tabs">
   <div class="tab active" data-tab="obf">Obfuscator / Deobfuscator</div>
   <div class="tab" data-tab="fmt">Formatter / Code Run</div>
-  <div class="tab" data-tab="ai">AI Helper</div>
   <div class="tab" data-tab="search">Script Search</div>
 </div>
 
@@ -39,7 +38,6 @@ textarea{padding:12px;border-radius:6px;border:2px solid #39396b;background:rgba
   <textarea id="obfCode" placeholder="Paste Lua code..."></textarea>
   <div class="button-group">
     <button class="btn" id="obfBtn">Obfuscate</button>
-    <button class="btn" id="deobfBtn">Deobfuscate</button>
     <button class="btn" id="obfUndo">Undo</button>
   </div>
   <div id="obfFeedback" class="feedback"></div>
@@ -52,31 +50,21 @@ textarea{padding:12px;border-radius:6px;border:2px solid #39396b;background:rgba
     <button class="btn" id="fmtBtn">Format / Minify</button>
     <button class="btn" id="runBtn">Run Code</button>
   </div>
-  <textarea id="runOutput" placeholder="Output..." readonly style="min-height:150px;"></textarea>
+  <textarea id="runOutput" placeholder="Output / Log..." readonly style="min-height:200px;"></textarea>
   <div id="fmtFeedback" class="feedback"></div>
-</div>
-
-<!-- AI Helper -->
-<div class="panel" id="ai">
-  <textarea id="aiPrompt" placeholder="Enter your prompt..."></textarea>
-  <div class="button-group">
-    <button class="btn" id="aiGenerate">Generate / Improve Script</button>
-  </div>
-  <textarea id="aiOutput" placeholder="AI output..." readonly style="min-height:200px;"></textarea>
-  <div id="aiFeedback" class="feedback"></div>
 </div>
 
 <!-- Script Search -->
 <div class="panel" id="search">
-  <input type="text" id="searchQuery" placeholder="Search snippets..." style="padding:10px;border-radius:6px;border:none;width:300px;">
+  <input type="text" id="searchQuery" placeholder="Search ScriptBlox..." style="padding:10px;border-radius:6px;border:none;width:300px;">
   <div class="button-group">
     <button class="btn" id="searchBtn">Search</button>
   </div>
-  <textarea id="searchResults" placeholder="Search results..." readonly style="min-height:200px;"></textarea>
+  <textarea id="searchResults" placeholder="Search results..." readonly style="min-height:250px;"></textarea>
 </div>
 
 <script>
-// TAB SWITCHING
+// --- TAB SWITCHING ---
 const tabs = document.querySelectorAll('.tab');
 const panels = document.querySelectorAll('.panel');
 tabs.forEach(tab=>{
@@ -88,7 +76,7 @@ tabs.forEach(tab=>{
   });
 });
 
-// --- Obfuscator / Deobfuscator ---
+// --- Obfuscator ---
 let obfOriginal="";
 function randomVar(){ return "_v"+Math.floor(Math.random()*10000); }
 function obfuscateLua(code){
@@ -102,16 +90,11 @@ function obfuscateLua(code){
   for(let i=0;i<3;i++){ code += ` function ${randomVar()}() return ${Math.floor(Math.random()*100)} end`; }
   return code;
 }
-function deobfuscateLua(code){ return code; } // placeholder
-
 document.getElementById('obfBtn').addEventListener('click',()=>{
   const code=document.getElementById('obfCode').value.trim();
-  if(!code){ return; }
+  if(!code) return;
   obfOriginal=code;
   document.getElementById('obfCode').value=obfuscateLua(code);
-});
-document.getElementById('deobfBtn').addEventListener('click',()=>{
-  if(obfOriginal) document.getElementById('obfCode').value=deobfuscateLua(obfOriginal);
 });
 document.getElementById('obfUndo').addEventListener('click',()=>{ if(obfOriginal) document.getElementById('obfCode').value=obfOriginal; });
 
@@ -124,22 +107,38 @@ document.getElementById('fmtBtn').addEventListener('click',()=>{
 });
 document.getElementById('runBtn').addEventListener('click',()=>{
   const code=document.getElementById('fmtCode').value;
-  try{ let result=Function('"use strict";return ('+code+')')(); document.getElementById('runOutput').value+="> "+result+"\n"; } 
-  catch(e){ document.getElementById('runOutput').value+="> ERROR: "+e+"\n"; }
+  const output = document.getElementById('runOutput');
+  output.value = ""; // clear previous logs
+  try{
+    // basic Lua-like emulation using JS eval
+    let result=eval(code.replace(/local\s+/g,"var ")); // converts local->var
+    output.value+="> Success: "+result+"\n";
+  } catch(e){
+    output.value+="> ERROR: "+e+"\n";
+  }
 });
 
-// --- AI Helper ---
-document.getElementById('aiGenerate').addEventListener('click',()=>{
-  const prompt=document.getElementById('aiPrompt').value.trim();
-  if(!prompt) return;
-  document.getElementById('aiOutput').value="AI generation placeholder for prompt:\n"+prompt;
-});
+// --- Script Search using ScriptBlox API ---
+document.getElementById('searchBtn').addEventListener('click',async()=>{
+  const query = document.getElementById('searchQuery').value.trim();
+  const results = document.getElementById('searchResults');
+  if(!query){ results.value="Enter a search query."; return; }
 
-// --- Script Search ---
-document.getElementById('searchBtn').addEventListener('click',()=>{
-  const query=document.getElementById('searchQuery').value.trim();
-  if(!query) return;
-  document.getElementById('searchResults').value="Search placeholder: Found scripts containing '"+query+"'";
+  try{
+    const resp = await fetch(`https://scriptblox.com/api/script/fetch?sortBy=updatedAt&order=desc`);
+    const data = await resp.json();
+    if(data.result && data.result.scripts){
+      results.value="";
+      data.result.scripts.forEach(s=>{
+        if(s.title.toLowerCase().includes(query.toLowerCase())){
+          results.value+=`Title: ${s.title}\nGame: ${s.game.name}\nSlug: ${s.slug}\nVerified: ${s.verified}\nKey: ${s.key}\n\n`;
+        }
+      });
+      if(results.value==="") results.value="No scripts found for that query.";
+    } else results.value="No scripts found.";
+  } catch(err){
+    results.value="Error fetching scripts: "+err;
+  }
 });
 </script>
 </body>
