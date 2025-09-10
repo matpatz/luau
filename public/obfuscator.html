@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lua Obfuscator</title>
+<title>Lua Ultra Obfuscator</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:Arial,sans-serif;}
 body{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;min-height:100vh;display:flex;justify-content:center;align-items:center;padding:20px;}
@@ -21,7 +21,7 @@ body{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;min-height:10
 </head>
 <body>
 <div class="container">
-<h1 class="title">Advanced Lua Obfuscator</h1>
+<h1 class="title">Lua Ultra Obfuscator</h1>
 <div class="panel">
   <textarea class="textarea-field" id="luaBox" placeholder="Paste your Lua script here..."></textarea>
   <div class="button-box">
@@ -32,85 +32,46 @@ body{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;min-height:10
 </div>
 
 <script>
-const luaBox = document.getElementById('luaBox');
-const obfuscateBtn = document.getElementById('obfuscateBtn');
-const feedback = document.getElementById('feedback');
+const luaBox=document.getElementById("luaBox"),
+      obfuscateBtn=document.getElementById("obfuscateBtn"),
+      feedback=document.getElementById("feedback");
 
-function showFeedback(msg,type='success'){
-  feedback.textContent = msg;
-  feedback.className = 'inline-msg ' + (type==='success'?'success':'error');
-}
+function showFeedback(msg,type='success'){feedback.textContent=msg;feedback.className='inline-msg '+(type==='success'?'success':'error');}
 
-function randomVar(){ return "_v"+Math.floor(Math.random()*100000+Math.random()*1000); }
+function randVar(){return"_v"+Math.floor(Math.random()*1e7+Math.random()*1e4);}
+function encodeStr(s){return btoa(s);}
 
-function encodeStrings(lua){
-  return lua.replace(/(["'])(.*?)\1/g,(m,q,s)=>{
-    return `decode64("${btoa(s)}")`;
-  });
-}
-
-function encodeNumbers(lua){
-  return lua.replace(/\b\d+(\.\d+)?\b/g,n=>{
-    const num = parseFloat(n);
-    const a = Math.floor(Math.random()*num);
-    const b = num - a;
-    return `(${a}+${b})`;
-  });
-}
-
-function addJunkCode(lua){
-  const junk = [
-    `local ${randomVar()} = math.random()`,
-    `local ${randomVar()} = {} for i=1,5 do table.insert(${randomVar()},i) end`,
-    `local ${randomVar()} = "${btoa("junk")}"`,
-  ];
-  const lines = lua.split(";");
-  for(let i=0;i<lines.length;i+=2){
-    if(Math.random()<0.3) lines[i] += `;${junk[Math.floor(Math.random()*junk.length)]}`;
-  }
-  return lines.join(";");
-}
-
-function obfuscateLua(lua){
+function ultraObfuscate(lua){
   try{
-    // Remove comments & whitespace
-    lua = lua.replace(/--\[==*\[.*?\]==*\]/gs,"").replace(/--.*$/gm,"");
-    lua = lua.replace(/\s+/g," ").trim();
-
-    // Randomize identifiers
-    const identifiers = {};
-    lua = lua.replace(/\b(local\s+)?(function\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\b/g,(m,localKw,funcKw,name)=>{
-      const reserved = ["function","end","if","then","else","for","in","do","while","repeat","until","return","break","true","false","nil","getgenv","game","workspace"];
-      if(reserved.includes(name)) return m;
-      if(!identifiers[name]) identifiers[name] = randomVar();
-      return (localKw||"") + (funcKw||"") + identifiers[name];
+    lua=lua.replace(/--\[==*\[.*?\]==*\]/gs,"").replace(/--.*$/gm,"").replace(/\s+/g," ");
+    const ids={};
+    lua=lua.replace(/\b(local\s+)?(function\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\b/g,(m,lk,fk,name)=>{
+      const reserved=["function","end","if","then","else","for","in","do","while","repeat","until","return","break","true","false","nil","getgenv","game","workspace"];
+      if(reserved.includes(name))return m;
+      if(!ids[name])ids[name]=randVar();
+      return (lk||"")+(fk||"")+ids[name];
     });
 
-    // Encode strings & numbers
-    lua = encodeStrings(lua);
-    lua = encodeNumbers(lua);
+    lua=lua.replace(/(["'])(.*?)\1/g,(m,q,s)=>`decode64("${encodeStr(s)}")`);
+    lua=lua.replace(/\b\d+(\.\d+)?\b/g(n)=>{const num=parseFloat(n),a=Math.floor(Math.random()*num),b=num-a;return`(${a}+${b})`});
 
-    // Add junk/no-op code
-    lua = addJunkCode(lua);
+    // Add massive junk table like the style you posted
+    let junk="local _tbl={";
+    for(let i=0;i<50;i++){junk+=`"${encodeStr(randVar())}",`;};
+    junk=junk.slice(0,-1)+"};";
+    lua=`return(function(...)${junk} ${lua} end)()`;
 
-    // Add decode64 function
-    if(lua.includes('decode64')){
-      lua = `local decode64=function(s) return game:GetService("HttpService"):Base64Decode(s) end\n` + lua;
-    }
-
+    lua=`local decode64=function(s)return game:GetService("HttpService"):Base64Decode(s)end;${lua}`;
     return lua;
-  }catch(e){
-    showFeedback("Obfuscation failed","error");
-    return "";
-  }
+  }catch(e){showFeedback("Obfuscation failed","error");return"";}
 }
 
-obfuscateBtn.addEventListener('click', ()=>{
-  const code = luaBox.value.trim();
-  if(!code){ showFeedback("Paste a Lua script first","error"); return; }
-  const obf = obfuscateLua(code);
-  luaBox.value = obf;
-  showFeedback("Obfuscation complete","success");
+obfuscateBtn.addEventListener('click',()=>{
+  const code=luaBox.value.trim();
+  if(!code){showFeedback("Paste a Lua script first","error");return;}
+  const obf=ultraObfuscate(code);
+  luaBox.value=obf;
+  showFeedback("Ultra obfuscation complete","success");
 });
 </script>
 </body>
