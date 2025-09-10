@@ -42,7 +42,6 @@ function encodeBase64(s){return btoa(s);}
 
 function ultraObfuscate(lua){
   try{
-    // remove comments & extra spaces
     lua=lua.replace(/--\[==*\[.*?\]==*\]/gs,"").replace(/--.*$/gm,"").replace(/\s+/g," ").trim();
 
     const ids={};
@@ -53,10 +52,8 @@ function ultraObfuscate(lua){
       return (lk||"")+(fk||"")+ids[name];
     });
 
-    // encode strings
     lua=lua.replace(/(["'])(.*?)\1/g,(m,q,s)=>`decodeBase64("${encodeBase64(s)}")`);
 
-    // wrap everything in anonymous return
     let junk="local _tbl={";
     for(let i=0;i<50;i++){junk+=`"${encodeBase64(randVar())}",`;};
     junk=junk.slice(0,-1)+"};";
