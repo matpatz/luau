@@ -11,7 +11,6 @@ body{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;min-height:10
 .title{text-align:center;font-size:28px;margin-bottom:20px;color:#00eeff;text-shadow:0 0 10px rgba(0,238,255,0.5);}
 .panel{display:flex;flex-direction:column;gap:15px;}
 .textarea-field{padding:12px;border-radius:6px;border:2px solid #39396b;background:rgba(30,30,60,0.8);color:#fff;font-size:14px;font-family:monospace;width:100%;min-height:400px;resize:vertical;}
-.button-group{display:flex;gap:10px;justify-content:center;}
 .button-box{background:rgba(0,238,255,0.1);border-radius:8px;padding:5px;display:flex;gap:10px;}
 .enter-btn{padding:12px 20px;border-radius:6px;border:none;background:linear-gradient(135deg,#00c6ff,#0072ff);color:white;font-weight:bold;cursor:pointer;transition:all 0.3s;}
 .enter-btn:hover{background:linear-gradient(135deg,#00eeff,#008cff);transform:translateY(-2px);box-shadow:0 5px 15px rgba(0,238,255,0.4);}
@@ -27,7 +26,6 @@ body{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;min-height:10
   <textarea class="textarea-field" id="luaBox" placeholder="Paste your Lua script here..."></textarea>
   <div class="button-box">
     <button class="enter-btn" id="obfuscateBtn">Obfuscate</button>
-    <button class="enter-btn" id="undoBtn">Undo</button>
   </div>
   <div id="feedback" class="inline-msg"></div>
 </div>
@@ -36,36 +34,37 @@ body{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;min-height:10
 <script>
 const luaBox = document.getElementById('luaBox');
 const obfuscateBtn = document.getElementById('obfuscateBtn');
-const undoBtn = document.getElementById('undoBtn');
 const feedback = document.getElementById('feedback');
-
-let originalCode = "";
 
 function showFeedback(msg,type='success'){
   feedback.textContent = msg;
   feedback.className = 'inline-msg ' + (type==='success'?'success':'error');
 }
 
-// Generate random variable/function names
-function randomVar(){ return "_v"+Math.floor(Math.random()*100000); }
+// Random variable names
+function randomVar(){ return "_v"+Math.floor(Math.random()*100000 + Math.random()*1000); }
 
 // Base64 encode Lua strings
 function encodeStrings(lua){
-  return lua.replace(/(["'])(.*?)\1/g,(m,q,s)=>`decode64("${btoa(s)}")`);
+  return lua.replace(/(["'])(.*?)\1/g,(m,q,s)=>{
+    return `decode64("${btoa(s)}")`;
+  });
 }
 
-// Obfuscate Lua code
+// Main obfuscation function
 function obfuscateLua(lua){
   try{
-    // Remove multiline and single-line comments
-    lua = lua.replace(/--\[==*\[.*?\]==*\]/gs,"");
-    lua = lua.replace(/--.*$/gm,"");
+    // Remove comments
+    lua = lua.replace(/--\[==*\[.*?\]==*\]/gs,"").replace(/--.*$/gm,"");
+
+    // Remove extra whitespace & newlines
     lua = lua.replace(/\s+/g," ").trim();
 
-    // Random rename for locals and functions
+    // Map for renaming identifiers
     const identifiers = {};
     lua = lua.replace(/\b(local\s+)?(function\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\b/g,(m,localKw,funcKw,name)=>{
-      if(["function","end","if","then","else","for","in","do","while","repeat","until","return","break","true","false","nil","getgenv","game","workspace"].includes(name)) return m;
+      const reserved = ["function","end","if","then","else","for","in","do","while","repeat","until","return","break","true","false","nil","getgenv","game","workspace"];
+      if(reserved.includes(name)) return m;
       if(!identifiers[name]) identifiers[name] = randomVar();
       return (localKw||"") + (funcKw||"") + identifiers[name];
     });
@@ -73,7 +72,7 @@ function obfuscateLua(lua){
     // Encode strings
     lua = encodeStrings(lua);
 
-    // Add decode64 function if needed
+    // Add decode64 function if there are encoded strings
     if(lua.includes('decode64')){
       lua = `local decode64=function(s) return game:GetService("HttpService"):Base64Decode(s) end\n` + lua;
     }
@@ -87,23 +86,10 @@ function obfuscateLua(lua){
 
 obfuscateBtn.addEventListener('click', ()=>{
   const code = luaBox.value.trim();
-  if(!code){
-    showFeedback("Paste a Lua script first","error");
-    return;
-  }
-  originalCode = code;
+  if(!code){ showFeedback("Paste a Lua script first","error"); return; }
   const obf = obfuscateLua(code);
   luaBox.value = obf;
   showFeedback("Obfuscation complete","success");
-});
-
-undoBtn.addEventListener('click', ()=>{
-  if(originalCode){
-    luaBox.value = originalCode;
-    showFeedback("Restored original code","success");
-  } else {
-    showFeedback("Nothing to undo","error");
-  }
 });
 </script>
 </body>
