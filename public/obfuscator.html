@@ -36,39 +36,46 @@ const luaBox=document.getElementById("luaBox"),
       obfuscateBtn=document.getElementById("obfuscateBtn"),
       feedback=document.getElementById("feedback");
 
-function showFeedback(msg,type='success'){feedback.textContent=msg;feedback.className='inline-msg '+(type==='success'?'success':'error');}
+function showFeedback(msg,type='success'){
+    feedback.textContent=msg;
+    feedback.className='inline-msg '+(type==='success'?'success':'error');
+}
+
 function randVar(){return "_v"+Math.floor(Math.random()*1e7);}
-function encodeBase64(s){return btoa(s);}
+function encodeBase64(s){return btoa(unescape(encodeURIComponent(s)));}
+function decodeBase64Lua(){return 'local decodeBase64=function(s)return game:HttpService():Base64Decode(s)end';}
 
 function ultraObfuscate(lua){
-  try{
-    lua=lua.replace(/--\[==*\[.*?\]==*\]/gs,"").replace(/--.*$/gm,"").replace(/\s+/g," ").trim();
+    try{
+        lua=lua.replace(/--\[==*\[.*?\]==*\]/gs,"")
+               .replace(/--.*$/gm,"")
+               .replace(/\s+/g," ").trim();
 
-    const ids={};
-    lua=lua.replace(/\b(local\s+)?(function\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\b/g,(m,lk,fk,name)=>{
-      const reserved=["function","end","if","then","else","for","in","do","while","repeat","until","return","break","true","false","nil","getgenv","game","workspace"];
-      if(reserved.includes(name)) return m;
-      if(!ids[name]) ids[name]=randVar();
-      return (lk||"")+(fk||"")+ids[name];
-    });
+        const ids={};
+        lua=lua.replace(/\b(local\s+)?(function\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\b/g,(m,lk,fk,name)=>{
+            const reserved=["function","end","if","then","else","for","in","do","while","repeat","until","return","break","true","false","nil","getgenv","game","workspace"];
+            if(reserved.includes(name)) return m;
+            if(!ids[name]) ids[name]=randVar();
+            return (lk||"")+(fk||"")+ids[name];
+        });
 
-    lua=lua.replace(/(["'])(.*?)\1/g,(m,q,s)=>`decodeBase64("${encodeBase64(s)}")`);
+        lua=lua.replace(/(["'])(.*?)\1/g,(m,q,s)=>`decodeBase64("${encodeBase64(s)}")`);
 
-    let junk="local _tbl={";
-    for(let i=0;i<50;i++){junk+=`"${encodeBase64(randVar())}",`;};
-    junk=junk.slice(0,-1)+"};";
+        let junk="local _tbl={";
+        for(let i=0;i<50;i++){junk+=`"${encodeBase64(randVar())}",`;};
+        junk=junk.slice(0,-1)+"};";
 
-    lua=`local decodeBase64=function(s) return game:HttpService().Base64Decode(s) end; return (function(...) ${junk} ${lua} end)()`;
-    return lua;
-  }catch(e){showFeedback("Obfuscation failed","error"); return "";}
+        lua=`${decodeBase64Lua()}; return (function(...) ${junk} ${lua} end)()`;
+        return lua;
+    }catch(e){showFeedback("Obfuscation failed","error"); return "";}
 }
 
 obfuscateBtn.addEventListener('click',()=>{
-  const code=luaBox.value.trim();
-  if(!code){showFeedback("Paste a Lua script first","error");return;}
-  const obf=ultraObfuscate(code);
-  luaBox.value=obf;
-  showFeedback("Ultra obfuscation complete","success");
+    const code=luaBox.value.trim();
+    if(!code){showFeedback("Paste a Lua script first","error");return;}
+    const obf=ultraObfuscate(code);
+    luaBox.value=obf;
+    showFeedback("Ultra obfuscation complete","success");
 });
 </script>
 </body>
