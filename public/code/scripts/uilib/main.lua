@@ -11,7 +11,45 @@ local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 
--- Theme defaults
+-- Drag function
+local function makeDraggable(frame)
+    local UserInputService = game:GetService("UserInputService")
+    local dragging = false
+    local dragInput, mousePos, framePos
+
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            mousePos = input.Position
+            framePos = frame.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    frame.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input == dragInput then
+            local delta = input.Position - mousePos
+            frame.Position = UDim2.new(
+                framePos.X.Scale,
+                framePos.X.Offset + delta.X,
+                framePos.Y.Scale,
+                framePos.Y.Offset + delta.Y
+            )
+        end
+    end)
+end
+
 Library.Theme = {
     Background = Color3.fromRGB(30,30,30),
     Accent = Color3.fromRGB(0,170,255),
@@ -38,7 +76,8 @@ function Library.new(title)
     self.MainFrame.BackgroundColor3 = self.Theme.Background
     self.MainFrame.Parent = self.ScreenGui
 
-    -- UI Corner & Stroke
+	makeDraggable(self.MainFrame)
+
     local corner = Instance.new("UICorner", self.MainFrame)
     corner.CornerRadius = UDim.new(0,8)
     local stroke = Instance.new("UIStroke", self.MainFrame)
@@ -231,12 +270,12 @@ function Library:CreateDropdown(section, name, options, callback)
     dropdownFrame.BackgroundTransparency = 1
     dropdownFrame.Parent = section
 
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1,0,1,0)
-    label.BackgroundColor3 = self.Theme.SectionColor
-    label.Text = name
-    label.TextColor3 = self.Theme.TextColor
-    label.Parent = dropdownFrame
+	local label = Instance.new("TextButton")
+	label.BackgroundColor3 = self.Theme.SectionColor
+	label.Text = name
+	label.TextColor3 = self.Theme.TextColor
+	label.Size = UDim2.new(1,0,1,0)
+	label.Parent = dropdownFrame
 
     local corner = Instance.new("UICorner", label)
     corner.CornerRadius = UDim.new(0,4)
