@@ -210,11 +210,12 @@ function Library.new(title)
     return self
 end
 
--- Updated CreateTab for vertical layout
+-- Updated CreateTab for vertical tab layout
 function Library:CreateTab(tabName)
+    -- Create the tab button
     local tabButton = Instance.new("TextButton")
-    tabButton.Size = UDim2.new(1,0,0,40)
-    tabButton.Position = UDim2.new(0,0,#self.Tabs*45,5) -- stacked along Y-axis
+    tabButton.Size = UDim2.new(1, 0, 0, 40)          -- stacked vertically
+    tabButton.Position = UDim2.new(0, 0, 0, #self.Tabs * 45 + 5)
     tabButton.BackgroundColor3 = self.Theme.SectionColor
     tabButton.Text = tabName
     tabButton.TextColor3 = self.Theme.TextColor
@@ -223,17 +224,20 @@ function Library:CreateTab(tabName)
     local corner = Instance.new("UICorner", tabButton)
     corner.CornerRadius = UDim.new(0,6)
 
+    -- Create the tab content frame
     local tabContent = Instance.new("Frame")
-    tabContent.Size = UDim2.new(1,-100,1,0)
-    tabContent.Position = UDim2.new(0,100,0,0)
+    tabContent.Size = UDim2.new(1, -self.TabHolder.Size.X.Offset, 1, 0) -- width minus tab holder
+    tabContent.Position = UDim2.new(0, self.TabHolder.Size.X.Offset, 0, 0)
     tabContent.BackgroundTransparency = 1
     tabContent.Visible = false
     tabContent.Parent = self.MainFrame
 
+    -- Store reference
     self.Tabs[tabName] = tabContent
 
+    -- Tab button click
     tabButton.MouseButton1Click:Connect(function()
-        for name,frame in pairs(self.Tabs) do
+        for _, frame in pairs(self.Tabs) do
             frame.Visible = false
         end
         tabContent.Visible = true
@@ -243,37 +247,6 @@ function Library:CreateTab(tabName)
     return tabContent
 end
 
-function Library:CreateTab(tabName)
-    local tabButton = Instance.new("TextButton")
-    tabButton.Size = UDim2.new(0,100,1,0)
-    tabButton.Position = UDim2.new(#self.Tabs*0,0,0,0)
-    tabButton.BackgroundColor3 = self.Theme.SectionColor
-    tabButton.Text = tabName
-    tabButton.TextColor3 = self.Theme.TextColor
-    tabButton.Parent = self.TabHolder
-
-    local corner = Instance.new("UICorner", tabButton)
-    corner.CornerRadius = UDim.new(0,6)
-
-    local tabContent = Instance.new("Frame")
-    tabContent.Size = UDim2.new(1,0,1,-40)
-    tabContent.Position = UDim2.new(0,0,0,40)
-    tabContent.BackgroundTransparency = 1
-    tabContent.Visible = false
-    tabContent.Parent = self.MainFrame
-
-    self.Tabs[tabName] = tabContent
-
-    tabButton.MouseButton1Click:Connect(function()
-        for name,frame in pairs(self.Tabs) do
-            frame.Visible = false
-        end
-        tabContent.Visible = true
-        self.CurrentTab = tabContent
-    end)
-
-    return tabContent
-end
 
 -- Create section
 function Library:CreateSection(tab, sectionName)
