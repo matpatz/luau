@@ -170,6 +170,43 @@ function Library.new(title)
         self.MainFrame.Visible = not self.MainFrame.Visible
     end)
 
+	-- Resize handle
+	local resizeBtn = Instance.new("TextButton")
+	resizeBtn.Size = UDim2.new(0,15,0,15)
+	resizeBtn.Position = UDim2.new(1,-15,1,-15) -- bottom-right corner
+	resizeBtn.AnchorPoint = Vector2.new(1,1)
+	resizeBtn.Text = ""
+	resizeBtn.BackgroundColor3 = Color3.fromRGB(100,100,100)
+	resizeBtn.Parent = self.MainFrame
+
+	local corner = Instance.new("UICorner", resizeBtn)
+	corner.CornerRadius = UDim.new(0,3)
+
+	local dragging = false
+	local startMouse, startSize
+
+	resizeBtn.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			startMouse = input.Position
+			startSize = self.MainFrame.Size
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+
+	game:GetService("UserInputService").InputChanged:Connect(function(input)
+		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+			local delta = input.Position - startMouse
+			local newWidth = math.clamp(startSize.X.Offset + delta.X, 200, 800)
+			local newHeight = math.clamp(startSize.Y.Offset + delta.Y, 150, 600)
+			self.MainFrame.Size = UDim2.new(0, newWidth, 0, newHeight)
+		end
+	end)
+
     return self
 end
 
