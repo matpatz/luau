@@ -250,8 +250,9 @@ function Library:CreateTab(tabName)
 end
 
 function Library:CreateSection(tab, sectionName)
+    -- initialize offset with a top padding if first section
     if not self.SectionOffsets[tab] then
-        self.SectionOffsets[tab] = 0
+        self.SectionOffsets[tab] = 40  -- space for top buttons + some margin
     end
 
     local section = Instance.new("Frame")
@@ -273,13 +274,13 @@ function Library:CreateSection(tab, sectionName)
     label.TextSize = 16
     label.Parent = section
 
-    -- Update offset for next section
+    -- increment offset for next section
     self.SectionOffsets[tab] = self.SectionOffsets[tab] + section.Size.Y.Offset + 10
 
     return section
 end
 
--- Toggle
+
 function Library:CreateToggle(section, name, callback)
     local toggleFrame = Instance.new("Frame")
     toggleFrame.Size = UDim2.new(1,0,0,30)
