@@ -6,6 +6,8 @@
 local Library = {}
 Library.__index = Library
 
+Library.SectionOffsets = {}
+
 -- Services
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -247,12 +249,14 @@ function Library:CreateTab(tabName)
     return tabContent
 end
 
-
--- Create section
 function Library:CreateSection(tab, sectionName)
+    if not self.SectionOffsets[tab] then
+        self.SectionOffsets[tab] = 0
+    end
+
     local section = Instance.new("Frame")
     section.Size = UDim2.new(1, -20, 0, 100)
-    section.Position = UDim2.new(0,10,0,0)
+    section.Position = UDim2.new(0, 10, 0, self.SectionOffsets[tab])
     section.BackgroundColor3 = self.Theme.SectionColor
     section.Parent = tab
 
@@ -268,6 +272,9 @@ function Library:CreateSection(tab, sectionName)
     label.Font = Enum.Font.SourceSansBold
     label.TextSize = 16
     label.Parent = section
+
+    -- Update offset for next section
+    self.SectionOffsets[tab] = self.SectionOffsets[tab] + section.Size.Y.Offset + 10
 
     return section
 end
