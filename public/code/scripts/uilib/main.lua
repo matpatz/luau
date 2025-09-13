@@ -60,14 +60,17 @@ Library.Theme = {
 }
 
 -- Create UI
+-- Create UI
 function Library.new(title)
     local self = setmetatable({}, Library)
+
+    local CoreGui = game:GetService("CoreGui")
 
     -- Main ScreenGui
     self.ScreenGui = Instance.new("ScreenGui")
     self.ScreenGui.Name = title or "CustomUI"
     self.ScreenGui.ResetOnSpawn = false
-    self.ScreenGui.Parent = game:GetService("CoreGui")
+    self.ScreenGui.Parent = CoreGui
 
     -- Main Frame
     self.MainFrame = Instance.new("Frame")
@@ -75,28 +78,134 @@ function Library.new(title)
     self.MainFrame.Position = UDim2.new(0.5, -200, 0.5, -150)
     self.MainFrame.BackgroundColor3 = self.Theme.Background
     self.MainFrame.Parent = self.ScreenGui
+    makeDraggable(self.MainFrame)
 
-	makeDraggable(self.MainFrame)
-
+    -- Corner & Stroke
     local corner = Instance.new("UICorner", self.MainFrame)
     corner.CornerRadius = UDim.new(0,8)
     local stroke = Instance.new("UIStroke", self.MainFrame)
     stroke.Color = self.Theme.Accent
     stroke.Thickness = 2
 
-    -- Tab holder
+    -- Close Button
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0,25,0,25)
+    closeBtn.Position = UDim2.new(1,-30,0,5)
+    closeBtn.Text = "X"
+    closeBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(200,50,50)
+    closeBtn.Parent = self.MainFrame
+    local cornerClose = Instance.new("UICorner", closeBtn)
+    cornerClose.CornerRadius = UDim.new(0,5)
+
+    -- Minimize Button
+    local minBtn = Instance.new("TextButton")
+    minBtn.Size = UDim2.new(0,25,0,25)
+    minBtn.Position = UDim2.new(1,-60,0,5)
+    minBtn.Text = "_"
+    minBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    minBtn.BackgroundColor3 = Color3.fromRGB(50,50,50)
+    minBtn.Parent = self.MainFrame
+    local cornerMin = Instance.new("UICorner", minBtn)
+    cornerMin.CornerRadius = UDim.new(0,5)
+
+    -- Tab holder (vertical Y-axis)
     self.TabHolder = Instance.new("Frame")
-    self.TabHolder.Size = UDim2.new(1,0,0,40)
+    self.TabHolder.Size = UDim2.new(0,100,1,0)
+    self.TabHolder.Position = UDim2.new(0,0,0,0)
     self.TabHolder.BackgroundTransparency = 1
     self.TabHolder.Parent = self.MainFrame
 
     self.Tabs = {}
     self.CurrentTab = nil
 
+    -- Close confirmation
+    closeBtn.MouseButton1Click:Connect(function()
+        local confirm = Instance.new("Frame")
+        confirm.Size = UDim2.new(0,200,0,100)
+        confirm.Position = UDim2.new(0.5,-100,0.5,-50)
+        confirm.BackgroundColor3 = Color3.fromRGB(40,40,40)
+        confirm.Parent = self.ScreenGui
+        local cCorner = Instance.new("UICorner", confirm)
+        cCorner.CornerRadius = UDim.new(0,6)
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1,0,0,50)
+        label.Position = UDim2.new(0,0,0,0)
+        label.Text = "Are you sure you want to close?"
+        label.TextColor3 = Color3.fromRGB(255,255,255)
+        label.BackgroundTransparency = 1
+        label.Parent = confirm
+
+        local yesBtn = Instance.new("TextButton")
+        yesBtn.Size = UDim2.new(0.5,-5,0,40)
+        yesBtn.Position = UDim2.new(0,5,1,-45)
+        yesBtn.Text = "Yes"
+        yesBtn.BackgroundColor3 = Color3.fromRGB(200,50,50)
+        yesBtn.TextColor3 = Color3.fromRGB(255,255,255)
+        yesBtn.Parent = confirm
+        local yesCorner = Instance.new("UICorner", yesBtn)
+        yesCorner.CornerRadius = UDim.new(0,5)
+
+        local noBtn = Instance.new("TextButton")
+        noBtn.Size = UDim2.new(0.5,-5,0,40)
+        noBtn.Position = UDim2.new(0.5,0,1,-45)
+        noBtn.Text = "No"
+        noBtn.BackgroundColor3 = Color3.fromRGB(50,50,50)
+        noBtn.TextColor3 = Color3.fromRGB(255,255,255)
+        noBtn.Parent = confirm
+        local noCorner = Instance.new("UICorner", noBtn)
+        noCorner.CornerRadius = UDim.new(0,5)
+
+        yesBtn.MouseButton1Click:Connect(function()
+            self.ScreenGui:Destroy()
+        end)
+        noBtn.MouseButton1Click:Connect(function()
+            confirm:Destroy()
+        end)
+    end)
+
+    -- Minimize button
+    minBtn.MouseButton1Click:Connect(function()
+        self.MainFrame.Visible = not self.MainFrame.Visible
+    end)
+
     return self
 end
 
--- Create a tab
+-- Updated CreateTab for vertical layout
+function Library:CreateTab(tabName)
+    local tabButton = Instance.new("TextButton")
+    tabButton.Size = UDim2.new(1,0,0,40)
+    tabButton.Position = UDim2.new(0,0,#self.Tabs*45,5) -- stacked along Y-axis
+    tabButton.BackgroundColor3 = self.Theme.SectionColor
+    tabButton.Text = tabName
+    tabButton.TextColor3 = self.Theme.TextColor
+    tabButton.Parent = self.TabHolder
+
+    local corner = Instance.new("UICorner", tabButton)
+    corner.CornerRadius = UDim.new(0,6)
+
+    local tabContent = Instance.new("Frame")
+    tabContent.Size = UDim2.new(1,-100,1,0)
+    tabContent.Position = UDim2.new(0,100,0,0)
+    tabContent.BackgroundTransparency = 1
+    tabContent.Visible = false
+    tabContent.Parent = self.MainFrame
+
+    self.Tabs[tabName] = tabContent
+
+    tabButton.MouseButton1Click:Connect(function()
+        for name,frame in pairs(self.Tabs) do
+            frame.Visible = false
+        end
+        tabContent.Visible = true
+        self.CurrentTab = tabContent
+    end)
+
+    return tabContent
+end
+
 function Library:CreateTab(tabName)
     local tabButton = Instance.new("TextButton")
     tabButton.Size = UDim2.new(0,100,1,0)
