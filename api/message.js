@@ -1,22 +1,10 @@
+// Example Node.js / Express server
 let messages = []
 
-export default function handler(req, res) {
-  if (req.method === "GET") {
-    res.status(200).json(messages)
-  } else if (req.method === "POST") {
-    try {
-      const body = JSON.parse(req.body)
-      const { Player, Message } = body
-      if (Player && Message) {
-        messages.push({ Player, Message })
-        res.status(200).json({ status: "ok" })
-      } else {
-        res.status(400).json({ error: "Missing Player or Message" })
-      }
-    } catch (e) {
-      res.status(400).json({ error: "Invalid JSON" })
+app.get('/api/message', (req, res) => {
+    const { player, message } = req.query
+    if(player && message){
+        messages.push({ Player: player, Message: message })
     }
-  } else {
-    res.status(405).json({ error: "Method not allowed" })
-  }
-}
+    res.json(messages)
+})
