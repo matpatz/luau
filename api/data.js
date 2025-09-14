@@ -1,5 +1,5 @@
 const data = {
-  "1089470888": {
+  "Catastrophia": {
     version: 1,
     updated: "2025-09-01",
     status: "Functional",
@@ -9,7 +9,7 @@ const data = {
       john: "thisisafakehwid"
     }
   },
-  "53453535": {
+  "game": {
     version: 2,
     updated: "2025-09-01",
     status: "Functional",
