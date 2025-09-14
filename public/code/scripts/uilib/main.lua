@@ -1,8 +1,3 @@
---[[ 
-    Simple UI Library
-    Features: Tabs, Sections, Themes, Toggles, Buttons, Sliders, Dropdowns
---]]
-
 local Library = {}
 Library.__index = Library
 
@@ -61,8 +56,6 @@ Library.Theme = {
     ToggleInactive = Color3.fromRGB(80,80,80)
 }
 
--- Create UI
--- Create UI
 function Library.new(title)
     local self = setmetatable({}, Library)
 
@@ -212,12 +205,11 @@ function Library.new(title)
     return self
 end
 
--- Updated CreateTab for vertical tab layout
 function Library:CreateTab(tabName)
     -- Create the tab button
     local tabButton = Instance.new("TextButton")
     tabButton.Size = UDim2.new(1, 0, 0, 40)          -- stacked vertically
-    tabButton.Position = UDim2.new(0, 0, 0, #self.Tabs * 45 + 5)
+    tabButton.Position = UDim2.new(0, 0, 0, #self.Tabs * 30 + 5)
     tabButton.BackgroundColor3 = self.Theme.SectionColor
     tabButton.Text = tabName
     tabButton.TextColor3 = self.Theme.TextColor
