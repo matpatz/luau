@@ -1,6 +1,5 @@
-// /api/data.js
 const data = {
-  "168556275": {
+  "3640115475": {
     version: 1,
     updated: "2025-09-01",
     status: "Functional",
