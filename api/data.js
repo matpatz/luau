@@ -1,5 +1,5 @@
 {
-  "Catastrophia": {
+  "423422434": {
     "version": 1,
     "updated": "2025-09-01",
     "status": "Functional",
@@ -9,7 +9,7 @@
       "john": "thisisafakehwid"
     }
   },
-  "game": {
+  "2423424241": {
     "version": 2,
     "updated": "2025-09-01",
     "status": "Functional",
