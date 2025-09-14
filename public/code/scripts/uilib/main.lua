@@ -208,20 +208,28 @@ end
 function Library:CreateTab(tabName)
     -- Create the tab button
     local tabButton = Instance.new("TextButton")
-    tabButton.Size = UDim2.new(1, 0, 0, 40)          -- stacked vertically
-    tabButton.Position = UDim2.new(0, 0, 0, #self.Tabs * 30 + 5)
+    tabButton.Size = UDim2.new(1, 0, 0, 40) -- stacked vertically
+    tabButton.Position = UDim2.new(0, 0, 0, #self.Tabs * 45 + 5)
     tabButton.BackgroundColor3 = self.Theme.SectionColor
     tabButton.Text = tabName
     tabButton.TextColor3 = self.Theme.TextColor
     tabButton.Parent = self.TabHolder
 
     local corner = Instance.new("UICorner", tabButton)
-    corner.CornerRadius = UDim.new(0,6)
+    corner.CornerRadius = UDim.new(0, 6)
+
+    -- Offset for close/minimize buttons
+    local topOffset = 40 -- adjust if your top bar is taller/shorter
 
     -- Create the tab content frame
     local tabContent = Instance.new("Frame")
-    tabContent.Size = UDim2.new(1, -self.TabHolder.Size.X.Offset, 1, 0) -- width minus tab holder
-    tabContent.Position = UDim2.new(0, self.TabHolder.Size.X.Offset, 0, 0)
+    tabContent.Size = UDim2.new(
+        1,
+        -self.TabHolder.Size.X.Offset,
+        1,
+        -topOffset
+    )
+    tabContent.Position = UDim2.new(0, self.TabHolder.Size.X.Offset, 0, topOffset)
     tabContent.BackgroundTransparency = 1
     tabContent.Visible = false
     tabContent.Parent = self.MainFrame
