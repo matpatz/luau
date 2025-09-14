@@ -206,38 +206,27 @@ function Library.new(title)
 end
 
 function Library:CreateTab(tabName)
-    -- Create the tab button
+    -- Tab button
     local tabButton = Instance.new("TextButton")
-    tabButton.Size = UDim2.new(1, 0, 0, 40) -- stacked vertically
-    tabButton.Position = UDim2.new(0, 0, 0, #self.Tabs * 45 + 5)
+    tabButton.Size = UDim2.new(1, 0, 0, 40)
     tabButton.BackgroundColor3 = self.Theme.SectionColor
     tabButton.Text = tabName
     tabButton.TextColor3 = self.Theme.TextColor
     tabButton.Parent = self.TabHolder
 
     local corner = Instance.new("UICorner", tabButton)
-    corner.CornerRadius = UDim.new(0, 6)
+    corner.CornerRadius = UDim.new(0,6)
 
-    -- Offset for close/minimize buttons
-    local topOffset = 40 -- adjust if your top bar is taller/shorter
-
-    -- Create the tab content frame
+    -- Tab content
     local tabContent = Instance.new("Frame")
-    tabContent.Size = UDim2.new(
-        1,
-        -self.TabHolder.Size.X.Offset,
-        1,
-        -topOffset
-    )
-    tabContent.Position = UDim2.new(0, self.TabHolder.Size.X.Offset, 0, topOffset)
+    tabContent.Size = UDim2.new(1, -self.TabHolder.Size.X.Offset, 1, -35)
+    tabContent.Position = UDim2.new(0, self.TabHolder.Size.X.Offset, 0, 35)
     tabContent.BackgroundTransparency = 1
     tabContent.Visible = false
     tabContent.Parent = self.MainFrame
 
-    -- Store reference
     self.Tabs[tabName] = tabContent
 
-    -- Tab button click
     tabButton.MouseButton1Click:Connect(function()
         for _, frame in pairs(self.Tabs) do
             frame.Visible = false
@@ -250,36 +239,46 @@ function Library:CreateTab(tabName)
 end
 
 function Library:CreateSection(tab, sectionName)
-    -- initialize offset with a top padding if first section
     if not self.SectionOffsets[tab] then
-        self.SectionOffsets[tab] = 40  -- space for top buttons + some margin
+        self.SectionOffsets[tab] = 40
     end
 
     local section = Instance.new("Frame")
-    section.Size = UDim2.new(1, -20, 0, 100)
+    section.Size = UDim2.new(1, -20, 0, 0) -- automatic height
     section.Position = UDim2.new(0, 10, 0, self.SectionOffsets[tab])
     section.BackgroundColor3 = self.Theme.SectionColor
+    section.AutomaticSize = Enum.AutomaticSize.Y
     section.Parent = tab
 
     local corner = Instance.new("UICorner", section)
-    corner.CornerRadius = UDim.new(0,6)
+    corner.CornerRadius = UDim.new(0, 6)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1,0,0,20)
-    label.Position = UDim2.new(0,0,0,0)
-    label.BackgroundTransparency = 1
+    label.Size = UDim2.new(1, 0, 0, 20)
     label.Text = sectionName
+    label.BackgroundTransparency = 1
     label.TextColor3 = self.Theme.TextColor
     label.Font = Enum.Font.SourceSansBold
     label.TextSize = 16
     label.Parent = section
 
-    -- increment offset for next section
-    self.SectionOffsets[tab] = self.SectionOffsets[tab] + section.Size.Y.Offset + 10
+    -- Layout for stacking elements
+    local list = Instance.new("UIListLayout")
+    list.SortOrder = Enum.SortOrder.LayoutOrder
+    list.Padding = UDim.new(0, 6)
+    list.Parent = section
 
+    -- padding at top
+    local padding = Instance.new("UIPadding")
+    padding.PaddingTop = UDim.new(0, 25)
+    padding.PaddingLeft = UDim.new(0, 5)
+    padding.PaddingRight = UDim.new(0, 5)
+    padding.PaddingBottom = UDim.new(0, 5)
+    padding.Parent = section
+
+    self.SectionOffsets[tab] = self.SectionOffsets[tab] + 120
     return section
 end
-
 
 function Library:CreateToggle(section, name, callback)
     local toggleFrame = Instance.new("Frame")
