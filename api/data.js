@@ -1,22 +1,28 @@
 const data = {
-  "Catastrophia": {
+  "53453": {
     version: 1,
     updated: "2025-09-01",
     status: "Functional",
-    supported: ["Potassium","Delta","Xeno","Solara"],
+    supported: ["Potassium", "Delta", "Xeno", "Solara"],
     devs: {
       matpats: "B86F5628-12B8-4683-93C7-773F70D1A406",
       john: "thisisafakehwid"
     }
   },
-  "game": {
+  "34535353": {
     version: 2,
     updated: "2025-09-01",
     status: "Functional",
-    supported: ["Potassium","Delta","Xeno","Solara"],
+    supported: ["Potassium", "Delta", "Xeno", "Solara"],
     devs: {
       matpats: "B86F5628-12B8-4683-93C7-773F70D1A406",
       tod: "realhwid1234"
+    }
+  },
+  "Owned": {
+    devs: {
+      matpats: "B86F5628-12B8-4683-93C7-773F70D1A406",
+      alt: "B86Fef28-12B8-4683-93C7-773F70D1A406"
     }
   }
 };
