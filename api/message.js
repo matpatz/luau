@@ -1,16 +1,13 @@
 // api/message.js
+import { kv } from '@vercel/kv'
 
-// Simple in-memory storage (resets on cold start)
-let messages = []
-
-export default function handler(req, res) {
+export default async function handler(req, res) {
   const { player, message } = req.query
 
-  // Add new message if both player and message exist
   if (player && message) {
-    messages.push({ Player: player, Message: message })
+    await kv.rpush('chat:messages', JSON.stringify({ Player: player, Message: message }))
   }
 
-  // Return all messages
-  res.status(200).json(messages)
+  const all = await kv.lrange('chat:messages', -50, -1) // last 50 messages
+  res.status(200).json(all.map(JSON.parse))
 }
