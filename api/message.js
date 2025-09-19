@@ -1,4 +1,5 @@
-let messages = [];
+// api/message.js
+let messages = []; // in-memory storage
 
 export default function handler(req, res) {
   const { player, message } = req.query;
@@ -14,12 +15,13 @@ export default function handler(req, res) {
     }).replace(",", "");
 
     messages.push({
-      Date: stamp,      // "09/19 21:20"
+      Date: stamp,   // 09/19 21:20
       Player: player,
       Message: message
     });
 
-    if (messages.length > 50) messages.shift(); // keep last 50
+    // Keep last 50 messages
+    if (messages.length > 50) messages.shift();
   }
 
   res.setHeader("Content-Type", "application/json");
