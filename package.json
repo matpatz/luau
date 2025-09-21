@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "dev": "vercel dev",
     "start": "vercel dev"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.43.5"
+    "@supabase/supabase-js": "^2.46.0"
   }
 }
