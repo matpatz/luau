@@ -1,71 +1,35 @@
-// banana.js (Vercel Serverless Function)
-let db = {}; // In-memory for example. Replace with a real DB for persistence.
+function getRandomBananaColor() {
+    // Generate a yellow tone with some variance
+    const r = Math.floor(200 + Math.random() * 55); // 200-255
+    const g = Math.floor(200 + Math.random() * 55); // 200-255
+    const b = Math.floor(Math.random() * 50);       // 0-50
+    return `rgb(${r},${g},${b})`;
+}
 
-export default function handler(req, res) {
-    const { hwid, action } = req.query;
+function generateBanana() {
+    const rarities = ["Common", "Uncommon", "Rare", "Epic", "Sigma"];
+    const rarityMultiplier = { "Common": 1, "Uncommon": 1.5, "Rare": 2, "Epic": 3, "Sigma": 5 };
 
-    if (!hwid) {
-        res.status(400).json({ error: "No HWID provided" });
-        return;
-    }
+    const Rarity = rarities[Math.floor(Math.random() * rarities.length)];
+    const Curveyness = +(Math.random() * 10).toFixed(2); // 0-10
+    const Length = Math.floor(Math.random() * 16) + 15;   // 15-30
+    const Patches = Math.floor(Math.random() * 11);       // 0-10
+    const Weight = +(Math.random() * 0.5 + 0.5).toFixed(2); // 0.5-1kg
+    const Color = getRandomBananaColor();
 
-    // Ensure user exists
-    if (!db[hwid]) {
-        db[hwid] = {
-            cash: 0,
-            bananas: [],
-            lastSpin: 0
-        };
-    }
+    // Value formula based on stats
+    const value = Math.floor(
+        (Length * 2 + Curveyness * 10 + Weight * 50 - Patches * 5) * rarityMultiplier[Rarity]
+    );
 
-    const user = db[hwid];
-
-    // Helper: generate a random banana
-    function generateBanana() {
-        const colors = ["#FFFF66", "#FFFF33", "#FFCC00"];
-        const rarities = ["Common", "Uncommon", "Rare", "Epic", "Sigma"];
-        return {
-            id: Math.floor(Math.random() * 1000000),
-            Color: colors[Math.floor(Math.random() * colors.length)],
-            Patches: Math.floor(Math.random() * 11), // 0-10
-            Rarity: rarities[Math.floor(Math.random() * rarities.length)],
-            Curveyness: +(Math.random() * 10).toFixed(2),
-            Length: Math.floor(Math.random() * 16) + 15, // 15-30
-            value: Math.floor(Math.random() * 451) + 50, // 50-500
-        };
-    }
-
-    if (action === "spin") {
-        const now = Date.now();
-        if (now - user.lastSpin < 24 * 60 * 60 * 1000) {
-            res.json({ error: "You can only spin once per day" });
-            return;
-        }
-
-        const banana = generateBanana();
-        user.bananas.push(banana);
-        user.lastSpin = now;
-
-        res.json({ banana });
-        return;
-    }
-
-    if (action === "sell") {
-        if (user.bananas.length === 0) {
-            res.json({ error: "No bananas to sell" });
-            return;
-        }
-
-        const banana = user.bananas.pop();
-        user.cash += banana.value;
-
-        res.json({ cash: banana.value });
-        return;
-    }
-
-    // Default: return user data
-    res.json({
-        cash: user.cash,
-        bananas: user.bananas
-    });
+    return {
+        id: Math.floor(Math.random() * 1e6),
+        Color,
+        Patches,
+        Rarity,
+        Curveyness,
+        Length,
+        Weight,
+        value
+    };
 }
