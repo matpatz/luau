@@ -1,72 +1,71 @@
-// api/banana.js
-import fs from 'fs';
-import path from 'path';
-
-const DATA_FILE = path.join(process.cwd(), 'banana_data.json');
-
-// Load existing data
-function loadData() {
-    if (!fs.existsSync(DATA_FILE)) return {};
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-}
-
-// Save data
-function saveData(data) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-}
-
-// Generate random banana stats
-function generateBanana() {
-    return {
-        id: Math.floor(Math.random() * 1000000),
-        length: (Math.random() * 30).toFixed(2),   // cm
-        ripeness: Math.floor(Math.random() * 101), // 0-100
-        value: Math.floor(Math.random() * 1000)    // cash value
-    };
-}
+// banana.js (Vercel Serverless Function)
+let db = {}; // In-memory for example. Replace with a real DB for persistence.
 
 export default function handler(req, res) {
-    const hwid = req.query.hwid;
-    if (!hwid) return res.status(400).json({error: "No HWID provided"});
+    const { hwid, action } = req.query;
 
-    let data = loadData();
-    if (!data[hwid]) {
-        data[hwid] = { spins: 0, cash: 0, bananas: [] };
+    if (!hwid) {
+        res.status(400).json({ error: "No HWID provided" });
+        return;
     }
 
-    const user = data[hwid];
-
-    if (req.method === 'GET') {
-        // Return user data
-        return res.json(user);
+    // Ensure user exists
+    if (!db[hwid]) {
+        db[hwid] = {
+            cash: 0,
+            bananas: [],
+            lastSpin: 0
+        };
     }
 
-    if (req.method === 'POST') {
-        const action = req.query.action;
+    const user = db[hwid];
 
-        if (action === 'spin') {
-            const today = new Date().toDateString();
-            if (user.lastSpin === today) {
-                return res.json({ error: "Already spun today!" });
-            }
+    // Helper: generate a random banana
+    function generateBanana() {
+        const colors = ["#FFFF66", "#FFFF33", "#FFCC00"];
+        const rarities = ["Common", "Uncommon", "Rare", "Epic", "Sigma"];
+        return {
+            id: Math.floor(Math.random() * 1000000),
+            Color: colors[Math.floor(Math.random() * colors.length)],
+            Patches: Math.floor(Math.random() * 11), // 0-10
+            Rarity: rarities[Math.floor(Math.random() * rarities.length)],
+            Curveyness: +(Math.random() * 10).toFixed(2),
+            Length: Math.floor(Math.random() * 16) + 15, // 15-30
+            value: Math.floor(Math.random() * 451) + 50, // 50-500
+        };
+    }
 
-            const banana = generateBanana();
-            user.bananas.push(banana);
-            user.lastSpin = today;
-            saveData(data);
-            return res.json({ message: "You got a banana!", banana });
+    if (action === "spin") {
+        const now = Date.now();
+        if (now - user.lastSpin < 24 * 60 * 60 * 1000) {
+            res.json({ error: "You can only spin once per day" });
+            return;
         }
 
-        if (action === 'sell') {
-            if (!user.bananas.length) return res.json({ error: "No bananas to sell" });
-            const banana = user.bananas.pop();
-            user.cash += banana.value;
-            saveData(data);
-            return res.json({ message: `Sold banana for ${banana.value} cash`, cash: user.cash });
-        }
+        const banana = generateBanana();
+        user.bananas.push(banana);
+        user.lastSpin = now;
 
-        return res.status(400).json({ error: "Invalid action" });
+        res.json({ banana });
+        return;
     }
 
-    return res.status(405).json({ error: "Method not allowed" });
+    if (action === "sell") {
+        if (user.bananas.length === 0) {
+            res.json({ error: "No bananas to sell" });
+            return;
+        }
+
+        const banana = user.bananas.pop();
+        user.cash += banana.value;
+
+        res.json({ cash: banana.value });
+        return;
+    }
+
+    // Default: return user data
+    res.json({
+        cash: user.cash,
+        bananas: user.bananas
+    });
 }
