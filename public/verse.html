@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Bible Verse</title>
+  <title>Interfaith Verse</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -23,18 +23,33 @@
       max-width: 700px;
       text-align: center;
     }
+    select, button {
+      margin: 10px;
+      padding: 8px 12px;
+      font-size: 1em;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover { background: #1d4ed8; }
     .verse-text {
-      font-size: 1.3em;
+      font-size: 1.2em;
       line-height: 1.6;
-      margin-bottom: 14px;
+      margin-top: 18px;
     }
     .verse-ref {
       font-weight: bold;
-      margin-bottom: 6px;
+      margin-top: 10px;
     }
-    .translation {
-      font-size: 0.9em;
+    .religion {
+      margin-top: 8px;
       color: #6b7280;
+      font-size: 0.9em;
     }
     .loading {
       color: #9ca3af;
@@ -43,34 +58,105 @@
 </head>
 <body>
   <div class="box">
-    <div id="loading" class="loading">Loading verse...</div>
-    <div id="verseRef" class="verse-ref" style="display:none;"></div>
-    <div id="verseText" class="verse-text" style="display:none;"></div>
-    <div id="translation" class="translation" style="display:none;"></div>
+    <h2>Interfaith Verse Picker</h2>
+    <div>
+      <select id="religionPicker">
+        <option value="christianity">Christianity (Bible)</option>
+        <option value="islam">Islam (Quran)</option>
+        <option value="judaism">Judaism (Tanakh)</option>
+        <option value="hinduism">Hinduism (Bhagavad Gita)</option>
+        <option value="buddhism">Buddhism (Suttas)</option>
+      </select>
+      <button id="fetchBtn">Get Verse</button>
+    </div>
+
+    <div id="loading" class="loading">Choose a religion and click "Get Verse".</div>
+    <div id="verseText" class="verse-text"></div>
+    <div id="verseRef" class="verse-ref"></div>
+    <div id="religion" class="religion"></div>
   </div>
 
   <script>
-    const api = 'https://bible-api.com/data/web/random';
+    const picker = document.getElementById('religionPicker');
+    const fetchBtn = document.getElementById('fetchBtn');
 
-    fetch(api)
-      .then(res => res.json())
-      .then(data => {
-          const verse = data.random_verse;
-        
-          document.getElementById('loading').style.display = 'none';
-          document.getElementById('verseRef').style.display = 'block';
-          document.getElementById('verseText').style.display = 'block';
-          document.getElementById('translation').style.display = 'block';
-        
-          document.getElementById('verseRef').textContent =
-            verse.book + ' ' + verse.chapter + ':' + verse.verse;
-          document.getElementById('verseText').textContent = verse.text;
-          document.getElementById('translation').textContent = 'English';
-      })
-      .catch(err => {
-        document.getElementById('loading').textContent = 'Failed to load verse.';
-        console.error(err);
-      });
+    const verseText = document.getElementById('verseText');
+    const verseRef = document.getElementById('verseRef');
+    const religion = document.getElementById('religion');
+    const loading = document.getElementById('loading');
+
+    // restore saved choice
+    const saved = localStorage.getItem('religionChoice');
+    if (saved) picker.value = saved;
+
+    fetchBtn.addEventListener('click', () => {
+      const choice = picker.value;
+      localStorage.setItem('religionChoice', choice);
+
+      verseText.textContent = '';
+      verseRef.textContent = '';
+      religion.textContent = '';
+      loading.textContent = 'Loading...';
+
+      if (choice === 'christianity') {
+        fetch('https://bible-api.com/data/web/random')
+          .then(res => res.json())
+          .then(data => {
+            const v = data.random_verse;
+            verseText.textContent = v.text;
+            verseRef.textContent = `${v.book} ${v.chapter}:${v.verse}`;
+            religion.textContent = 'Christianity';
+            loading.textContent = '';
+          });
+      }
+
+      if (choice === 'islam') {
+        fetch('https://api.alquran.cloud/v1/ayah/random')
+          .then(res => res.json())
+          .then(data => {
+            const v = data.data;
+            verseText.textContent = v.text;
+            verseRef.textContent = `Surah ${v.surah.englishName} (${v.surah.number}):${v.numberInSurah}`;
+            religion.textContent = 'Islam';
+            loading.textContent = '';
+          });
+      }
+
+      if (choice === 'judaism') {
+        // Example: Genesis 1:1 (Sefaria doesn't provide a random endpoint, so we pick a sample)
+        fetch('https://www.sefaria.org/api/texts/Genesis.1.1?lang=he-en')
+          .then(res => res.json())
+          .then(data => {
+            verseText.textContent = data.text[0];
+            verseRef.textContent = 'Genesis 1:1';
+            religion.textContent = 'Judaism';
+            loading.textContent = '';
+          });
+      }
+
+      if (choice === 'hinduism') {
+        fetch('https://bhagavadgitaapi.in/slok?random=true')
+          .then(res => res.json())
+          .then(data => {
+            verseText.textContent = data.slok;
+            verseRef.textContent = `Chapter ${data.chapter}, Verse ${data.verse}`;
+            religion.textContent = 'Hinduism';
+            loading.textContent = '';
+          });
+      }
+
+      if (choice === 'buddhism') {
+        // Sample stub: SuttaCentral doesn't provide simple random; we pick Dhammapada 1:1
+        fetch('https://suttacentral.net/api/bilarasuttas/sn1.1.json')
+          .then(res => res.json())
+          .then(data => {
+            verseText.textContent = data.translation.en[0] || 'Sample Buddhist text';
+            verseRef.textContent = 'SN 1.1 (Sutta Nipāta)';
+            religion.textContent = 'Buddhism';
+            loading.textContent = '';
+          });
+      }
+    });
   </script>
 </body>
 </html>
