@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Bible Verse (API)</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f3f4f6;
+      color: #111827;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .box {
+      background: #fff;
+      padding: 24px 32px;
+      border-radius: 10px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.1);
+      max-width: 700px;
+      text-align: center;
+    }
+    .verse-text {
+      font-size: 1.3em;
+      line-height: 1.6;
+      margin-bottom: 14px;
+    }
+    .verse-ref {
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+    .translation {
+      font-size: 0.9em;
+      color: #6b7280;
+    }
+    .loading {
+      color: #9ca3af;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div id="loading" class="loading">Loading verse...</div>
+    <div id="verseRef" class="verse-ref" style="display:none;"></div>
+    <div id="verseText" class="verse-text" style="display:none;"></div>
+    <div id="translation" class="translation" style="display:none;"></div>
+  </div>
+
+  <script>
+    const apiUrl = 'https://bible-api.com/data/web/random';
+
+    fetch(apiUrl)
+      .then(res => res.json())
+      .then(data => {
+        const verse = data.random_verse;
+        const trans = data.translation;
+
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('verseRef').style.display = 'block';
+        document.getElementById('verseText').style.display = 'block';
+        document.getElementById('translation').style.display = 'block';
+
+        document.getElementById('verseRef').textContent =
+          verse.book + ' ' + verse.chapter + ':' + verse.verse;
+        document.getElementById('verseText').textContent = verse.text;
+        document.getElementById('translation').textContent =
+          trans.name + ' (' + trans.language + ')';
+      })
+      .catch(err => {
+        document.getElementById('loading').textContent = 'Failed to load verse.';
+        console.error(err);
+      });
+  </script>
+</body>
+</html>
