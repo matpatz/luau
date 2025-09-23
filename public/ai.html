@@ -3,120 +3,110 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Free Sigma AI Chat</title>
+<title>Free AI News Generator</title>
 <style>
 body {
   font-family: Arial, sans-serif;
-  background: #1e1e1e;
-  color: #f3f4f6;
+  background: #f3f4f6;
   margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  align-items: center;
+  min-height: 100vh;
 }
 header {
   background: #2563eb;
+  color: white;
+  width: 100%;
   padding: 15px;
   text-align: center;
   font-size: 1.5em;
   font-weight: bold;
-  color: white;
 }
-#chatContainer {
-  flex: 1;
-  padding: 20px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.message {
-  max-width: 70%;
-  padding: 10px 15px;
+.container {
+  max-width: 800px;
+  width: 90%;
+  margin: 20px auto;
+  background: white;
+  padding: 20px 30px;
   border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.1);
 }
-.user { background: #2563eb; align-self: flex-end; }
-.ai { background: #333; align-self: flex-start; }
-#inputArea {
-  display: flex;
-  padding: 10px 20px;
-  gap: 10px;
-  background: #111;
-}
-#userInput {
-  flex: 1;
+input, button {
   padding: 10px;
-  border-radius: 8px;
-  border: none;
   font-size: 1em;
+  border-radius: 8px;
+  border: 1px solid #ccc;
 }
-#sendBtn {
-  padding: 10px 20px;
+button {
   background: #2563eb;
   color: white;
   border: none;
-  border-radius: 8px;
   cursor: pointer;
 }
-#sendBtn:hover { background: #1d4ed8; }
+button:hover { background: #1d4ed8; }
+#article {
+  margin-top: 20px;
+}
+h2 { margin-bottom: 5px; }
+h4 { margin-top: 0; color: #6b7280; font-weight: normal; }
+p { line-height: 1.6; margin-bottom: 10px; }
 </style>
 </head>
 <body>
-<header>Free Sigma AI Chat</header>
-<div id="chatContainer"></div>
-<div id="inputArea">
-  <input type="text" id="userInput" placeholder="Ask me anything...">
-  <button id="sendBtn">Send</button>
+<header>Free AI News Generator</header>
+<div class="container">
+  <input type="text" id="topicInput" placeholder="Enter news topic" style="width:70%;">
+  <button id="generateBtn">Generate Article</button>
+  <div id="article"></div>
 </div>
 
 <script>
-// Very basic free AI responses
-const aiResponses = [
-  { patterns: [/hello/i, /hi/i, /hey/i], response: "Hello! How can I help you today?" },
-  { patterns: [/how are you/i], response: "I'm a bot, but I'm doing fine!" },
-  { patterns: [/your name/i], response: "I'm Free Sigma AI, your friendly local bot." },
-  { patterns: [/weather/i], response: "I can't check real weather yet, but it's always sunny in code!" },
-  { patterns: [/time/i], response: () => `Current time is ${new Date().toLocaleTimeString()}` },
-  { patterns: [/.*?/], response: "Interesting! Tell me more." } // fallback
+// Templates for unbiased news
+const headlines = [
+  "Recent developments in {topic}",
+  "{topic} updates: what you need to know",
+  "Breaking news: {topic}",
+  "Experts discuss {topic}"
 ];
 
-const chatContainer = document.getElementById('chatContainer');
-const userInput = document.getElementById('userInput');
-const sendBtn = document.getElementById('sendBtn');
+const introTemplates = [
+  "Today, {topic} has been in focus as recent events unfold.",
+  "Recent reports highlight key points about {topic}.",
+  "{topic} has captured attention in recent developments."
+];
 
-function addMessage(text, sender) {
-  const msg = document.createElement('div');
-  msg.className = 'message ' + sender;
-  msg.textContent = text;
-  chatContainer.appendChild(msg);
-  chatContainer.scrollTop = chatContainer.scrollHeight;
+const bodyTemplates = [
+  "According to reliable sources, {topic} is being monitored carefully.",
+  "Authorities and experts agree that {topic} requires attention.",
+  "Various perspectives indicate that {topic} is evolving, with ongoing discussions about its impact."
+];
+
+function randomChoice(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function getAIResponse(prompt) {
-  for (let entry of aiResponses) {
-    if (entry.patterns.some(p => p.test(prompt))) {
-      return typeof entry.response === 'function' ? entry.response() : entry.response;
-    }
-  }
-  return "Hmm, I don't know about that.";
+function generateArticle(topic) {
+  const headline = randomChoice(headlines).replace("{topic}", topic);
+  const intro = randomChoice(introTemplates).replace("{topic}", topic);
+  const body = randomChoice(bodyTemplates).replace(/{topic}/g, topic);
+
+  return { headline, intro, body };
 }
 
-sendBtn.addEventListener('click', () => {
-  const text = userInput.value.trim();
-  if (!text) return;
-  addMessage(text, 'user');
-  userInput.value = '';
+document.getElementById('generateBtn').addEventListener('click', () => {
+  const topic = document.getElementById('topicInput').value.trim();
+  if (!topic) return;
 
-  addMessage("Typing...", 'ai');
-  const aiMessageEl = chatContainer.lastChild;
-
-  setTimeout(() => {
-    aiMessageEl.textContent = getAIResponse(text);
-  }, 500 + Math.random() * 800);
-});
-
-userInput.addEventListener('keypress', e => {
-  if (e.key === 'Enter') sendBtn.click();
+  const article = generateArticle(topic);
+  const articleDiv = document.getElementById('article');
+  articleDiv.innerHTML = `
+    <h2>${article.headline}</h2>
+    <h4>By Free Sigma AI | ${new Date().toLocaleDateString()}</h4>
+    <p>${article.intro}</p>
+    <p>${article.body}</p>
+  `;
 });
 </script>
 </body>
