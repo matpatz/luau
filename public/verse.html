@@ -55,19 +55,17 @@
     fetch(api)
       .then(res => res.json())
       .then(data => {
-        const verse = data.random_verse;
-        const trans = data.translation;
-
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('verseRef').style.display = 'block';
-        document.getElementById('verseText').style.display = 'block';
-        document.getElementById('translation').style.display = 'block';
-
-        document.getElementById('verseRef').textContent =
-          verse.book + ' ' + verse.chapter + ':' + verse.verse;
-        document.getElementById('verseText').textContent = verse.text;
-        document.getElementById('translation').textContent =
-          trans.name + ' (' + trans.language + ')';
+          const verse = data.random_verse;
+        
+          document.getElementById('loading').style.display = 'none';
+          document.getElementById('verseRef').style.display = 'block';
+          document.getElementById('verseText').style.display = 'block';
+          document.getElementById('translation').style.display = 'block';
+        
+          document.getElementById('verseRef').textContent =
+            verse.book + ' ' + verse.chapter + ':' + verse.verse;
+          document.getElementById('verseText').textContent = verse.text;
+          document.getElementById('translation').textContent = 'English';
       })
       .catch(err => {
         document.getElementById('loading').textContent = 'Failed to load verse.';
