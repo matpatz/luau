@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Random Verse</title>
 <style>
   body {
     font-family: Arial, sans-serif;
@@ -23,7 +24,6 @@
     text-align: center;
   }
   select, button {
-    margin: 10px 0;
     padding: 8px 12px;
     font-size: 1em;
     border-radius: 6px;
@@ -40,21 +40,27 @@
   .verse-ref { font-weight: bold; margin-top: 10px; }
   .religion { margin-top: 8px; color: #6b7280; font-size: 0.9em; }
   .loading { color: #9ca3af; margin-top: 12px; }
+  .input-row {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
 </style>
 </head>
 <body>
   <div class="box">
     <h1>Random Verse</h1>
-  
-    <select id="religionPicker">
-      <option value="Christianity">Christianity (Bible)</option>
-      <option value="Islam">Islam (Quran)</option>
-    </select>
-  
-    <br>
-  
-    <button id="fetchBtn">Get Verse</button>
-  
+
+    <!-- Horizontally aligned dropdown + button -->
+    <div class="input-row">
+      <select id="religionPicker">
+        <option value="Christianity">Christianity (Bible)</option>
+        <option value="Islam">Islam (Quran)</option>
+      </select>
+      <button id="fetchBtn">Get Verse</button>
+    </div>
+
     <div id="loading" class="loading">Choose a religion and click "Get Verse".</div>
     <div id="verseText" class="verse-text"></div>
     <div id="verseRef" class="verse-ref"></div>
