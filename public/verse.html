@@ -1,74 +1,61 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Interfaith Verse</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f3f4f6;
-      color: #111827;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
-    }
-    .box {
-      background: #fff;
-      padding: 24px 32px;
-      border-radius: 10px;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.1);
-      max-width: 700px;
-      text-align: center;
-    }
-    select, button {
-      margin: 10px;
-      padding: 8px 12px;
-      font-size: 1em;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-    }
-    button {
-      background: #2563eb;
-      color: white;
-      border: none;
-      cursor: pointer;
-    }
-    button:hover { background: #1d4ed8; }
-    .verse-text {
-      font-size: 1.2em;
-      line-height: 1.6;
-      margin-top: 18px;
-    }
-    .verse-ref {
-      font-weight: bold;
-      margin-top: 10px;
-    }
-    .religion {
-      margin-top: 8px;
-      color: #6b7280;
-      font-size: 0.9em;
-    }
-    .loading {
-      color: #9ca3af;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interfaith Verse Picker</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #f3f4f6;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+  }
+  .box {
+    background: #fff;
+    padding: 24px 32px;
+    border-radius: 10px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.1);
+    max-width: 700px;
+    width: 90%;
+    text-align: center;
+  }
+  select, button {
+    margin: 10px 0;
+    padding: 8px 12px;
+    font-size: 1em;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+  }
+  button {
+    background: #2563eb;
+    color: white;
+    border: none;
+    cursor: pointer;
+  }
+  button:hover { background: #1d4ed8; }
+  .verse-text { font-size: 1.2em; line-height: 1.6; margin-top: 18px; }
+  .verse-ref { font-weight: bold; margin-top: 10px; }
+  .religion { margin-top: 8px; color: #6b7280; font-size: 0.9em; }
+  .loading { color: #9ca3af; }
+</style>
 </head>
 <body>
   <div class="box">
-    <h2>Interfaith Verse Picker</h2>
-    <div>
-      <select id="religionPicker">
-        <option value="christianity">Christianity (Bible)</option>
-        <option value="islam">Islam (Quran)</option>
-        <option value="judaism">Judaism (Tanakh)</option>
-        <option value="hinduism">Hinduism (Bhagavad Gita)</option>
-        <option value="buddhism">Buddhism (Suttas)</option>
-      </select>
-      <button id="fetchBtn">Get Verse</button>
-    </div>
+    <h1>Interfaith Verse Picker</h1>
+    <select id="religionPicker">
+      <option value="Christianity">Christianity</option>
+      <option value="Islam">Islam</option>
+      <option value="Judaism">Judaism</option>
+      <option value="Hinduism">Hinduism</option>
+      <option value="Buddhism">Buddhism</option>
+      <option value="Atheism">Atheism</option>
+    </select>
+    <br>
+    <button id="fetchBtn">Get Verse</button>
 
     <div id="loading" class="loading">Choose a religion and click "Get Verse".</div>
     <div id="verseText" class="verse-text"></div>
@@ -79,13 +66,12 @@
   <script>
     const picker = document.getElementById('religionPicker');
     const fetchBtn = document.getElementById('fetchBtn');
-
     const verseText = document.getElementById('verseText');
     const verseRef = document.getElementById('verseRef');
     const religion = document.getElementById('religion');
     const loading = document.getElementById('loading');
 
-    // restore saved choice
+    // Restore last choice
     const saved = localStorage.getItem('religionChoice');
     if (saved) picker.value = saved;
 
@@ -98,7 +84,26 @@
       religion.textContent = '';
       loading.textContent = 'Loading...';
 
-      if (choice === 'christianity') {
+      const fallbackBanks = {
+        Judaism: [
+          { text: "In the beginning God created the heaven and the earth.", source: "Genesis 1:1" },
+          { text: "Hear, O Israel: The LORD our God, the LORD is one.", source: "Deuteronomy 6:4" }
+        ],
+        Hinduism: [
+          { text: "You have the right to work, but never to the fruit of work.", source: "Bhagavad Gita 2:47" },
+          { text: "When meditation is mastered, the mind is unwavering like the flame of a lamp in a windless place.", source: "Bhagavad Gita 6:19" }
+        ],
+        Buddhism: [
+          { text: "All that we are is the result of what we have thought.", source: "Dhammapada 1:1" },
+          { text: "Hatred does not cease by hatred, but only by love.", source: "Dhammapada 1:5" }
+        ],
+        Atheism: [
+          { text: "We are a way for the cosmos to know itself.", source: "Carl Sagan" },
+          { text: "The good life is one inspired by love and guided by knowledge.", source: "Bertrand Russell" }
+        ]
+      };
+
+      if (choice === "Christianity") {
         fetch('https://bible-api.com/data/web/random')
           .then(res => res.json())
           .then(data => {
@@ -107,10 +112,9 @@
             verseRef.textContent = `${v.book} ${v.chapter}:${v.verse}`;
             religion.textContent = 'Christianity';
             loading.textContent = '';
-          });
-      }
-
-      if (choice === 'islam') {
+          })
+          .catch(() => { loading.textContent = 'Failed to fetch Bible verse.'; });
+      } else if (choice === "Islam") {
         fetch('https://api.alquran.cloud/v1/ayah/random')
           .then(res => res.json())
           .then(data => {
@@ -119,42 +123,15 @@
             verseRef.textContent = `Surah ${v.surah.englishName} (${v.surah.number}):${v.numberInSurah}`;
             religion.textContent = 'Islam';
             loading.textContent = '';
-          });
-      }
-
-      if (choice === 'judaism') {
-        // Example: Genesis 1:1 (Sefaria doesn't provide a random endpoint, so we pick a sample)
-        fetch('https://www.sefaria.org/api/texts/Genesis.1.1?lang=he-en')
-          .then(res => res.json())
-          .then(data => {
-            verseText.textContent = data.text[0];
-            verseRef.textContent = 'Genesis 1:1';
-            religion.textContent = 'Judaism';
-            loading.textContent = '';
-          });
-      }
-
-      if (choice === 'hinduism') {
-        fetch('https://bhagavadgitaapi.in/slok?random=true')
-          .then(res => res.json())
-          .then(data => {
-            verseText.textContent = data.slok;
-            verseRef.textContent = `Chapter ${data.chapter}, Verse ${data.verse}`;
-            religion.textContent = 'Hinduism';
-            loading.textContent = '';
-          });
-      }
-
-      if (choice === 'buddhism') {
-        // Sample stub: SuttaCentral doesn't provide simple random; we pick Dhammapada 1:1
-        fetch('https://suttacentral.net/api/bilarasuttas/sn1.1.json')
-          .then(res => res.json())
-          .then(data => {
-            verseText.textContent = data.translation.en[0] || 'Sample Buddhist text';
-            verseRef.textContent = 'SN 1.1 (Sutta Nipāta)';
-            religion.textContent = 'Buddhism';
-            loading.textContent = '';
-          });
+          })
+          .catch(() => { loading.textContent = 'Failed to fetch Quran ayah.'; });
+      } else {
+        const bank = fallbackBanks[choice];
+        const v = bank[Math.floor(Math.random() * bank.length)];
+        verseText.textContent = v.text;
+        verseRef.textContent = v.source;
+        religion.textContent = choice;
+        loading.textContent = '';
       }
     });
   </script>
