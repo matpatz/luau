@@ -52,7 +52,6 @@
   <div class="box">
     <h1>Random Verse</h1>
 
-    <!-- Horizontally aligned dropdown + button -->
     <div class="input-row">
       <select id="religionPicker">
         <option value="Christianity">Christianity (Bible)</option>
@@ -75,7 +74,6 @@
     const religion = document.getElementById('religion');
     const loading = document.getElementById('loading');
 
-    // Restore last choice
     const saved = localStorage.getItem('religionChoice');
     if (saved) picker.value = saved;
 
