@@ -40,19 +40,15 @@
   .verse-text { font-size: 1.2em; line-height: 1.6; margin-top: 18px; }
   .verse-ref { font-weight: bold; margin-top: 10px; }
   .religion { margin-top: 8px; color: #6b7280; font-size: 0.9em; }
-  .loading { color: #9ca3af; }
+  .loading { color: #9ca3af; margin-top: 12px; }
 </style>
 </head>
 <body>
   <div class="box">
     <h1>Interfaith Verse Picker</h1>
     <select id="religionPicker">
-      <option value="Christianity">Christianity</option>
-      <option value="Islam">Islam</option>
-      <option value="Judaism">Judaism</option>
-      <option value="Hinduism">Hinduism</option>
-      <option value="Buddhism">Buddhism</option>
-      <option value="Atheism">Atheism</option>
+      <option value="Christianity">Christianity (Bible)</option>
+      <option value="Islam">Islam (Quran)</option>
     </select>
     <br>
     <button id="fetchBtn">Get Verse</button>
@@ -84,25 +80,6 @@
       religion.textContent = '';
       loading.textContent = 'Loading...';
 
-      const fallbackBanks = {
-        Judaism: [
-          { text: "In the beginning God created the heaven and the earth.", source: "Genesis 1:1" },
-          { text: "Hear, O Israel: The LORD our God, the LORD is one.", source: "Deuteronomy 6:4" }
-        ],
-        Hinduism: [
-          { text: "You have the right to work, but never to the fruit of work.", source: "Bhagavad Gita 2:47" },
-          { text: "When meditation is mastered, the mind is unwavering like the flame of a lamp in a windless place.", source: "Bhagavad Gita 6:19" }
-        ],
-        Buddhism: [
-          { text: "All that we are is the result of what we have thought.", source: "Dhammapada 1:1" },
-          { text: "Hatred does not cease by hatred, but only by love.", source: "Dhammapada 1:5" }
-        ],
-        Atheism: [
-          { text: "We are a way for the cosmos to know itself.", source: "Carl Sagan" },
-          { text: "The good life is one inspired by love and guided by knowledge.", source: "Bertrand Russell" }
-        ]
-      };
-
       if (choice === "Christianity") {
         fetch('https://bible-api.com/data/web/random')
           .then(res => res.json())
@@ -125,13 +102,6 @@
             loading.textContent = '';
           })
           .catch(() => { loading.textContent = 'Failed to fetch Quran ayah.'; });
-      } else {
-        const bank = fallbackBanks[choice];
-        const v = bank[Math.floor(Math.random() * bank.length)];
-        verseText.textContent = v.text;
-        verseRef.textContent = v.source;
-        religion.textContent = choice;
-        loading.textContent = '';
       }
     });
   </script>
