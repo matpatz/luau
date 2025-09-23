@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Free Sigma AI Chat</title>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #1e1e1e;
+  color: #f3f4f6;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+header {
+  background: #2563eb;
+  padding: 15px;
+  text-align: center;
+  font-size: 1.5em;
+  font-weight: bold;
+  color: white;
+}
+#chatContainer {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.message {
+  max-width: 70%;
+  padding: 10px 15px;
+  border-radius: 12px;
+}
+.user { background: #2563eb; align-self: flex-end; }
+.ai { background: #333; align-self: flex-start; }
+#inputArea {
+  display: flex;
+  padding: 10px 20px;
+  gap: 10px;
+  background: #111;
+}
+#userInput {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  font-size: 1em;
+}
+#sendBtn {
+  padding: 10px 20px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+#sendBtn:hover { background: #1d4ed8; }
+</style>
+</head>
+<body>
+<header>Free Sigma AI Chat</header>
+<div id="chatContainer"></div>
+<div id="inputArea">
+  <input type="text" id="userInput" placeholder="Ask me anything...">
+  <button id="sendBtn">Send</button>
+</div>
+
+<script>
+// Very basic free AI responses
+const aiResponses = [
+  { patterns: [/hello/i, /hi/i, /hey/i], response: "Hello! How can I help you today?" },
+  { patterns: [/how are you/i], response: "I'm a bot, but I'm doing fine!" },
+  { patterns: [/your name/i], response: "I'm Free Sigma AI, your friendly local bot." },
+  { patterns: [/weather/i], response: "I can't check real weather yet, but it's always sunny in code!" },
+  { patterns: [/time/i], response: () => `Current time is ${new Date().toLocaleTimeString()}` },
+  { patterns: [/.*?/], response: "Interesting! Tell me more." } // fallback
+];
+
+const chatContainer = document.getElementById('chatContainer');
+const userInput = document.getElementById('userInput');
+const sendBtn = document.getElementById('sendBtn');
+
+function addMessage(text, sender) {
+  const msg = document.createElement('div');
+  msg.className = 'message ' + sender;
+  msg.textContent = text;
+  chatContainer.appendChild(msg);
+  chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function getAIResponse(prompt) {
+  for (let entry of aiResponses) {
+    if (entry.patterns.some(p => p.test(prompt))) {
+      return typeof entry.response === 'function' ? entry.response() : entry.response;
+    }
+  }
+  return "Hmm, I don't know about that.";
+}
+
+sendBtn.addEventListener('click', () => {
+  const text = userInput.value.trim();
+  if (!text) return;
+  addMessage(text, 'user');
+  userInput.value = '';
+
+  addMessage("Typing...", 'ai');
+  const aiMessageEl = chatContainer.lastChild;
+
+  setTimeout(() => {
+    aiMessageEl.textContent = getAIResponse(text);
+  }, 500 + Math.random() * 800);
+});
+
+userInput.addEventListener('keypress', e => {
+  if (e.key === 'Enter') sendBtn.click();
+});
+</script>
+</body>
+</html>
