@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Bible Verse (API)</title>
+  <title>Bible Verse</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -50,9 +50,9 @@
   </div>
 
   <script>
-    const apiUrl = 'https://bible-api.com/data/web/random';
+    const api = 'https://bible-api.com/data/web/random';
 
-    fetch(apiUrl)
+    fetch(api)
       .then(res => res.json())
       .then(data => {
         const verse = data.random_verse;
