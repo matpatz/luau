@@ -45,13 +45,14 @@
 <body>
   <div class="box">
     <h1>Random Verse</h1>
-    <select id="religionPicker">
-      <option value="Christianity">Christianity (Bible)</option>
-      <option value="Islam">Islam (Quran)</option>
-    </select>
-    <br>
-    <button id="fetchBtn">Get Verse</button>
-
+    <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 10px;">
+      <select id="religionPicker">
+        <option value="Christianity">Christianity (Bible)</option>
+        <option value="Islam">Islam (Quran)</option>
+      </select>
+      <button id="fetchBtn">Get Verse</button>
+    </div>
+  
     <div id="loading" class="loading">Choose a religion and click "Get Verse".</div>
     <div id="verseText" class="verse-text"></div>
     <div id="verseRef" class="verse-ref"></div>
