@@ -5,76 +5,46 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Free AI News Summarizer</title>
 <style>
-body {
-  font-family: Arial, sans-serif;
-  background: #f3f4f6;
-  margin: 0;
-  padding: 0;
-}
-header {
-  background: #2563eb;
-  color: white;
-  padding: 15px;
-  text-align: center;
-  font-size: 1.5em;
-  font-weight: bold;
-}
-.container {
-  max-width: 900px;
-  margin: 20px auto;
-  background: white;
-  padding: 20px 30px;
-  border-radius: 12px;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.1);
-}
-input, button {
-  padding: 10px;
-  font-size: 1em;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-}
-button {
-  background: #2563eb;
-  color: white;
-  border: none;
-  cursor: pointer;
-}
+body { font-family: Arial, sans-serif; background: #f3f4f6; margin: 0; padding: 0; }
+header { background: #2563eb; color: white; padding: 15px; text-align: center; font-size: 1.5em; font-weight: bold; }
+.container { max-width: 900px; margin: 20px auto; background: white; padding: 20px 30px; border-radius: 12px; box-shadow: 0 6px 18px rgba(0,0,0,0.1); }
+input, button { padding: 10px; font-size: 1em; border-radius: 8px; border: 1px solid #ccc; }
+button { background: #2563eb; color: white; border: none; cursor: pointer; }
 button:hover { background: #1d4ed8; }
-.article {
-  margin-top: 20px;
-}
+.article { margin-top: 20px; padding: 10px; border-bottom: 1px solid #ddd; }
 .article h2 { margin-bottom: 5px; }
 .article p { line-height: 1.6; margin-bottom: 10px; }
+.summary { background: #eef; padding: 10px; border-radius: 6px; margin-top: 5px; }
 </style>
 </head>
 <body>
 <header>Free AI News Summarizer</header>
 <div class="container">
   <input type="text" id="topicInput" placeholder="Enter topic to summarize" style="width:70%;">
-  <button id="fetchBtn">Fetch & Summarize</button>
+  <button id="fetchBtn">Fetch Articles</button>
   <div id="articles"></div>
 </div>
 
 <script>
-// Summarizer: pick first 2-3 sentences
+// Basic JS summarizer: first 2 sentences
 function summarize(text) {
+  if(!text) return "No content available to summarize.";
   const sentences = text.split('. ');
-  return sentences.slice(0,3).join('. ') + (sentences.length > 3 ? '...' : '');
+  return sentences.slice(0,2).join('. ') + (sentences.length > 2 ? '...' : '');
 }
 
 document.getElementById('fetchBtn').addEventListener('click', async () => {
   const topic = document.getElementById('topicInput').value.trim();
-  if (!topic) return;
+  if(!topic) return;
 
   const articlesDiv = document.getElementById('articles');
   articlesDiv.innerHTML = 'Loading...';
 
   try {
-    // Using a free RSS-to-JSON service
     const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=https://news.google.com/rss/search?q=${encodeURIComponent(topic)}&hl=en-US&gl=US&ceid=US:en`);
     const data = await res.json();
     articlesDiv.innerHTML = '';
-    if (!data.items || data.items.length === 0) {
+    if(!data.items || data.items.length === 0) {
       articlesDiv.innerHTML = 'No recent articles found.';
       return;
     }
@@ -84,10 +54,19 @@ document.getElementById('fetchBtn').addEventListener('click', async () => {
       articleDiv.className = 'article';
       articleDiv.innerHTML = `
         <h2><a href="${item.link}" target="_blank">${item.title}</a></h2>
-        <p>${summarize(item.description || item.content || '')}</p>
-        <small>Source: ${item.source || 'News'} | ${new Date(item.pubDate).toLocaleString()}</small>
+        <p>${item.description || item.content || 'No content available.'}</p>
+        <small>Source: ${item.source || 'News'} | ${new Date(item.pubDate).toLocaleString()}</small><br>
+        <button class="summarizeBtn">Summarize</button>
+        <div class="summary" style="display:none;"></div>
       `;
       articlesDiv.appendChild(articleDiv);
+
+      const summarizeBtn = articleDiv.querySelector('.summarizeBtn');
+      const summaryDiv = articleDiv.querySelector('.summary');
+      summarizeBtn.addEventListener('click', () => {
+        summaryDiv.textContent = summarize(item.description || item.content);
+        summaryDiv.style.display = 'block';
+      });
     });
   } catch(e) {
     articlesDiv.innerHTML = 'Failed to fetch articles.';
