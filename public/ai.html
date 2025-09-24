@@ -3,30 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Free AI News Generator</title>
+<title>Free AI News Summarizer</title>
 <style>
 body {
   font-family: Arial, sans-serif;
   background: #f3f4f6;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-height: 100vh;
 }
 header {
   background: #2563eb;
   color: white;
-  width: 100%;
   padding: 15px;
   text-align: center;
   font-size: 1.5em;
   font-weight: bold;
 }
 .container {
-  max-width: 800px;
-  width: 90%;
+  max-width: 900px;
   margin: 20px auto;
   background: white;
   padding: 20px 30px;
@@ -46,67 +40,59 @@ button {
   cursor: pointer;
 }
 button:hover { background: #1d4ed8; }
-#article {
+.article {
   margin-top: 20px;
 }
-h2 { margin-bottom: 5px; }
-h4 { margin-top: 0; color: #6b7280; font-weight: normal; }
-p { line-height: 1.6; margin-bottom: 10px; }
+.article h2 { margin-bottom: 5px; }
+.article p { line-height: 1.6; margin-bottom: 10px; }
 </style>
 </head>
 <body>
-<header>Free AI News Generator</header>
+<header>Free AI News Summarizer</header>
 <div class="container">
-  <input type="text" id="topicInput" placeholder="Enter news topic" style="width:70%;">
-  <button id="generateBtn">Generate Article</button>
-  <div id="article"></div>
+  <input type="text" id="topicInput" placeholder="Enter topic to summarize" style="width:70%;">
+  <button id="fetchBtn">Fetch & Summarize</button>
+  <div id="articles"></div>
 </div>
 
 <script>
-// Templates for unbiased news
-const headlines = [
-  "Recent developments in {topic}",
-  "{topic} updates: what you need to know",
-  "Breaking news: {topic}",
-  "Experts discuss {topic}"
-];
-
-const introTemplates = [
-  "Today, {topic} has been in focus as recent events unfold.",
-  "Recent reports highlight key points about {topic}.",
-  "{topic} has captured attention in recent developments."
-];
-
-const bodyTemplates = [
-  "According to reliable sources, {topic} is being monitored carefully.",
-  "Authorities and experts agree that {topic} requires attention.",
-  "Various perspectives indicate that {topic} is evolving, with ongoing discussions about its impact."
-];
-
-function randomChoice(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
+// Summarizer: pick first 2-3 sentences
+function summarize(text) {
+  const sentences = text.split('. ');
+  return sentences.slice(0,3).join('. ') + (sentences.length > 3 ? '...' : '');
 }
 
-function generateArticle(topic) {
-  const headline = randomChoice(headlines).replace("{topic}", topic);
-  const intro = randomChoice(introTemplates).replace("{topic}", topic);
-  const body = randomChoice(bodyTemplates).replace(/{topic}/g, topic);
-
-  return { headline, intro, body };
-}
-
-document.getElementById('generateBtn').addEventListener('click', () => {
+document.getElementById('fetchBtn').addEventListener('click', async () => {
   const topic = document.getElementById('topicInput').value.trim();
   if (!topic) return;
 
-  const article = generateArticle(topic);
-  const articleDiv = document.getElementById('article');
-  articleDiv.innerHTML = `
-    <h2>${article.headline}</h2>
-    <h4>By Free Sigma AI | ${new Date().toLocaleDateString()}</h4>
-    <p>${article.intro}</p>
-    <p>${article.body}</p>
-  `;
+  const articlesDiv = document.getElementById('articles');
+  articlesDiv.innerHTML = 'Loading...';
+
+  try {
+    // Using a free RSS-to-JSON service
+    const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=https://news.google.com/rss/search?q=${encodeURIComponent(topic)}&hl=en-US&gl=US&ceid=US:en`);
+    const data = await res.json();
+    articlesDiv.innerHTML = '';
+    if (!data.items || data.items.length === 0) {
+      articlesDiv.innerHTML = 'No recent articles found.';
+      return;
+    }
+
+    data.items.slice(0,5).forEach(item => {
+      const articleDiv = document.createElement('div');
+      articleDiv.className = 'article';
+      articleDiv.innerHTML = `
+        <h2><a href="${item.link}" target="_blank">${item.title}</a></h2>
+        <p>${summarize(item.description || item.content || '')}</p>
+        <small>Source: ${item.source || 'News'} | ${new Date(item.pubDate).toLocaleString()}</small>
+      `;
+      articlesDiv.appendChild(articleDiv);
+    });
+  } catch(e) {
+    articlesDiv.innerHTML = 'Failed to fetch articles.';
+    console.error(e);
+  }
 });
 </script>
 </body>
