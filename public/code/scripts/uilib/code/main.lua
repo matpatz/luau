@@ -8,6 +8,7 @@ function Library.new(windowTitle, TabsEnabled)
     self.Tabs = {}
     self.ActiveTab = nil
     self.ContentFrames = {}
+    self.Stacks = {} -- track Y offsets for each parent
 
     -- ScreenGui
     self.ScreenGui = Instance.new("ScreenGui")
@@ -92,6 +93,9 @@ function Library:AddTab(tabName)
     contentFrame.Parent = self.Frame
     self.ContentFrames[tabButton] = contentFrame
 
+    -- Initialize stack for content
+    self.Stacks[contentFrame] = 5
+
     -- Switch tab
     tabButton.MouseButton1Click:Connect(function()
         for _, frame in pairs(self.ContentFrames) do
@@ -103,11 +107,17 @@ function Library:AddTab(tabName)
 
     -- Auto activate first tab
     if #self.Tabs == 1 then
-        tabButton:CaptureFocus()
         tabButton.MouseButton1Click:Fire()
     end
 
     return contentFrame
+end
+
+-- Internal function to stack UI
+function Library:_StackElement(parent, element, height)
+    local y = self.Stacks[parent] or 5
+    element.Position = UDim2.new(0,5,0,y)
+    self.Stacks[parent] = y + height + 5
 end
 
 -- Add TextBox
@@ -121,7 +131,6 @@ function Library:AddTextBox(tabOrPlaceholder, placeholder)
 
     local box = Instance.new("TextBox")
     box.Size = UDim2.new(1,-10,0,100)
-    box.Position = UDim2.new(0,5,0,5)
     box.BackgroundColor3 = Color3.fromRGB(35,35,35)
     box.Text = textPlaceholder
     box.TextColor3 = Color3.fromRGB(255,255,255)
@@ -130,6 +139,8 @@ function Library:AddTextBox(tabOrPlaceholder, placeholder)
     box.MultiLine = true
     box.ClearTextOnFocus = false
     box.Parent = parent
+
+    self:_StackElement(parent, box, 100)
     return box
 end
 
@@ -146,13 +157,15 @@ function Library:AddButton(tabOrText, textOrCallback, callback)
 
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0,120,0,35)
-    btn.Position = UDim2.new(0,5,0,110)
-    btn.Text = text
     btn.BackgroundColor3 = Color3.fromRGB(60,60,60)
     btn.TextColor3 = Color3.fromRGB(255,255,255)
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 14
+    btn.Text = text
     btn.Parent = parent
+
+    self:_StackElement(parent, btn, 35)
+
     if cb then
         btn.MouseButton1Click:Connect(cb)
     end
@@ -170,7 +183,6 @@ function Library:AddLabel(tabOrText, text)
 
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(1,-10,0,20)
-    lbl.Position = UDim2.new(0,5,0,150)
     lbl.BackgroundTransparency = 1
     lbl.TextColor3 = Color3.fromRGB(255,255,255)
     lbl.Text = txt
@@ -178,6 +190,8 @@ function Library:AddLabel(tabOrText, text)
     lbl.TextSize = 14
     lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.Parent = parent
+
+    self:_StackElement(parent, lbl, 20)
     return lbl
 end
 
