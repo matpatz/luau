@@ -8,9 +8,10 @@ local games = {
 }
 
 local ext = games[game.PlaceId]
-if ext and type == "game" then
+
+if ext and mode == "game" then
     loadstring(game:HttpGet(hps .. "loader.lua"))(ext)
-elseif type == "script" then
+elseif mode == "script" then
     print("in development")
 else
     local names = {}
