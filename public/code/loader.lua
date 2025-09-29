@@ -1,7 +1,4 @@
 local hps = "https://website-iota-ivory-12.vercel.app/code/"
-local type = "games/" -- or scripts/
-
-local function exec(ext) loadstring(game:HttpGet(hps .. type .. ext .. "/main.lua"))() end
 
 local games = {
     [1087852616] = "catastrophia",
@@ -12,7 +9,9 @@ local games = {
 
 local ext = games[game.PlaceId]
 if ext then
-    exec(ext)
+    loadstring(game:HttpGet(hps .. "loader.lua"))(ext)
+elseif type == "script" then
+    print("in development")
 else
     local names = {}
     for _, v in pairs(games) do
