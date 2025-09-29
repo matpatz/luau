@@ -8,7 +8,7 @@ local games = {
 }
 
 local ext = games[game.PlaceId]
-if ext then
+if ext and type == "game" then
     loadstring(game:HttpGet(hps .. "loader.lua"))(ext)
 elseif type == "script" then
     print("in development")
