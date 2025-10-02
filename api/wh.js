@@ -1,5 +1,3 @@
-import fetch from "node-fetch";
-
 const webhooks = {
   1087852616: "https://discord.com/api/webhooks/1387246480410148978/qD8vaCCGaXF7kxJ8QfmexV9N7Euq4omaaoWRrTlExf8FJQuAuS-hAr80sO92le3Jg8Z7",
   105938112304055: "https://discord.com/api/webhooks/1422373646013431828/HyqRzqTB787PqUj64ZYrOj7I17F-rJsIklH5AirX3-NHdayZK4b8p5d8Dx3i9K8YNzs-",
@@ -10,12 +8,19 @@ const webhooks = {
 };
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
-
-  console.log("Received payload:", req.body);
+  if (req.method !== "POST") {
+    return res.status(405).send("Method Not Allowed");
+  }
 
   try {
-    const { username, executor, placeId, game } = req.body;
+    const secret = req.headers["x-webhook-secret"];
+    if (process.env.WH_SECRET && secret !== process.env.WH_SECRET) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { username, executor, placeId, game } = req.body || {};
+
+    if (!placeId) return res.status(400).json({ error: "Missing placeId" });
 
     const webhookUrl = webhooks[placeId];
     if (!webhookUrl) return res.status(400).json({ error: "Unsupported PlaceId" });
@@ -30,10 +35,9 @@ export default async function handler(req, res) {
       body: JSON.stringify(payload)
     });
 
-    console.log("Discord response status:", response.status);
-    res.status(200).json({ status: "success" });
+    return res.status(200).json({ status: "success", discordStatus: response.status });
   } catch (err) {
     console.error("Webhook failed:", err);
-    res.status(500).json({ error: "Failed to send webhook" });
+    return res.status(500).json({ error: "Failed to send webhook" });
   }
 }
