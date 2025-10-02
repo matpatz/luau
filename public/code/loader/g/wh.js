@@ -4,7 +4,7 @@ import fetch from "node-fetch";
 const app = express();
 app.use(express.json());
 
-const webhooks = { // very secure indeed
+const webhooks = { // SOOOO secure 
   1087852616: "https://discord.com/api/webhooks/1387246480410148978/qD8vaCCGaXF7kxJ8QfmexV9N7Euq4omaaoWRrTlExf8FJQuAuS-hAr80sO92le3Jg8Z7",
   105938112304055: "https://discord.com/api/webhooks/1422373646013431828/HyqRzqTB787PqUj64ZYrOj7I17F-rJsIklH5AirX3-NHdayZK4b8p5d8Dx3i9K8YNzs-",
   13253735473: "https://discord.com/api/webhooks/1422373838729121824/WnlHIXUjazBFoq3LHguNQcxbScCFQNqchev378LaIrlxj0qjWTH2UDkvmxDIYU-M6WnX",
