@@ -13,7 +13,7 @@ const webhooks = { // SOOOO secure
   11966456877:     "https://discord.com/api/webhooks/1422790373016735745/SLR6ujXdmNqNjtjeDTcm6Fsq2cP41jY20VFPd5Ol0n96ksHcta30etmzTDi7Spuqb968"
 };
 
-app.post("/wh", async (req, res) => {
+app.post("/wh.js", async (req, res) => {
   try {
     const { username, executor, placeId, game } = req.body;
 
