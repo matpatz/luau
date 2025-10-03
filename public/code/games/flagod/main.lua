@@ -6,6 +6,7 @@ local SolveRemote = FlagsService.RF.Solve
 local TriggerEvent = FlagsService.RE.TriggerGameSolution
 
 TriggerEvent.OnClientEvent:Connect(function(eventType, data)
+	task.wait(tonumber(getgenv().timer))
     if eventType ~= "ShowFlag" then return end
 
     local imageId = data.SolutionImageId
@@ -22,6 +23,7 @@ TriggerEvent.OnClientEvent:Connect(function(eventType, data)
     if countryName then
         SolveRemote:InvokeServer(countryName)
         print("Answered:", countryName)
+        getgenv().LastAnswer = countryName
     else
         warn("failed, image Id:", imageId)
     end
