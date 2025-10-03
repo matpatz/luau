@@ -6,80 +6,117 @@
   <title>Voltex Browser</title>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&display=swap" rel="stylesheet">
   <style>
+    :root{--bg:#0a0f1a;--panel:#132235;--accent:#4dc3ff;--muted:#bfefff}
+    *{box-sizing:border-box}
     body {
       margin: 0;
       font-family: 'Orbitron', sans-serif;
-      background: #0a0f1a;
+      background: var(--bg);
       color: #e0f0ff;
       display: flex;
       flex-direction: column;
-      height: 100vh;
+      align-items: center;
+      min-height: 100vh;
+      padding: 28px 18px;
     }
-    header {
-      background: #132235;
-      padding: 14px 20px;
-      font-size: 1.4rem;
-      color: #4dc3ff;
-      text-shadow: 0 0 8px rgba(77,195,255,0.6);
-      border-bottom: 1px solid rgba(77,195,255,0.25);
+    .hero{
+      width:100%;
+      max-width:920px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:18px;
+      margin-bottom:18px;
     }
-    .bar {
-      display: flex;
-      gap: 10px;
-      padding: 10px;
-      background: #1a2a3d;
-      border-bottom: 1px solid rgba(77,195,255,0.25);
+    .logo{font-size:64px;font-weight:800;color:var(--accent);text-shadow:0 6px 24px rgba(77,195,255,0.12)}
+    .searchbox{
+      width:100%;
+      display:flex;
+      gap:10px;
+      align-items:center;
     }
-    .bar input {
-      flex: 1;
-      padding: 8px;
-      border-radius: 8px;
-      border: 1px solid rgba(77,195,255,0.4);
-      background: #0f1a27;
-      color: #e0f0ff;
-      font-family: 'Orbitron', sans-serif;
+    form{display:flex;flex:1}
+    input[type="text"]{
+      flex:1;
+      padding:18px 20px;
+      border-radius:36px;
+      border:1px solid rgba(77,195,255,0.14);
+      background:#0f1a27;
+      color:inherit;
+      font-size:18px;
+      outline:none;
     }
-    .bar button {
-      padding: 8px 14px;
-      border: none;
-      border-radius: 8px;
-      background: #1e3d5c;
-      color: #e0f8ff;
-      font-weight: bold;
-      cursor: pointer;
-      transition: background 0.2s;
+    .controls{display:flex;gap:8px;margin-left:6px}
+    button{
+      padding:12px 16px;border-radius:12px;border:none;background:#1e3d5c;color:#e0f8ff;font-weight:700;cursor:pointer
     }
-    .bar button:hover {
-      background: #2a5b87;
-    }
-    iframe {
-      flex: 1;
-      border: none;
-      width: 100%;
-    }
+    button:hover{background:#2a5b87}
+
+    .frame-wrap{width:100%;max-width:920px;flex:1;display:flex;flex-direction:column;gap:8px}
+    iframe{flex:1;border-radius:10px;min-height:420px;border:1px solid rgba(77,195,255,0.12);background:#fff}
+
+    .note{color:var(--muted);font-size:13px;text-align:center}
+
+    @media (max-width:720px){.logo{font-size:44px}.frame-wrap{min-height:300px}} 
   </style>
 </head>
 <body>
-  <header>Voltex Browser</header>
+  <div class="hero">
+    <div class="logo">Voltex</div>
 
-  <div class="bar">
-    <input id="url" type="text" placeholder="Enter URL..." />
-    <button onclick="go()">Go</button>
+    <div class="searchbox">
+      <form id="searchForm" onsubmit="doSearch(event)">
+        <input id="q" type="text" placeholder="Search Google or type a URL" autocomplete="off" />
+      </form>
+      <div class="controls">
+        <button id="goBtn" onclick="doSearch()">Search</button>
+        <button id="openBtn" onclick="openNewTab()">Open in new tab</button>
+      </div>
+    </div>
+
+    <div class="note">Tip: if a site blocks embedding, use "Open in new tab".</div>
   </div>
 
-  <iframe id="view" src="https://example.com"></iframe>
+  <div class="frame-wrap">
+    <iframe id="view" src="about:blank" sandbox="allow-scripts allow-forms allow-popups"></iframe>
+  </div>
 
   <script>
-    function go() {
-      const url = document.getElementById('url').value.trim();
-      if (!url) return;
-      const iframe = document.getElementById('view');
-      if (!/^https?:\/\//i.test(url)) {
-        iframe.src = 'https://' + url;
-      } else {
-        iframe.src = url;
+    const input = document.getElementById('q');
+    const iframe = document.getElementById('view');
+
+    function normalizeQuery(raw){
+      const s = String(raw).trim();
+      if (!s) return '';
+
+      if (s.indexOf('.') !== -1 && !s.includes(' ')){
+        if (s.startsWith('http://') || s.startsWith('https://')) return s;
+        return 'https://' + s;
       }
+      return 'https://www.google.com/search?q=' + encodeURIComponent(s);
     }
+
+    function doSearch(e){
+      if (e && e.preventDefault) e.preventDefault();
+      const q = input.value;
+      if (!q) return;
+      iframe.src = normalizeQuery(q);
+    }
+
+    function openNewTab(){
+      const q = input.value;
+      if (!q) return;
+      window.open(normalizeQuery(q), '_blank');
+    }
+
+    input.addEventListener('keydown', (e)=>{
+      if (e.key === 'Enter'){
+        e.preventDefault();
+        doSearch();
+      }
+    });
+
+    iframe.src = 'https://www.google.com/search?q=voltex';
   </script>
 </body>
 </html>
