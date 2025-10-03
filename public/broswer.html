@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Voltex Browser</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Orbitron', sans-serif;
+      background: #0a0f1a;
+      color: #e0f0ff;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    header {
+      background: #132235;
+      padding: 14px 20px;
+      font-size: 1.4rem;
+      color: #4dc3ff;
+      text-shadow: 0 0 8px rgba(77,195,255,0.6);
+      border-bottom: 1px solid rgba(77,195,255,0.25);
+    }
+    .bar {
+      display: flex;
+      gap: 10px;
+      padding: 10px;
+      background: #1a2a3d;
+      border-bottom: 1px solid rgba(77,195,255,0.25);
+    }
+    .bar input {
+      flex: 1;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid rgba(77,195,255,0.4);
+      background: #0f1a27;
+      color: #e0f0ff;
+      font-family: 'Orbitron', sans-serif;
+    }
+    .bar button {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 8px;
+      background: #1e3d5c;
+      color: #e0f8ff;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .bar button:hover {
+      background: #2a5b87;
+    }
+    iframe {
+      flex: 1;
+      border: none;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <header>Voltex Browser</header>
+
+  <div class="bar">
+    <input id="url" type="text" placeholder="Enter URL..." />
+    <button onclick="go()">Go</button>
+  </div>
+
+  <iframe id="view" src="https://example.com"></iframe>
+
+  <script>
+    function go() {
+      const url = document.getElementById('url').value.trim();
+      if (!url) return;
+      const iframe = document.getElementById('view');
+      if (!/^https?:\/\//i.test(url)) {
+        iframe.src = 'https://' + url;
+      } else {
+        iframe.src = url;
+      }
+    }
+  </script>
+</body>
+</html>
