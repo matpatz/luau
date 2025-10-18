@@ -1,3 +1,8 @@
+--[[ Useage :
+getgenv().text = "TextIsMe" getgenv().keybind = Enum.KeyCode.RightControl getgenv().radius = 1.5
+loadstring(game:HttpGet("https://website-iota-ivory-12.vercel.app/code/scripts/watermark.lua"))()
+--]]
+
 getgenv().text = getgenv().text or "EnterText"
 getgenv().keybind = getgenv().keybind or Enum.KeyCode.RightShift
 getgenv().radius = getgenv().radius or 1.2 -- center of screen / radius (makes drawings tigher)
