@@ -37,6 +37,7 @@ _G.Keys = {
     ["Accept"] = 0x1E,
     ["Mode Change"] = 0x1F,
     ["Space"] = 0x20,
+	[" "] = 0x20,
     ["Page Up"] = 0x21,
     ["Page Down"] = 0x22,
     ["End"] = 0x23,
