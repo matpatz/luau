@@ -230,3 +230,5 @@ _G.Keys = {
     ["PA1"] = 0xFD,
     ["OEM Clear"] = 0xFE
 }
+
+return Keys
