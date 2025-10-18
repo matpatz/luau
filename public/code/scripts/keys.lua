@@ -228,7 +228,47 @@ _G.Keys = {
     ["Play"] = 0xFA,
     ["Zoom"] = 0xFB,
     ["PA1"] = 0xFD,
-    ["OEM Clear"] = 0xFE
+    ["OEM Clear"] = 0xFE,
+    
+    -- Direct character mappings
+    [","] = 0xBC,        -- Comma
+    ["."] = 0xBE,        -- Period  
+    ["/"] = 0xBF,        -- Forward slash
+    [";"] = 0xBA,        -- Semicolon
+    ["'"] = 0xDE,        -- Single quote
+    ["["] = 0xDB,        -- Left bracket
+    ["]"] = 0xDD,        -- Right bracket
+    ["\\"] = 0xDC,       -- Backslash
+    ["-"] = 0xBD,        -- Minus/hyphen
+    ["="] = 0xBB,        -- Equals
+    ["`"] = 0xC0,        -- Grave accent
+    
+    -- Shift-modified characters
+    ["<"] = 0xBC,        -- Less than (Shift + ,)
+    [">"] = 0xBE,        -- Greater than (Shift + .)
+    ["?"] = 0xBF,        -- Question mark (Shift + /)
+    [":"] = 0xBA,        -- Colon (Shift + ;)
+    ["\""] = 0xDE,       -- Double quote (Shift + ')
+    ["{"] = 0xDB,        -- Left curly brace (Shift + [)
+    ["}"] = 0xDD,        -- Right curly brace (Shift + ])
+    ["|"] = 0xDC,        -- Pipe (Shift + \)
+    ["_"] = 0xBD,        -- Underscore (Shift + -)
+    ["+"] = 0xBB,        -- Plus (Shift + =)
+    ["~"] = 0xC0,        -- Tilde (Shift + `)
+    
+    -- Parentheses
+    ["("] = 0x39,        -- Left parenthesis (Shift + 9)
+    [")"] = 0x30,        -- Right parenthesis (Shift + 0)
+    
+    -- Shift-number symbols
+    ["!"] = 0x31,        -- Exclamation (Shift + 1)
+    ["@"] = 0x32,        -- At symbol (Shift + 2)
+    ["#"] = 0x33,        -- Hash/pound (Shift + 3)
+    ["$"] = 0x34,        -- Dollar (Shift + 4)
+    ["%"] = 0x35,        -- Percent (Shift + 5)
+    ["^"] = 0x36,        -- Caret (Shift + 6)
+    ["&"] = 0x37,        -- Ampersand (Shift + 7)
+    ["*"] = 0x38         -- Asterisk (Shift + 8)
 }
 
 return Keys
