@@ -149,7 +149,7 @@ end
 Settings = game:service'HttpService':JSONEncode(readfile(Name))
 end)
 
-local LibName = tostring(math.random(1, 100))..tostring(math.random(1,50))..tostring(math.random(1, 100))
+local LibName = tostring("e" .. math.random(1e9, 2e9))
 
 function Kavo:ToggleUI()
     if game.CoreGui[LibName].Enabled then
@@ -235,7 +235,7 @@ function Kavo.CreateLib(kavName, themeList)
     blurFrame.ZIndex = 999
 
     ScreenGui.Parent = core
-    ScreenGui.Name = Libname
+    ScreenGui.Name = LibName
     ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     ScreenGui.ResetOnSpawn = false
 
