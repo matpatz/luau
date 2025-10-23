@@ -11,7 +11,7 @@ end
 
 return list
 
---[[
-    local list = loadstring(game:HttpGet("onesec"))()
+--[[ usage :
+    local list = loadstring(game:HttpGet("https://website-iota-ivory-12.vercel.app//code/scripts/vars.lua"))()
     print(list.Playyers)
 ]]
