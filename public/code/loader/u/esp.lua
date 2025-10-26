@@ -86,7 +86,7 @@ return function()
         distances[p] = t
     end
 
-    local function newchams(p)
+    local function newchams(p) --cf
         local highlight = Instance.new("Highlight")
         highlight.FillTransparency = 0.7
         highlight.OutlineTransparency = 1
@@ -164,7 +164,7 @@ return function()
                     b.Color, b.Visible = col, true
                 else b.Visible = false end
 
-                -- name + distance combined
+                -- name + distance
                 if (esp.showname or esp.showdistance) and on2 then
                     local nameText = ""
                     local distanceText = ""
@@ -181,7 +181,6 @@ return function()
                         distanceText = math.floor(dist) .. " studs"
                     end
                     
-                    -- Combine name and distance horizontally
                     local combinedText = nameText
                     if nameText ~= "" and distanceText ~= "" then
                         combinedText = nameText .. " | " .. distanceText
@@ -260,7 +259,21 @@ return function()
     end)
 
     function esp:enable() self.active = true end
-    function esp:disable() self.active = false end
+    
+    function esp:disable() 
+        self.active = false 
+        for p, b in pairs(boxes) do
+            if b then b.Visible = false end
+            if names[p] then names[p].Visible = false end
+            if tracers[p] then tracers[p].Visible = false end
+            if quads[p] then quads[p].Visible = false end
+            if healths[p] then healths[p].Visible = false end
+            if distances[p] then distances[p].Visible = false end
+            if chams[p] then chams[p].Enabled = false end
+            if healthbars[p] then healthbars[p].Visible = false end
+        end
+    end
+
     function esp:box(v) self.showbox = v end -- square
     function esp:name(v) self.showname = v end -- text
     function esp:held(v) self.showheld = v end -- text (name)
