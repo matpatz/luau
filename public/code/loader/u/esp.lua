@@ -261,17 +261,17 @@ return function()
 
     function esp:enable() self.active = true end
     function esp:disable() self.active = false end
-    function esp:box(v) self.showbox = v end
-    function esp:name(v) self.showname = v end
-    function esp:held(v) self.showheld = v end
-    function esp:tracer(v) self.showtracer = v end
-    function esp:quad(v) self.showquad = v end
-    function esp:dist(d) self.maxdist = d end
-    function esp:team(v) self.teamcolor = v end
-    function esp:health(v) self.showhealth = v end
-    function esp:distance(v) self.showdistance = v end
-    function esp:chams(v) self.showchams = v end
-    function esp:healthbar(v) self.showhealthbar = v end
+    function esp:box(v) self.showbox = v end -- square
+    function esp:name(v) self.showname = v end -- text
+    function esp:held(v) self.showheld = v end -- text (name)
+    function esp:tracer(v) self.showtracer = v end -- line
+    function esp:quad(v) self.showquad = v end -- quad (idk why you would need this)
+    function esp:dist(d) self.maxdist = d end -- text
+    function esp:team(v) self.teamcolor = v end -- color
+    function esp:health(v) self.showhealth = v end -- text
+    function esp:distance(v) self.showdistance = v end -- text
+    function esp:chams(v) self.showchams = v end -- highlight
+    function esp:healthbar(v) self.showhealthbar = v end -- line
     function esp:performance(v) self.performancemode = v end
     
     function esp:clear()
