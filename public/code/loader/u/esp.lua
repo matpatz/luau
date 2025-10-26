@@ -18,11 +18,11 @@ return function()
     esp.showhealth = false
     esp.showdistance = false
     esp.showchams = false
+    esp.showhealthbar = false
     esp.performancemode = false
 
-    local boxes, names, tracers, quads, healths, distances, chams = {}, {}, {}, {}, {}, {}, {}
-    local frameCount = 0
-    local uInterval = 2
+    local boxes, names, tracers, quads, healths, distances, chams, healthbars = {}, {}, {}, {}, {}, {}, {}, {}
+    local frameCount, uInterval = 0, 2
 
     local function getparts(p)
         local ch = p.Character
@@ -35,7 +35,7 @@ return function()
         return ch, hrp, head, humanoid
     end
 
-    local function gethealthcolor(health, maxhealth)
+    local function getColor(health, maxhealth)
         local percentage = health / maxhealth
         if percentage > 0.7 then
             return Color3.fromRGB(0, 255, 0)
@@ -96,6 +96,12 @@ return function()
         chams[p] = highlight
     end
 
+    local function newhealthbar(p)
+        local bar = Drawing.new("Line")
+        bar.Thickness, bar.Color, bar.Visible = 3, Color3.fromRGB(0,255,0), false
+        healthbars[p] = bar
+    end
+
     local function trackplayer(p)
         newbox(p)
         newname(p)
@@ -104,6 +110,7 @@ return function()
         newhealth(p)
         newdistance(p)
         newchams(p)
+        newhealthbar(p)
     end
 
     for _,p in pairs(players:GetPlayers()) do if p ~= lp then trackplayer(p) end end
@@ -116,6 +123,7 @@ return function()
         if healths[p] then healths[p]:Remove() healths[p] = nil end
         if distances[p] then distances[p]:Remove() distances[p] = nil end
         if chams[p] then chams[p]:Destroy() chams[p] = nil end
+        if healthbars[p] then healthbars[p]:Remove() healthbars[p] = nil end
     end)
 
     rs.RenderStepped:Connect(function()
@@ -136,6 +144,7 @@ return function()
                     if healths[p] then healths[p].Visible = false end
                     if distances[p] then distances[p].Visible = false end
                     if chams[p] then chams[p].Enabled = false end
+                    if healthbars[p] then healthbars[p].Visible = false end
                     continue 
                 end
 
@@ -155,15 +164,33 @@ return function()
                     b.Color, b.Visible = col, true
                 else b.Visible = false end
 
-                -- name
-                if esp.showname and on2 then
-                    local txt = p.Name
-                    if esp.showheld then
-                        local tool = t:FindFirstChildOfClass("Tool")
-                        if tool then txt = txt.." | "..tool.Name end
+                -- name + distance combined
+                if (esp.showname or esp.showdistance) and on2 then
+                    local nameText = ""
+                    local distanceText = ""
+                    
+                    if esp.showname then
+                        nameText = p.Name
+                        if esp.showheld then
+                            local tool = t:FindFirstChildOfClass("Tool")
+                            if tool then nameText = nameText .. " [" .. tool.Name .. "]" end
+                        end
                     end
+                    
+                    if esp.showdistance then
+                        distanceText = math.floor(dist) .. " studs"
+                    end
+                    
+                    -- Combine name and distance horizontally
+                    local combinedText = nameText
+                    if nameText ~= "" and distanceText ~= "" then
+                        combinedText = nameText .. " | " .. distanceText
+                    elseif distanceText ~= "" then
+                        combinedText = distanceText
+                    end
+                    
                     local n = names[p]
-                    n.Position, n.Text, n.Color, n.Visible = Vector2.new(headPos.X, headPos.Y-15), txt, col, true
+                    n.Position, n.Text, n.Color, n.Visible = Vector2.new(headPos.X, headPos.Y-15), combinedText, col, true
                 elseif names[p] then names[p].Visible = false end
 
                 -- tracer
@@ -185,20 +212,31 @@ return function()
                         col, true
                 elseif quads[p] then quads[p].Visible = false end
 
-                -- health
+                -- health text
                 if esp.showhealth and humanoid and on2 then
                     local health = healths[p]
                     local healthText = math.floor(humanoid.Health) .. "/" .. math.floor(humanoid.MaxHealth)
-                    local healthCol = gethealthcolor(humanoid.Health, humanoid.MaxHealth)
+                    local healthCol = getColor(humanoid.Health, humanoid.MaxHealth)
                     health.Position, health.Text, health.Color, health.Visible = Vector2.new(headPos.X, headPos.Y+5), healthText, healthCol, true
                 elseif healths[p] then healths[p].Visible = false end
 
-                -- distance
-                if esp.showdistance and on2 then
-                    local distText = distances[p]
-                    local distanceText = math.floor(dist) .. " studs"
-                    distText.Position, distText.Text, distText.Color, distText.Visible = Vector2.new(headPos.X, headPos.Y+25), distanceText, col, true
-                elseif distances[p] then distances[p].Visible = false end
+                -- health bar
+                if esp.showhealthbar and humanoid and on1 and on2 then
+                    local bar = healthbars[p]
+                    local h = math.abs(hrpPos.Y - headPos.Y)
+                    local w = h * 0.6
+                    local boxLeft = hrpPos.X - w/2
+                    local boxTop = headPos.Y
+                    
+                    local healthPercentage = humanoid.Health / humanoid.MaxHealth
+                    local barHeight = h * healthPercentage
+                    local barColor = getColor(humanoid.Health, humanoid.MaxHealth)
+                    
+                    bar.From = Vector2.new(boxLeft - 6, boxTop + h - barHeight)
+                    bar.To = Vector2.new(boxLeft - 6, boxTop + h)
+                    bar.Color = barColor
+                    bar.Visible = true
+                elseif healthbars[p] then healthbars[p].Visible = false end
 
                 -- chams
                 if esp.showchams then
@@ -216,6 +254,7 @@ return function()
                 if healths[p] then healths[p].Visible = false end
                 if distances[p] then distances[p].Visible = false end
                 if chams[p] then chams[p].Enabled = false end
+                if healthbars[p] then healthbars[p].Visible = false end
             end
         end
     end)
@@ -232,6 +271,7 @@ return function()
     function esp:health(v) self.showhealth = v end
     function esp:distance(v) self.showdistance = v end
     function esp:chams(v) self.showchams = v end
+    function esp:healthbar(v) self.showhealthbar = v end
     function esp:performance(v) self.performancemode = v end
     
     function esp:clear()
@@ -242,13 +282,10 @@ return function()
         for _,h in pairs(healths) do h:Remove() end
         for _,d in pairs(distances) do d:Remove() end
         for _,c in pairs(chams) do c:Destroy() end
-        boxes, names, tracers, quads, healths, distances, chams = {}, {}, {}, {}, {}, {}, {}
+        for _,b in pairs(healthbars) do b:Remove() end
+        boxes, names, tracers, quads, healths, distances, chams, healthbars = {}, {}, {}, {}, {}, {}, {}, {}
         self.active = false
     end
-
-    game:GetService("UserInputService").WindowFocused:Connect(function()
-        print("...")
-    end)
 
     return esp
 end
