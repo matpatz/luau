@@ -11,7 +11,7 @@ local console = tab:Console({
 	MaxLines = 500
 })
 
-local function SpyLog(...)
+local function aLog(...)
 	local msg = table.concat({...}, " ")
 	if console then
 		console:AppendText(msg .. "\n")
@@ -19,8 +19,8 @@ local function SpyLog(...)
 end
 
 local function Log(...)
-	local ok, err = pcall(SpyLog, ...)
-	if not ok then warn("SpyLog error:", err) end
+	local ok, err = pcall(aLog, ...)
+	if not ok then warn("error:", err) end
 end
 
 local players = game:GetService("Players")
