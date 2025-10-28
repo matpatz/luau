@@ -8,6 +8,7 @@
 	Max    | Programming
 	Damian | Programming
 
+	and most importantly, I commented out a print (the game has a neat list of sutff console cant contain)
 ]]
 
 if debugX then
