@@ -11,19 +11,18 @@ local console = tab:Console({
 	MaxLines = 500
 })
 
-local function aLog(...)
-	local msg = table.concat({...}, " ")
-	if console then
-		console:AppendText(msg .. "\n")
-	end
-end
+local https = game:GetService("HttpService")
+local function Log(msg)
+	local success, translated = pcall(function()
+		local url = "https://api.mymemory.translated.net/get?q="..https:UrlEncode(msg).."&langpair=auto|en"
+		local res = https:GetAsync(url)
+		local data = https:JSONDecode(res)
+		return data.responseData.translatedText
+	end)
 
-local function Log(...)
-	local ok, err = pcall(aLog, ...)
-	if not ok then warn("error:", err) end
+	if success and translated then msg = translated end
+	if console then console:AppendText(msg .. "\n") end
 end
-
-local players = game:GetService("Players")
 
 local function get(player)
 	player.Chatted:Connect(function(msg)
@@ -31,8 +30,8 @@ local function get(player)
 	end)
 end
 
+local players = game:GetService("Players")
 for _, player in ipairs(players:GetPlayers()) do get(player) end
-
 players.PlayerAdded:Connect(get)
 
 Log("Functional\n")
