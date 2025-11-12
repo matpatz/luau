@@ -57,7 +57,7 @@ return function()
             o[k] = v
         end
         if type == "Highlight" then
-            o.Parent = core
+            o.Parent = ws
         end
         return o
     end
