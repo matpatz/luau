@@ -311,21 +311,15 @@ return function()
     function esp:enable()
         self.active = true
     end
-
+    
     function esp:disable()
         self.active = false
-
         for _, t in pairs(objs) do
             for _, o in pairs(t) do
-                if type(o) == "table" then
-                    for _, b in pairs(o) do
-                        if b[1] and b[1].Remove then
-                            b[1]:Remove()
-                        end
-                    end
-                elseif o.Remove then
-                    o:Remove()
-                elseif o.Enabled ~= nil then
+                if o.Visible ~= nil then
+                    o.Visible = false
+                end
+                if o.Enabled ~= nil then
                     o.Enabled = false
                 end
             end
