@@ -1,5 +1,7 @@
 return function()
-    local get = cloneref or function(x) return x end
+    local get = cloneref or function(x)
+        return x
+    end
 
     local players = get(game:GetService("Players"))
     local rs, ws = get(game:GetService("RunService")), get(game:GetService("Workspace"))
@@ -38,6 +40,31 @@ return function()
 
     local frameCount, uInterval = 0, 2
 
+    local function setVisible(o, val)
+        if not o then
+            return
+        end
+        pcall(function()
+            o.Visible = val
+        end)
+    end
+
+    local function setEnabled(o, val)
+        if not o then
+            return
+        end
+        pcall(function()
+            o.Enabled = val
+        end)
+    end
+
+    local function withinViewport(x, y)
+        if not cam or not cam.ViewportSize then
+            return false
+        end
+        return x >= 0 and x <= cam.ViewportSize.X and y >= 0 and y <= cam.ViewportSize.Y
+    end
+
     local function getparts(p)
         local ch = p.Character
         if not ch then
@@ -48,22 +75,41 @@ return function()
 
     local function getColor(h, m)
         local p = h / m
-        return (p > .7 and Color3.fromRGB(0, 255, 0)) or (p > .3 and Color3.fromRGB(255, 255, 0)) or Color3.fromRGB(255, 0, 0)
+        if p > 0.7 then
+            return Color3.fromRGB(0, 255, 0)
+        elseif p > 0.3 then
+            return Color3.fromRGB(255, 255, 0)
+        else
+            return Color3.fromRGB(255, 0, 0)
+        end
     end
 
     local function new(p, type, props)
-        local o = (type == "Highlight") and Instance.new("Highlight") or Drawing.new(type)
-        for k, v in pairs(props) do
-            o[k] = v
-        end
+        local o
         if type == "Highlight" then
-            o.Parent = ws
+            o = Instance.new("Highlight")
+        else
+            o = Drawing.new(type)
         end
+
+        if props then
+            for k, v in pairs(props) do
+                pcall(function()
+                    o[k] = v
+                end)
+            end
+        end
+
+        if type == "Highlight" then
+            o.Parent = core
+        end
+
         return o
     end
 
     local function drawSkeleton(char, color)
-        local parts = {
+        local parts =
+        {
             { "Head", "UpperTorso" },
             { "UpperTorso", "LowerTorso" },
             { "UpperTorso", "LeftUpperArm" },
@@ -85,7 +131,6 @@ return function()
         for _, pair in ipairs(parts) do
             local a = char:FindFirstChild(pair[1])
             local b = char:FindFirstChild(pair[2])
-
             if a and b then
                 local line = Drawing.new("Line")
                 line.Thickness = 1.5
@@ -96,6 +141,24 @@ return function()
         end
 
         return bones
+    end
+
+    local function removeSkeleton(p)
+        local set = objs.skeletons[p]
+        if not set then
+            return
+        end
+
+        for _, bone in ipairs(set) do
+            local line = bone[1]
+            if line and line.Remove then
+                pcall(function()
+                    line:Remove()
+                end)
+            end
+        end
+
+        objs.skeletons[p] = nil
     end
 
     local function track(p)
@@ -111,18 +174,34 @@ return function()
     end
 
     local function cleanup(p)
-        for _, t in pairs(objs) do
+        for name, t in pairs(objs) do
             if t[p] then
-                if type(t[p]) == "table" then
-                    for _, o in pairs(t[p]) do
-                        if o[1] and o[1].Remove then
-                            o[1]:Remove()
+                if name == "removeSkeleton" then
+                    removeSkeleton(p)
+                else
+                    local o = t[p]
+                    if type(o) == "table" then
+
+                        for _, v in pairs(o) do
+                            pcall(function()
+                                if v.Remove then
+                                    v:Remove()
+                                elseif v.Destroy then
+                                    v:Destroy()
+                                end
+                            end)
                         end
+                    else
+                        pcall(function()
+                            if o.Remove then
+                                o:Remove()
+                            elseif o.Destroy then
+                                o:Destroy()
+                            end
+                        end)
                     end
-                elseif t[p].Remove or t[p].Destroy then
-                    (t[p].Remove or t[p].Destroy)(t[p])
+                    t[p] = nil
                 end
-                t[p] = nil
             end
         end
     end
@@ -139,14 +218,16 @@ return function()
         end
     end)
 
-    players.PlayerRemoving:Connect(cleanup)
+    players.PlayerRemoving:Connect(function(p)
+        cleanup(p)
+    end)
 
     rs.RenderStepped:Connect(function()
         if not esp.active then
             return
         end
 
-        frameCount += 1
+        frameCount = frameCount + 1
         if esp.performancemode and frameCount % uInterval ~= 0 then
             return
         end
@@ -164,31 +245,46 @@ return function()
             local hd, on2 = cam:WorldToViewportPoint(head.Position)
             local dist = (camPos - hrp.Position).Magnitude
 
+            local validOn1 = on1 and withinViewport(hp.X, hp.Y)
+            local validOn2 = on2 and withinViewport(hd.X, hd.Y)
+
+           
             if dist > esp.maxdist then
-                cleanup(p)
+                setVisible(objs.boxes[p], false)
+                setVisible(objs.names[p], false)
+                setVisible(objs.tracers[p], false)
+                setVisible(objs.quads[p], false)
+                setVisible(objs.healths[p], false)
+                setVisible(objs.distances[p], false)
+                setEnabled(objs.chams[p], false)
+                setVisible(objs.healthbars[p], false)
+                removeSkeleton(p)
                 continue
             end
 
-            local col = esp.teamcolor and (p.Team and p.Team.TeamColor.Color or Color3.new(1, 1, 1)) or Color3.new(1, 1, 1)
+            local col = Color3.new(1, 1, 1)
+            if esp.teamcolor and p.Team then
+                col = p.Team.TeamColor.Color
+            end
+
             if hum and hum.Health <= 0 then
                 col = Color3.fromRGB(128, 128, 128)
             end
 
-            local function vis(obj, v)
-                if obj then
-                    obj.Visible = v
-                end
-            end
-
             local function setText(o, text, pos, color)
-                o.Text = text
-                o.Position = pos
-                o.Color = color
-                o.Visible = true
+                if not o then
+                    return
+                end
+                pcall(function()
+                    o.Text = text
+                    o.Position = pos
+                    o.Color = color
+                    o.Visible = true
+                end)
             end
 
             local h = math.abs(hp.Y - hd.Y)
-            local w = h * .6
+            local w = h * 0.6
 
             local n = objs.names[p]
             local tr = objs.tracers[p]
@@ -199,81 +295,101 @@ return function()
             local hb = objs.healthbars[p]
 
             -- Box
-            if esp.showbox and on1 and on2 then
-                b.Size = Vector2.new(w, h)
-                b.Position = Vector2.new(hp.X - w / 2, hd.Y)
-                b.Color = col
-                b.Visible = true
+            if esp.showbox and validOn1 and validOn2 then
+                pcall(function()
+                    b.Size = Vector2.new(w, h)
+                    b.Position = Vector2.new(hp.X - w / 2, hd.Y)
+                    b.Color = col
+                    b.Visible = true
+                end)
             else
-                vis(b, false)
+                setVisible(b, false)
             end
 
             -- Name + distance
-            if on2 then
-                local name = esp.showname and (p.Name .. (esp.showheld and (ch:FindFirstChildOfClass("Tool") and (" [" .. ch:FindFirstChildOfClass("Tool").Name .. "]") or "") or "")) or ""
+            if validOn2 then
+                local toolName = ""
+                if esp.showheld then
+                    local tool = ch:FindFirstChildOfClass("Tool")
+                    if tool then
+                        toolName = " [" .. tool.Name .. "]"
+                    end
+                end
+
+                local name = esp.showname and (p.Name .. toolName) or ""
                 local distText = esp.showdistance and (math.floor(dist) .. " studs") or ""
                 local text = (#name > 0 and #distText > 0) and (name .. " | " .. distText) or name .. distText
 
                 if text ~= "" then
                     setText(n, text, Vector2.new(hd.X, hd.Y - 15), col)
                 else
-                    vis(n, false)
+                    setVisible(n, false)
                 end
+            else
+                setVisible(n, false)
             end
 
             -- Tracer
-            if esp.showtracer and on1 then
-                local v = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y)
-                tr.From = v
-                tr.To = Vector2.new(hp.X, hp.Y)
-                tr.Color = col
-                tr.Visible = true
+            if esp.showtracer and validOn1 then
+                pcall(function()
+                    local origin = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y)
+                    tr.From = origin
+                    tr.To = Vector2.new(hp.X, hp.Y)
+                    tr.Color = col
+                    tr.Visible = true
+                end)
             else
-                vis(tr, false)
+                setVisible(tr, false)
             end
 
             -- Quad
-            if esp.showquad and on1 and on2 then
-                q.PointA = Vector2.new(hp.X - w / 2, hd.Y)
-                q.PointB = Vector2.new(hp.X + w / 2, hd.Y)
-                q.PointC = Vector2.new(hp.X + w / 2, hp.Y)
-                q.PointD = Vector2.new(hp.X - w / 2, hp.Y)
-                q.Color = col
-                q.Visible = true
+            if esp.showquad and validOn1 and validOn2 then
+                pcall(function()
+                    q.PointA = Vector2.new(hp.X - w / 2, hd.Y)
+                    q.PointB = Vector2.new(hp.X + w / 2, hd.Y)
+                    q.PointC = Vector2.new(hp.X + w / 2, hp.Y)
+                    q.PointD = Vector2.new(hp.X - w / 2, hp.Y)
+                    q.Color = col
+                    q.Visible = true
+                end)
             else
-                vis(q, false)
+                setVisible(q, false)
             end
 
             -- Health + bar
             if hum then
-                if esp.showhealth and on2 then
+                if esp.showhealth and validOn2 then
                     setText(ht, ("%d/%d"):format(hum.Health, hum.MaxHealth), Vector2.new(hd.X, hd.Y + 5), getColor(hum.Health, hum.MaxHealth))
                 else
-                    vis(ht, false)
+                    setVisible(ht, false)
                 end
 
-                if esp.showhealthbar and on1 and on2 then
-                    local perc = hum.Health / hum.MaxHealth
-                    local barH = h * perc
-                    hb.From = Vector2.new(hp.X - w / 2 - 6, hd.Y + h - barH)
-                    hb.To = Vector2.new(hp.X - w / 2 - 6, hd.Y + h)
-                    hb.Color = getColor(hum.Health, hum.MaxHealth)
-                    hb.Visible = true
+                if esp.showhealthbar and validOn1 and validOn2 then
+                    pcall(function()
+                        local perc = hum.Health / hum.MaxHealth
+                        local barH = h * perc
+                        hb.From = Vector2.new(hp.X - w / 2 - 6, hd.Y + h - barH)
+                        hb.To = Vector2.new(hp.X - w / 2 - 6, hd.Y + h)
+                        hb.Color = getColor(hum.Health, hum.MaxHealth)
+                        hb.Visible = true
+                    end)
                 else
-                    vis(hb, false)
+                    setVisible(hb, false)
                 end
             end
 
-            -- Chams
+            -- chams
             if esp.showchams then
-                chm.Adornee = ch
-                chm.FillColor = col
-                chm.Enabled = true
+                pcall(function()
+                    chm.Adornee = ch
+                    chm.FillColor = col
+                    chm.Enabled = true
+                end)
             else
-                chm.Enabled = false
+                setEnabled(chm, false)
             end
 
-            -- Skeleton
+            -- skeleton (cooked ngl)
             if esp.skeleton then
                 if not objs.skeletons[p] or #objs.skeletons[p] == 0 then
                     objs.skeletons[p] = drawSkeleton(ch, col)
@@ -281,29 +397,33 @@ return function()
 
                 for _, bone in ipairs(objs.skeletons[p]) do
                     local line, a, bPart = bone[1], bone[2], bone[3]
+                    if not line then
+                        continue
+                    end
+
                     if a and bPart and a:IsDescendantOf(ws) and bPart:IsDescendantOf(ws) then
                         local pa, onA = cam:WorldToViewportPoint(a.Position)
                         local pb, onB = cam:WorldToViewportPoint(bPart.Position)
 
-                        if onA and onB then
-                            line.From = Vector2.new(pa.X, pa.Y)
-                            line.To = Vector2.new(pb.X, pb.Y)
-                            line.Color = col
-                            line.Visible = true
+                        local validA = onA and withinViewport(pa.X, pa.Y)
+                        local validB = onB and withinViewport(pb.X, pb.Y)
+
+                        if validA and validB then
+                            pcall(function()
+                                line.From = Vector2.new(pa.X, pa.Y)
+                                line.To = Vector2.new(pb.X, pb.Y)
+                                line.Color = col
+                                line.Visible = true
+                            end)
                         else
-                            line.Visible = false
+                            setVisible(line, false)
                         end
                     else
-                        line.Visible = false
+                        setVisible(line, false)
                     end
                 end
-            elseif objs.skeletons[p] and #objs.skeletons[p] > 0 then
-                for _, bone in ipairs(objs.skeletons[p]) do
-                    if bone[1].Remove then
-                        bone[1]:Remove()
-                    end
-                end
-                objs.skeletons[p] = {}
+            else
+                removeSkeleton(p)
             end
         end
     end)
@@ -316,41 +436,37 @@ return function()
         self.active = false
 
         for name, t in pairs(objs) do
-            for _, o in pairs(t) do
+            for key, o in pairs(t) do
                 if name == "skeletons" then
-                    if o.Remove then
-                        o:Remove()
-                    elseif o.Destroy then
-                        o:Destroy()
-                    end
+                    removeSkeleton(key)
                 else
-                    if o.Visible ~= nil then
-                        o.Visible = false
-                    elseif o.Enabled ~= nil then
-                        o.Enabled = false
-                    end
+                    setVisible(o, false)
+                    setEnabled(o, false)
                 end
             end
         end
     end
 
     function esp:clear()
-        for _, t in pairs(objs) do
-            for _, o in pairs(t) do
-                if type(o) == "table" then
-                    for _, b in pairs(o) do
-                        if b[1] and b[1].Remove then
-                            b[1]:Remove()
+        for name, t in pairs(objs) do
+            for key, o in pairs(t) do
+                if name == "skeletons" then
+                    removeSkeleton(key)
+                else
+                    pcall(function()
+                        if type(o) == "table" then
+                            for _, v in pairs(o) do
+                                if v.Remove then v:Remove() end
+                                if v.Destroy then v:Destroy() end
+                            end
+                        else
+                            if o.Remove then o:Remove() end
+                            if o.Destroy then o:Destroy() end
                         end
-                    end
-                elseif o.Remove or o.Destroy then
-                    (o.Remove or o.Destroy)(o)
+                    end)
                 end
             end
-        end
-
-        for k in pairs(objs) do
-            objs[k] = {}
+            objs[name] = {}
         end
 
         self.active = false
