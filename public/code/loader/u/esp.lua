@@ -389,7 +389,7 @@ return function()
                 setEnabled(chm, false)
             end
 
-            -- skeleton (is jus always enabled ig)
+            -- skeleton (eh)
             if esp.skeleton then
                 if not objs.skeletons[p] or #objs.skeletons[p] == 0 then
                     objs.skeletons[p] = drawSkeleton(ch, col)
@@ -397,34 +397,45 @@ return function()
 
                 for _, bone in ipairs(objs.skeletons[p]) do
                     local line, a, bPart = bone[1], bone[2], bone[3]
-                    if not line then
-                        continue
-                    end
-
                     if a and bPart and a:IsDescendantOf(ws) and bPart:IsDescendantOf(ws) then
                         local pa, onA = cam:WorldToViewportPoint(a.Position)
                         local pb, onB = cam:WorldToViewportPoint(bPart.Position)
 
-                        local validA = onA and withinViewport(pa.X, pa.Y)
-                        local validB = onB and withinViewport(pb.X, pb.Y)
-
-                        if validA and validB then
-                            pcall(function()
-                                line.From = Vector2.new(pa.X, pa.Y)
-                                line.To = Vector2.new(pb.X, pb.Y)
-                                line.Color = col
-                                line.Visible = true
-                            end)
+                        if onA and onB then
+                            line.From = Vector2.new(pa.X, pa.Y)
+                            line.To = Vector2.new(pb.X, pb.Y)
+                            line.Color = col
+                            line.Visible = true
                         else
-                            setVisible(line, false)
+                            line.Visible = false
                         end
                     else
-                        setVisible(line, false)
+                        line.Visible = false
                     end
                 end
-            else
-                removeSkeleton(p)
+            elseif objs.skeletons[p] and #objs.skeletons[p] > 0 then
+            
+                for _, bone in ipairs(objs.skeletons[p]) do
+                    if bone[1] and bone[1].Remove then
+                        bone[1]:Remove()
+                    end
+                end
+                objs.skeletons[p] = {}
             end
+
+            players.PlayerAdded:Connect(function(p)
+                if p ~= lp then
+                    track(p)
+                    if esp.skeleton then
+                        objs.skeletons[p] = drawSkeleton(p.Character, esp.teamcolor and (p.Team and p.Team.TeamColor.Color or Color3.new(1,1,1)) or Color3.new(1,1,1))
+                    end
+                end
+            end)
+
+            players.PlayerRemoving:Connect(function(p)
+                cleanup(p)
+            end)
+
         end
     end)
 
