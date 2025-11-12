@@ -311,16 +311,24 @@ return function()
     function esp:enable()
         self.active = true
     end
-    
+
     function esp:disable()
         self.active = false
-        for _, t in pairs(objs) do
+
+        for name, t in pairs(objs) do
             for _, o in pairs(t) do
-                if o.Visible ~= nil then
-                    o.Visible = false
-                end
-                if o.Enabled ~= nil then
-                    o.Enabled = false
+                if name == "skeletons" then
+                    if o.Remove then
+                        o:Remove()
+                    elseif o.Destroy then
+                        o:Destroy()
+                    end
+                else
+                    if o.Visible ~= nil then
+                        o.Visible = false
+                    elseif o.Enabled ~= nil then
+                        o.Enabled = false
+                    end
                 end
             end
         end
