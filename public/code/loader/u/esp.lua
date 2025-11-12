@@ -389,7 +389,7 @@ return function()
                 setEnabled(chm, false)
             end
 
-            -- skeleton (cooked ngl)
+            -- skeleton (is jus always enabled ig)
             if esp.skeleton then
                 if not objs.skeletons[p] or #objs.skeletons[p] == 0 then
                     objs.skeletons[p] = drawSkeleton(ch, col)
