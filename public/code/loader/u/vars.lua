@@ -1,6 +1,14 @@
 local v, s, get = {}, {players = "Players", workspace = "Workspace", rs = "RunService", core = "CoreGui", input = "UserInputService", rep = "ReplicatedStorage", lighting = "Lighting", vim = "VirtualInputManager", vcr = "TextChatService"},  (type(cloneref) == "function") and cloneref or function(x) return x end
+
 for short, name in pairs(s) do
-    v[short] = get(game:GetService(name))
+    local svc = get(game:GetService(name))
+    v[short] = svc
+
+    if short == "players" then
+        local lp = svc.LocalPlayer
+        local char = lp and lp.Character
+        v.player, v.char, v.hrp, v.cam = lp, char, char and char:FindFirstChild("HumanoidRootPart"), workspace.CurrentCamera
+    end
 end
 
 return v
