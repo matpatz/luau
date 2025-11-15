@@ -4,3 +4,8 @@ for short, name in pairs(s) do
 end
 
 return v
+
+--[[
+    local v = loadstring(game:HttpGet("https://website-iota-ivory-12.vercel.app/code/loader/u/vars.lua"))()
+    print(v.workspace)
+--]]
