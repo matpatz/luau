@@ -18,6 +18,10 @@ function identify(child)
                 return "Tree / Cacti"
             end
 
+            if part.MeshId == "rbxassetid://86433652951149" then
+                return "Vending"
+            end
+
             if part.MeshId == "rbxassetid://94451148966574" then
                 return "Cardboard"
             end
@@ -48,4 +52,4 @@ function identify(child)
     return "Unknown"
 end
 
-print(identify(workspace:GetChildren()[399].default))
+--print(identify(workspace:GetChildren()[399].default))
