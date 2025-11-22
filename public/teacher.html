@@ -1,0 +1,56 @@
+<div class="panel">
+  <div class="left">
+    <h2>Classroom Randomizer</h2>
+    <div class="muted">Enter student names, then assign random numbers or roles.</div>
+    <textarea id="studentList" rows="6" placeholder="Enter one student per line" style="width:100%;border-radius:8px;padding:8px;"></textarea>
+    <input type="text" id="rolesInput" placeholder="Optional: comma-separated roles" style="width:100%;margin-top:8px;border-radius:8px;padding:8px;">
+  </div>
+  <div style="display:flex;flex-direction:column;gap:6px;">
+    <button class="btn" onclick="assignRandomNumbers()">Assign Random Numbers</button>
+    <button class="btn" onclick="assignRoles()">Assign Roles</button>
+  </div>
+</div>
+
+<div class="panel" id="resultsPanel" style="flex-direction:column;display:none;">
+  <h2>Results</h2>
+  <div id="results" style="display:flex;flex-direction:column;gap:6px;"></div>
+</div>
+
+<script>
+  function assignRandomNumbers() {
+    const students = document.getElementById('studentList').value.split('\n').filter(s => s.trim());
+    const resultsDiv = document.getElementById('results');
+    resultsDiv.innerHTML = '';
+    students.forEach(student => {
+      const number = Math.floor(Math.random() * 100) + 1; // random 1-100
+      const div = document.createElement('div');
+      div.textContent = `${student} → ${number}`;
+      div.style.background = '#1e3d5c';
+      div.style.padding = '6px 10px';
+      div.style.borderRadius = '8px';
+      resultsDiv.appendChild(div);
+    });
+    document.getElementById('resultsPanel').style.display = 'flex';
+  }
+
+  function assignRoles() {
+    const students = document.getElementById('studentList').value.split('\n').filter(s => s.trim());
+    const roles = document.getElementById('rolesInput').value.split(',').map(r => r.trim()).filter(r => r);
+    const resultsDiv = document.getElementById('results');
+    resultsDiv.innerHTML = '';
+    if (roles.length === 0) {
+      alert('Please enter at least one role.');
+      return;
+    }
+    students.forEach(student => {
+      const role = roles[Math.floor(Math.random() * roles.length)];
+      const div = document.createElement('div');
+      div.textContent = `${student} → ${role}`;
+      div.style.background = '#1e3d5c';
+      div.style.padding = '6px 10px';
+      div.style.borderRadius = '8px';
+      resultsDiv.appendChild(div);
+    });
+    document.getElementById('resultsPanel').style.display = 'flex';
+  }
+</script>
