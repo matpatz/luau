@@ -1,4 +1,6 @@
 --[[
+    make get function return
+
     Cobalt
     A runtime developer tool to monitor and intercept network traffic
     coming from the roblox game engine.
@@ -42,6 +44,7 @@ wax.shared.Settings = {}
 wax.shared.Hooks = {}
 
 -- Executor Support
+wax.shared.ExecutorName = identifyexecutor()
 wax.shared.ExecutorSupport = require(script.ExecutorSupport)
 
 -- Utils
@@ -63,7 +66,6 @@ if not wax.shared.Players.LocalPlayer then
 end
 wax.shared.LocalPlayer = wax.shared.Players.LocalPlayer
 wax.shared.PlayerScripts = cloneref(wax.shared.LocalPlayer:WaitForChild("PlayerScripts"))
-wax.shared.ExecutorName = identifyexecutor()
 
 -- Functions
 wax.shared.gethui = gethui or function()
@@ -155,6 +157,16 @@ wax.shared.GetTableLength = function(Table)
 	end
 	return Length
 end
+wax.shared.JoinTable = function(Table, Prefix, Suffix)
+	local FinalString = ""
+	for _, Value in pairs(Table) do
+		FinalString ..= Prefix .. tostring(Value) .. Suffix
+	end
+
+	FinalString = string.sub(FinalString, 1, string.len(FinalString) - string.len(Suffix))
+
+	return FinalString
+end
 wax.shared.GetTextBounds = function(Text: string, Font: Font, Size: number, Width: number?): (number, number)
 	local Params = Instance.new("GetTextBoundsParams")
 	Params.Text = Text
@@ -175,12 +187,17 @@ wax.shared.Unload = function()
 
 	local gameMetatable = wax.shared.getrawmetatable(game)
 
-	if restorefunction and not wax.shared.AlternativeEnabled then
-		pcall(restorefunction, gameMetatable.__namecall)
-		pcall(restorefunction, gameMetatable.__newindex)
+	if wax.shared.ExecutorSupport["oth"].IsWorking then
+		pcall(oth.unhook, gameMetatable.__namecall, wax.shared.NamecallHook)
+		pcall(oth.unhook, gameMetatable.__newindex, wax.shared.NewIndexHook)
 	else
-		wax.shared.Hooking.HookMetaMethod(game, "__namecall", wax.shared.NamecallHook)
-		wax.shared.Hooking.HookMetaMethod(game, "__newindex", wax.shared.NewIndexHook)
+		if restorefunction and not wax.shared.AlternativeEnabled then
+			pcall(restorefunction, gameMetatable.__namecall)
+			pcall(restorefunction, gameMetatable.__newindex)
+		else
+			wax.shared.Hooking.HookMetaMethod(game, "__namecall", wax.shared.NamecallHook)
+			wax.shared.Hooking.HookMetaMethod(game, "__newindex", wax.shared.NewIndexHook)
+		end
 	end
 
 	for Function, Original in pairs(wax.shared.Hooks) do
@@ -188,8 +205,12 @@ wax.shared.Unload = function()
 	end
 
 	if wax.shared.ActorCommunicator then
-		wax.shared.ActorCommunicator:Fire("Unload")
+		pcall(function()
+			wax.shared.ActorCommunicator:Fire("Unload")
+		end)
 	end
+
+	getgenv().CobaltInitialized = false
 
 	wax.shared.Communicator:Destroy()
 	wax.shared.ScreenGui:Destroy()
@@ -339,7 +360,14 @@ end)() end,
 ]]
 
 local ExecutorSupport = {
-	FailedChecks = {},
+	FailedChecks = {
+		Essential = {},
+		NonEssential = {},
+	},
+}
+
+local BrokenFeatures = {
+	["Volcano"] = { "oth", "run_on_actor" }
 }
 
 local function CheckFFlagValue(Name: string, Value: any)
@@ -359,19 +387,36 @@ local function CheckFFlagValue(Name: string, Value: any)
 	return false
 end
 
-local function test(name, Callback, CheckType)
+local function test(name, Callback, CheckType, Essential)
 	local TestFunction = not CheckType and Callback or function()
-		return typeof(Callback) == "function"
+		assert(typeof(Callback) == "function", string.format("%s is not a function.", name))
+		return "Passed nil check."
 	end
 
-	local Success, Result = pcall(TestFunction)
+	if Essential == nil then
+		Essential = true
+	end
+
+	local Success, Result
+	if BrokenFeatures[wax.shared.ExecutorName] and table.find(BrokenFeatures[wax.shared.ExecutorName], name) then
+		Success = false
+		Result = "This function/library is broken or can crash your game on this executor."
+	else
+		Success, Result = pcall(TestFunction)
+	end
+
 	ExecutorSupport[name] = {
 		IsWorking = Success,
 		Details = Result,
+		Essential = Essential,
 	}
 
 	if not Success then
-		table.insert(ExecutorSupport.FailedChecks, name)
+		if Essential then
+			table.insert(ExecutorSupport.FailedChecks.Essential, name)
+		else
+			table.insert(ExecutorSupport.FailedChecks.NonEssential, name)
+		end
 	end
 end
 
@@ -382,7 +427,7 @@ test("setfflag", setfflag, true)
 -- Actor Library
 test("getactors", getactors, true)
 test("run_on_actor", run_on_actor, true)
-test("getnilinstances", getnilinstances, true)
+test("create_comm_channel", create_comm_channel, true)
 
 -- Closure Library
 test("newcclosure", function()
@@ -448,6 +493,96 @@ test("restorefunction", function()
 
 	assert(Original(2, 3) == 5, "restorefunction did not restore the original function")
 end)
+
+test("setstackhidden", function()
+	assert(typeof(setstackhidden) == "function", "setstackhidden is not a function")
+
+	local StackCheck = {}
+
+	local CallerFunctionSource = [[
+		local StackCheck = ...
+		local function CallerFunction()
+			return StackCheck[1]()
+		end
+		return CallerFunction
+	]]
+
+	local CallerFunction = (loadstring(CallerFunctionSource, "=CallerFunction") :: (...any) -> ...any)(StackCheck)
+
+	setstackhidden(CallerFunction, true)
+
+	StackCheck[1] = function()
+		return debug.info(2, "f") ~= CallerFunction
+	end
+
+	local IsHidden = CallerFunction()
+	assert(IsHidden == true, "setstackhidden did not hide the function from the stack (debug.info)")
+
+	StackCheck[1] = function()
+		return not debug.traceback():find("CallerFunction")
+	end
+
+	IsHidden = CallerFunction()
+	assert(IsHidden == true, "setstackhidden did not hide the function from the stack (debug.traceback)")
+
+	local TestTable = { math.huge, 0 / 0, 123, 58913 } :: { any }
+	setfenv(CallerFunction, TestTable)
+
+	StackCheck[1] = function()
+		return getfenv(2) ~= TestTable
+	end
+
+	IsHidden = CallerFunction()
+	assert(IsHidden == true, "setstackhidden did not hide the function from the stack (getfenv)")
+
+	StackCheck[1] = function()
+		return not select(2, pcall(error, "", 3)):find("CallerFunction")
+	end
+
+	IsHidden = CallerFunction()
+	assert(IsHidden == true, "setstackhidden did not hide the function from the stack (error with level traceback)")
+end, false, false)
+
+-- Oth Library
+test("oth", function()
+	assert(oth ~= nil, "oth library not found")
+
+	assert(typeof(oth.hook) == "function", "oth.hook is not a function")
+	assert(hookfunction ~= oth.hook, "oth.hook is an alias of hookfunction")
+
+	assert(typeof(oth.unhook) == "function", "oth.unhook is not a function")
+	assert(restorefunction ~= oth.unhook, "oth.unhook is an alias of restorefunction")
+
+	assert(typeof(oth.is_hook_thread) == "function", "oth.is_hook_thread is not a function")
+	assert(typeof(oth.get_original_thread) == "function", "oth.get_original_thread is not a function")
+
+	local VIM = Instance.new("VirtualInputManager")
+	local Origin = coroutine.running()
+
+	local Working = nil
+
+	local Old
+	Old = oth.hook(VIM.SendGravityEvent, function(...)
+		if Working == nil then
+			Working = (Origin ~= coroutine.running() and oth.is_hook_thread() and oth.get_original_thread() == Origin)
+			return
+		end
+
+		return Old(...)
+	end)
+
+	pcall(VIM.SendGravityEvent, VIM, 0, 0, 0)
+
+	repeat
+		task.wait()
+	until Working ~= nil
+	local Success, Error = pcall(oth.unhook, VIM.SendGravityEvent, Old)
+
+	VIM:Destroy()
+
+	assert(Working, "oth.hook is not running on a seperate thread")
+	assert(Success, "oth.unhook failed: " .. tostring(Error))
+end, false, false)
 
 -- Metamethod
 test("hookmetamethod", function()
@@ -518,8 +653,16 @@ test("getcallbackvalue", function()
 
 	assert(typeof(FetchedInvoke) == "function", "getcallbackvalue did not return a function")
 
-	assert(FetchedInvoke(5) == 10, "getcallbackvalue did not return the correct function")
+	assert(FetchedInvoke(5) == 10, "getcallbackvalue's function return did not match expected value")
 	assert(FetchedInvoke == InvokeFunction, "getcallbackvalue did not return the original function")
+
+	local success, didNoValueReturnNil = pcall(function() 
+		local remoteFunction = Instance.new("RemoteFunction")
+		task.delay(1, remoteFunction.Destroy, remoteFunction)
+		return getcallbackvalue(remoteFunction, "OnClientInvoke") == nil
+	end)
+
+	assert(success and didNoValueReturnNil, "getcallbackvalue raised an error instead of returning nil, the function is not supposed to raise an error when there is no callback.")
 end)
 test("getnilinstances", function()
 	assert(typeof(getnilinstances) == "function", "getnilinstances is not a function")
@@ -606,7 +749,7 @@ if CheckFFlagValue("DebugRunParallelLuaOnMainThread", false) and not ExecutorSup
 
 		local GameUsesActors = false
 
-		local CategoryToSearch = { game:GetDescendants() }
+		local CategoryToSearch = { game:QueryDescendants("Actor") }
 		if ExecutorSupport["getnilinstances"].IsWorking then
 			table.insert(CategoryToSearch, getnilinstances())
 		end
@@ -633,11 +776,11 @@ if CheckFFlagValue("DebugRunParallelLuaOnMainThread", false) and not ExecutorSup
 		local bindable = Instance.new("BindableFunction")
 
 		function bindable.OnInvoke(response)
-			if response == "Set FFlag" then
+			if response == "Enable Fix" then
 				setfflag("DebugRunParallelLuaOnMainThread", "true")
 				wax.shared.StarterGui:SetCore("SendNotification", {
 					Title = "Cobalt",
-					Text = "Please rejoin for the FFlag to take effect!",
+					Text = "Please rejoin for the fix to take effect!",
 					Duration = math.huge,
 				})
 			end
@@ -647,16 +790,705 @@ if CheckFFlagValue("DebugRunParallelLuaOnMainThread", false) and not ExecutorSup
 
 		wax.shared.StarterGui:SetCore("SendNotification", {
 			Title = "Cobalt",
-			Text = "Detected the possible use of Actors but your exec does not support this. We can set a FFlag for you so after rejoining it detects actor remotes.",
+			Text = "This game may use remotes in a way that your executor can't intercept. You can enable the fix and rejoin to detect them.",
 			Duration = math.huge,
 			Callback = bindable,
-			Button1 = "Set FFlag",
+			Button1 = "Enable Fix",
 			Button2 = "Dismiss",
 		})
 	end)
 end
 
 return ExecutorSupport
+
+end)() end,
+    [12] = function()local wax,script,require=ImportGlobals(12)local ImportGlobals return (function(...)local ClassesToHook = {
+	RemoteEvent = "OnClientEvent",
+	RemoteFunction = "OnClientInvoke",
+	UnreliableRemoteEvent = "OnClientEvent",
+	BindableEvent = "Event",
+	BindableFunction = "OnInvoke",
+}
+
+type InstancesToHook = RemoteEvent | UnreliableRemoteEvent | RemoteFunction | BindableEvent | BindableFunction
+type MethodsToHook = "OnClientEvent" | "OnClientInvoke" | "Event" | "OnInvoke"
+
+local LogConnectionFunctions = {}
+local SignalMapping = setmetatable({}, { __mode = "kv" })
+
+--[[
+	Individually logs an incoming remote call.
+
+	@param Instance The instance that was called.
+	@param Method The method that was called (e.g., "OnClientEvent").
+	@param Function The function that was called, if applicable.
+	@param Info The information about the call, including arguments and origin. Can be nil.
+	@param ... The arguments passed from the server to the client.
+	@return boolean Returns true if the call was blocked, false otherwise.
+]]
+local function LogRemote(
+	Instance: InstancesToHook,
+	Method: MethodsToHook,
+	Function: (...any) -> ...any,
+	Info: {
+		Arguments: { [number]: any, n: number },
+		Time: string,
+		Origin: Instance,
+		Function: (...any) -> ...any,
+		Line: number,
+		IsExecutor: boolean,
+	}
+)
+	if not wax.shared.ShouldIgnore(Instance, getcallingscript()) and not LogConnectionFunctions[Function] then
+		local Log = wax.shared.Logs.Incoming[Instance]
+		if not Log then
+			Log = wax.shared.NewLog(Instance, "Incoming", Method, getcallingscript())
+		end
+
+		if Log.Blocked then
+			return true
+		elseif not Log.Ignored then
+			Log:Call(Info)
+		end
+	end
+
+	return false
+end
+
+--[[
+	Creates a function that can be used to pass to `Connect` which will log all the incoming calls. It will additonally add the function to a ignore list (`LogConnectionFunctions`) to prevent unneccessary logging.
+	
+	@param Instance The instance to log.
+	@param Method The method to log (e.g., "OnClientEvent").
+	@return function Returns a function that logs all calls to the given instance and method.
+]]
+local function CreateConnectionFunction(Instance: InstancesToHook, Method: MethodsToHook)
+	local ConnectionFunction = function(...)
+		for _, Connection in pairs(getconnections((Instance :: any)[Method])) do
+			if Connection.ForeignState then
+				continue
+			end
+
+			local Function = typeof(Connection.Function) == "function" and Connection.Function or nil
+			local Thread = Connection.Thread
+
+			local Origin = nil
+
+			if Thread and getscriptfromthread then
+				Origin = getscriptfromthread(Thread)
+			end
+
+			if not Origin and Function then
+				-- ts is unreliable because people could js set the script global to nil
+				-- if only debug.getinfo(Function).source or debug.info(Function, "s") returned an Instance...
+
+				local Script = rawget(getfenv(Function), "script")
+				if typeof(Script) == "Instance" then
+					Origin = Script
+				end
+			end
+
+			LogRemote(Instance, Method, Function, {
+				Arguments = table.pack(...),
+				Time = os.date("%X"),
+				Origin = Origin,
+				Function = Function,
+				Line = nil,
+				IsExecutor = Function and isexecutorclosure(Function) or false,
+			})
+		end
+	end
+
+	LogConnectionFunctions[ConnectionFunction] = true
+	return ConnectionFunction
+end
+
+--[[
+	Creates a function that can be used to pass to callbacks (.OnInvoke & .OnClientInvoke) which will log all the incoming calls.
+	
+	@param Instance The instance to log.
+	@param Method The method to log (e.g., "OnClientEvent").
+	@param Function The original callback of the RemoteFunction
+	@return function Returns a function that logs all function calls to the given instance and method.
+]]
+local function CreateCallbackDetour(Instance: InstancesToHook, Method: MethodsToHook, Callback: (...any) -> ...any)
+	local Detour = function(...)
+		local Origin = nil
+
+		-- May not exist in all executors
+		if getscriptfromthread then
+			Origin = getscriptfromthread(coroutine.running())
+		end
+
+		-- Unreliable method to get script.
+		if not Origin then
+			local Script = rawget(getfenv(Callback), "script")
+			if typeof(Script) == "Instance" then
+				Origin = Script
+			end
+		end
+
+		local FunctionCaller = debug.info(2, "f")
+		local IsExecutor = if typeof(FunctionCaller) == "function"
+			then isexecutorclosure(FunctionCaller)
+			else isexecutorclosure(Callback)
+
+		if
+			LogRemote(Instance, Method, Callback, {
+				Arguments = table.pack(...),
+				Time = os.date("%X"),
+				Origin = Origin,
+				Function = Callback,
+				Line = nil,
+				IsExecutor = IsExecutor,
+			})
+		then
+			return
+		end
+
+		return Callback(...)
+	end
+
+	if wax.shared.ExecutorSupport["setstackhidden"].IsWorking then
+		setstackhidden(Detour, true)
+	end
+
+	return Detour
+end
+
+--[[
+	Handles setting up logging for the appropriate instances.
+
+	@param Instance The instance to handle.
+]]
+local function HandleInstance(Instance: any)
+	if
+		not ClassesToHook[Instance.ClassName]
+		or Instance == wax.shared.Communicator
+		or Instance == wax.shared.ActorCommunicator
+	then
+		return
+	end
+
+	local Method = ClassesToHook[Instance.ClassName]
+
+	if Instance.ClassName == "RemoteEvent" or Instance.ClassName == "UnreliableRemoteEvent" then
+		wax.shared.Connect(Instance.OnClientEvent:Connect(CreateConnectionFunction(Instance, Method)))
+
+		SignalMapping[Instance.OnClientEvent] = Instance
+	elseif Instance.ClassName == "BindableEvent" then
+		wax.shared.Connect(Instance.Event:Connect(CreateConnectionFunction(Instance, Method)))
+
+		SignalMapping[Instance.Event] = Instance
+	elseif Instance.ClassName == "RemoteFunction" or Instance.ClassName == "BindableFunction" then
+		local Success, Callback = pcall(getcallbackvalue, Instance, Method)
+		local IsCallable = (
+			typeof(Callback) == "function"
+			or wax.shared.getrawmetatable(Callback) ~= nil and typeof(wax.shared.getrawmetatable(Callback)["__call"]) == "function"
+			or false
+		)
+
+		if not Success or not IsCallable then
+			return
+		end
+
+		Instance[Method] = CreateCallbackDetour(Instance, Method, Callback)
+	end
+end
+
+wax.shared.Connect(game.DescendantAdded:Connect(HandleInstance))
+
+-- getinstances() was unreliable and failed to find some instances... ts pmo bro..
+local CategoryToSearch = { game:QueryDescendants("RemoteEvent, RemoteFunction, UnreliableRemoteEvent, BindableEvent, BindableFunction") }
+if wax.shared.ExecutorSupport["getnilinstances"].IsWorking then
+	table.insert(CategoryToSearch, getnilinstances())
+end
+
+for _, Category in CategoryToSearch do
+	for _, Instance in pairs(Category) do
+		HandleInstance(Instance)
+	end
+end
+
+wax.shared.NewIndexHook = wax.shared.Hooking.HookMetaMethod(game, "__newindex", function(...)
+	local self, key, value = ...
+
+	if typeof(self) ~= "Instance" or not ClassesToHook[self.ClassName] then
+		return wax.shared.NewIndexHook(...)
+	end
+
+	if self.ClassName == "RemoteFunction" or self.ClassName == "BindableFunction" then
+		local Method = ClassesToHook[self.ClassName]
+
+		local IsCallable = (
+			typeof(value) == "function"
+			or wax.shared.getrawmetatable(value) ~= nil and typeof(wax.shared.getrawmetatable(value)["__call"]) == "function"
+			or false
+		)
+
+		if key == Method and IsCallable then
+			return wax.shared.NewIndexHook(self, key, CreateCallbackDetour(self :: InstancesToHook, Method, value))
+		end
+	end
+
+	return wax.shared.NewIndexHook(...)
+end)
+
+local ConnectionKeys = {
+	"Connect",
+	"ConnectParallel",
+	"connect",
+	"connectParallel",
+	"once",
+	"Once",
+}
+
+local SignalMetatable = wax.shared.getrawmetatable(Instance.new("Part").Touched)
+wax.shared.Hooks[SignalMetatable.__index] = wax.shared.Hooking.HookFunction(SignalMetatable.__index, function(...)
+	local self, key = ...
+
+	if table.find(ConnectionKeys, key) then
+		local Instance = SignalMapping[self]
+		local Connect = wax.shared.Hooks[SignalMetatable.__index](...)
+
+		if not Instance then
+			return Connect
+		end
+
+		local Method = ClassesToHook[Instance.ClassName]
+		wax.shared.Hooks[Connect] = wax.shared.Hooking.HookFunction(Connect, function(...)
+			local _self, callback = ...
+
+			local Result = table.pack(wax.shared.Hooks[Connect](...))
+			local Log = wax.shared.Logs.Incoming[Instance]
+
+			if Log and Log.Blocked then
+				for _, Connection in pairs(getconnections(Instance[Method])) do
+					if not Connection.ForeignState and Connection.Function ~= callback then
+						continue
+					end
+
+					Connection:Disable()
+				end
+			end
+
+			return table.unpack(Result, 1, Result.n)
+		end)
+
+		return Connect
+	end
+
+	return wax.shared.Hooks[SignalMetatable.__index](...)
+end)
+
+end)() end,
+    [13] = function()local wax,script,require=ImportGlobals(13)local ImportGlobals return (function(...)local NamecallMethods = {
+	"FireServer",
+	"InvokeServer",
+	"Fire",
+	"Invoke",
+	"fireServer",
+	"invokeServer",
+	"fire",
+	"invoke",
+}
+local AllowedClassNames =
+	{ "RemoteEvent", "RemoteFunction", "UnreliableRemoteEvent", "BindableEvent", "BindableFunction" }
+
+--[[
+	Returns the calling function via `debug.info`
+
+	@return `function | nil` The calling function or nil if not found.
+]]
+local function getcallingfunction()
+	local BaseLevel = if wax.shared.ExecutorSupport["oth"].IsWorking then 2 else 4
+
+	for i = BaseLevel, 10 do
+		local Function, Source = debug.info(i, "fs")
+		if not Function or not Source then
+			break
+		end
+
+		if Source == "[C]" then
+			continue
+		end
+
+		return Function
+	end
+
+	return debug.info(BaseLevel, "f")
+end
+
+--[[
+	Returns the calling line of the script that called the function via `debug.info`
+
+	@return number Returns the line number of the calling script.
+]]
+local function getcallingline()
+	local BaseLevel = if wax.shared.ExecutorSupport["oth"].IsWorking then 2 else 4
+
+	for i = BaseLevel, 10 do
+		local Source, Line = debug.info(i, "sl")
+		if not Source then
+			break
+		end
+
+		if Source == "[C]" then
+			continue
+		end
+
+		return Line
+	end
+
+	return debug.info(BaseLevel, "l")
+end
+
+--[[
+	Returns the calling source of the script that called the function via `debug.info`
+
+	@return string Returns the source of the calling script.
+]]
+local function getcallingsource()
+	local BaseLevel = if wax.shared.ExecutorSupport["oth"].IsWorking then 2 else 4
+
+	for i = BaseLevel, 10 do
+		local Source = debug.info(i, "s")
+		if not Source then
+			break
+		end
+
+		if Source == "[C]" then
+			continue
+		end
+
+		return Source
+	end
+
+	return debug.info(BaseLevel, "s")
+end
+
+-- metamethod hooks
+wax.shared.NamecallHook = wax.shared.Hooking.HookMetaMethod(game, "__namecall", function(...)
+	local self = ...
+	local Method = getnamecallmethod()
+
+	if
+		typeof(self) == "Instance"
+		and table.find(AllowedClassNames, self.ClassName)
+		and not rawequal(self, wax.shared.Communicator)
+		and not rawequal(self, wax.shared.ActorCommunicator)
+		and table.find(NamecallMethods, Method)
+		and not wax.shared.ShouldIgnore(self, getcallingscript())
+	then
+		local Log = wax.shared.Logs.Outgoing[self]
+		if not Log then
+			Log = wax.shared.NewLog(self, "Outgoing", Method, getcallingscript())
+		end
+
+		if Log.Blocked then
+			return
+		elseif not Log.Ignored then
+			local Info = {
+				Arguments = table.pack(select(2, ...)),
+				Time = os.date("%X"),
+				Origin = getcallingscript(),
+				Function = getcallingfunction(),
+				Line = getcallingline(),
+				Source = getcallingsource(),
+				IsExecutor = checkcaller(),
+			}
+			Log:Call(Info)
+			-- For RemoteFunction return value (ex: local result = RemoteFunction:InvokeServer())
+			if self.ClassName == "RemoteFunction" and (Method == "InvokeServer" or Method == "invokeServer") then
+				Log = wax.shared.Logs.Incoming[self]
+				if not Log then
+					Log = wax.shared.NewLog(self, "Incoming", Method, getcallingscript())
+				end
+
+				if Log.Blocked then
+					return
+				end
+
+				local Result = table.pack(wax.shared.NamecallHook(...))
+				if not Log.Ignored then
+					local RFResultInfo = {
+						Arguments = Result,
+						Time = os.date("%X"),
+						Origin = getcallingscript(),
+						Function = getcallingfunction(),
+						Line = getcallingline(),
+						Source = getcallingsource(),
+						IsExecutor = checkcaller(),
+						OriginalInvokeArgs = table.pack(select(2, ...)),
+					}
+					Log:Call(RFResultInfo)
+				end
+
+				return table.unpack(Result, 1, Result.n)
+			end
+		end
+	end
+
+	return wax.shared.NamecallHook(...)
+end)
+
+-- function hooks
+local FunctionsToHook
+do
+	local BindableFunction = Instance.new("BindableFunction")
+	local BindableEvent = Instance.new("BindableEvent")
+
+	local RemoteFunction = Instance.new("RemoteFunction")
+	local RemoteEvent = Instance.new("RemoteEvent")
+	local UnreliableRemoteEvent = Instance.new("UnreliableRemoteEvent")
+
+	FunctionsToHook = {
+		BindableFunction.Invoke,
+		BindableEvent.Fire,
+
+		RemoteFunction.InvokeServer,
+		RemoteEvent.FireServer,
+		UnreliableRemoteEvent.FireServer,
+	}
+
+	BindableFunction:Destroy()
+	BindableEvent:Destroy()
+
+	RemoteFunction:Destroy()
+	RemoteEvent:Destroy()
+	UnreliableRemoteEvent:Destroy()
+end
+
+for _, Function in pairs(FunctionsToHook) do
+	local Method = debug.info(Function, "n")
+
+	wax.shared.Hooks[Function] = wax.shared.Hooking.HookFunction(Function, function(...)
+		local self = ...
+
+		if
+			typeof(self) == "Instance"
+			and table.find(AllowedClassNames, self.ClassName)
+			and not rawequal(self, wax.shared.Communicator)
+			and not wax.shared.ShouldIgnore(self, getcallingscript())
+		then
+			local Log = wax.shared.Logs.Outgoing[self]
+			if not Log then
+				Log = wax.shared.NewLog(self, "Outgoing", Method, getcallingscript())
+			end
+
+			if Log.Blocked then
+				return
+			elseif not Log.Ignored then
+				local Info = {
+					Arguments = table.pack(select(2, ...)),
+					Time = os.date("%X"),
+					Origin = getcallingscript(),
+					Function = getcallingfunction(),
+					Line = getcallingline(),
+					Source = getcallingsource(),
+					IsExecutor = checkcaller(),
+				}
+				Log:Call(Info)
+				-- For RemoteFunction return value (ex: local result = RemoteFunction:InvokeServer())
+				if self.ClassName == "RemoteFunction" and (Method == "InvokeServer" or Method == "invokeServer") then
+					Log = wax.shared.Logs.Incoming[self]
+					if not Log then
+						Log = wax.shared.NewLog(self, "Incoming", Method, getcallingscript())
+					end
+
+					if Log.Blocked then
+						return
+					end
+
+					local Result = table.pack(wax.shared.Hooks[Function](...))
+					if not Log.Ignored then
+						local RFResultInfo = {
+							Arguments = Result,
+							Time = os.date("%X"),
+							Origin = getcallingscript(),
+							Function = getcallingfunction(),
+							Line = getcallingline(),
+							Source = getcallingsource(),
+							IsExecutor = checkcaller(),
+							OriginalInvokeArgs = table.pack(select(2, ...)),
+						}
+						Log:Call(RFResultInfo)
+					end
+
+					return table.unpack(Result, 1, Result.n)
+				end
+			end
+		end
+
+		return wax.shared.Hooks[Function](...)
+	end)
+end
+
+end)() end,
+    [14] = function()local wax,script,require=ImportGlobals(14)local ImportGlobals return (function(...)local LuaEncode = require(script.Parent.Parent.Utils.Serializer.LuaEncode)
+local CodeGen = require(script.Parent.Parent.Utils.CodeGen)
+
+local Hooks = script.Parent.Hooks
+
+-- Main Thread Hooks
+for _, Hook in ipairs(Hooks.Default:GetChildren()) do
+	task.spawn(require, Hook)
+end
+
+getgenv().CobaltInitialized = true
+
+-- Actors use a different lua vm
+-- This means that our main thread metatable hooks dont apply in the actor's vm
+-- So we need to set up the hooks again in the actor lua vm in order to log everything
+local ActorsUtils = script.Parent.Actors
+
+wax.shared.ActorsEnabled = (
+	wax.shared.ExecutorSupport["run_on_actor"].IsWorking
+	and wax.shared.ExecutorSupport["getactors"].IsWorking
+	and wax.shared.ExecutorSupport["create_comm_channel"].IsWorking
+)
+
+if wax.shared.ActorsEnabled then
+	local ActorEnvironmentCode = ActorsUtils.Environment.Value
+
+	local CommunicationChannelID, Channel = create_comm_channel()
+	wax.shared.ActorCommunicator = Channel
+
+	local AlternativeEnabled = wax.shared.SaveManager:GetState("UseAlternativeHooks", false)
+
+	local IgnorePlayerModule = wax.shared.SaveManager:GetState("IgnorePlayerModule", true)
+	local IngoredRemotesDropdown = wax.shared.SaveManager:GetState("IgnoredRemotesDropdown", {
+		["BindableEvent"] = true,
+		["BindableFunction"] = true,
+	})
+
+	local ActorData = LuaEncode({
+		Token = wax.shared.CobaltVerificationToken,
+
+		IgnorePlayerModule = IgnorePlayerModule,
+		IgnoredRemotesDropdown = IngoredRemotesDropdown,
+		UseAlternativeHooks = AlternativeEnabled,
+
+		ExecutorSupport = wax.shared.ExecutorSupport,
+	})
+
+	ActorEnvironmentCode = ActorEnvironmentCode:gsub("COBALT_ACTOR_DATA", ActorData)
+
+	-- Actor Logs Sync Layer
+	local function ReconstructTable(Info, CyclicRefs)
+		local Reconstructed = {}
+
+		for Key, Value in Info do
+			if type(Value) == "table" then
+				if Value["__Function"] and Value["Validation"] == wax.shared.CobaltVerificationToken then
+					local FunctionData = table.clone(Value)
+					FunctionData["__Function"] = nil
+					FunctionData["Validation"] = nil
+
+					Reconstructed[Key] = FunctionData
+					continue
+				end
+
+				-- Check for Cobalt Created Object
+				if not Value["__CyclicRef"] then
+					Reconstructed[Key] = ReconstructTable(Value, CyclicRefs)
+					continue
+				end
+
+				local CyclicId = Value["__Id"]
+
+				if not CyclicRefs[CyclicId] then
+					warn("CyclicRef not found: " .. CyclicId)
+					continue
+				end
+
+				Reconstructed[Key] = CyclicRefs[CyclicId]
+				continue
+			end
+
+			Reconstructed[Key] = Value
+		end
+
+		return Reconstructed
+	end
+
+	wax.shared.Connect(Channel.Event:Connect(function(EventType, ...)
+		local ShouldLogActors = wax.shared.SaveManager:GetState("LogActors", true)
+
+		if not ShouldLogActors then
+			return
+		end
+
+		if EventType ~= "ActorCall" then
+			return
+		end
+
+		local Instance, Type, RawInfo, CyclicRefs = ...
+		if Instance == Channel or Instance == wax.shared.Communicator then
+			return
+		end
+
+		local Method = wax.shared.FunctionForClasses[Type][Instance.ClassName]
+		local Log = wax.shared.Logs[Type][Instance]
+
+		if not Log then
+			Log = wax.shared.NewLog(Instance, Type, Method, RawInfo.Origin)
+		end
+
+		if Log.Blocked then
+			return
+		elseif not Log.Ignored then
+			local ReconstructedInfo = ReconstructTable(RawInfo, CyclicRefs)
+
+			Log:Call(ReconstructedInfo)
+			wax.shared.Communicator:Fire(Log.Instance, Type, #Log.Calls)
+		end
+	end))
+
+	-- Actor Hooking Code Generation
+	local CodeToRun = ActorEnvironmentCode
+
+	for _, ActorHook in Hooks.Actors:GetChildren() :: { StringValue } do
+		CodeToRun ..= table.concat({
+			"task.spawn(function()",
+			CodeGen:IndentCode(ActorHook.Value, 1),
+			"end)",
+		}, "\n") .. "\n\n"
+	end
+
+	CodeToRun ..= table.concat({
+		"task.spawn(function()",
+		CodeGen:IndentCode(ActorsUtils.Unload.Value, 1),
+		"end)",
+	}, "\n")
+
+	-- Actual Hooking Logic
+	-- The hooking code wont run again if cobalt is already initialized in that Actor (to address deleted actors aka LuaStateProxy stuff)
+	
+	-- `HookActor` is to address Volcano returning non initialized actors inside their `getactors` function.
+	-- God this code is so ass 🥹
+	local function HookActor(TargetActor: Actor)
+		local Hooked = false
+		repeat
+			Hooked, _ = pcall(run_on_actor, TargetActor, CodeToRun, CommunicationChannelID)
+			task.wait(0.25)
+		until Hooked
+	end
+
+	for _, TargetActor in getactors() do
+		task.spawn(HookActor, TargetActor)
+	end
+
+	wax.shared.Connect(game.DescendantAdded:Connect(function(actor)
+		if not actor:IsA("Actor") then
+			return
+		end
+
+		HookActor(actor)
+	end))
+end
+
+return {}
 
 end)() end,
     [17] = function()local wax,script,require=ImportGlobals(17)local ImportGlobals return (function(...)--[[
@@ -728,6 +1560,2812 @@ end
 return AnticheatData
 
 end)() end,
+    [19] = function()local wax,script,require=ImportGlobals(19)local ImportGlobals return (function(...)local Adonis = {
+	Name = "Adonis",
+	Game = "*",
+}
+
+local AdonisAnticheatThreads = {}
+function Adonis.Detect()
+	if not getreg or not getgc or not isfunctionhooked then
+		return false
+	end
+
+	local AdonisDetected = false
+
+	for _, thread in getreg() do
+		if typeof(thread) ~= "thread" then
+			continue
+		end
+
+		local Source = debug.info(thread, 1, "s")
+		if Source and (Source:match(".Core.Anti") or Source:match(".Plugins.Anti_Cheat")) then
+			AdonisDetected = true
+			table.insert(AdonisAnticheatThreads, thread)
+		end
+	end
+
+	return AdonisDetected
+end
+
+function Adonis.Bypass()
+	for _, thread in AdonisAnticheatThreads do
+		pcall(coroutine.close, thread)
+	end
+
+	local AdonisTables = {}
+	if filtergc then
+		local ContendorAdonisTables = filtergc("table", {
+			Keys = { "Detected", "RLocked" }
+		}, false)
+
+		for _, AdonisTable in ContendorAdonisTables do
+			if typeof(rawget(AdonisTable, "Detected")) ~= "function" then continue end
+			table.insert(AdonisTables, AdonisTable)
+		end
+	else
+		for _, Table in getgc(true) do
+			if typeof(Table) ~= "table" then
+				continue
+			end
+	
+			local IsAdonisOrigin = typeof(rawget(Table, "Detected")) == "function" and rawget(Table, "RLocked")
+			if not IsAdonisOrigin then continue end
+
+			table.insert(AdonisTables, Table)
+		end
+	end
+
+	for _, Adonis in AdonisTables do
+		for _, DetectionFunc in Adonis do
+			-- Just in case they already loaded a custom anticheat bypass for adonis
+			if typeof(DetectionFunc) ~= "function" or isfunctionhooked(DetectionFunc) then
+				continue
+			end
+
+			wax.shared.Hooks[DetectionFunc] = wax.shared.Hooking.HookFunction(
+				DetectionFunc,
+				function(action, info, nocrash)
+					coroutine.yield(coroutine.running())
+					return task.wait(9e9)
+				end
+			)
+		end
+	end
+
+	return true
+end
+
+return Adonis
+
+end)() end,
+    [20] = function()local wax,script,require=ImportGlobals(20)local ImportGlobals return (function(...)local CodeGen = {
+	CleanTable = { ['"'] = '\\"', ["\\"] = "\\\\" },
+	IndentTemplate = string.rep(" ", 4),
+}
+
+export type SupportedRemoteTypes = RemoteEvent | RemoteFunction | BindableEvent | BindableFunction | UnreliableRemoteEvent
+export type CallInfo = {
+	Arguments: { [number]: any, n: number },
+	Time: string,
+	Origin: BaseScript?,
+	Function: (
+		...any
+	) -> any | {
+		Address: string,
+		Name: string,
+		Source: string?,
+		IsC: boolean,
+		Constants: { any }?,
+		Upvalues: { any }?,
+		Protos: { any }?,
+	},
+	Line: number?,
+	Source: string?,
+	Instance: SupportedRemoteTypes,
+	Order: number,
+	Type: "Incoming" | "Outgoing",
+	OriginalInvokeArgs: { [number]: any, n: number }?,
+	IsActor: boolean?,
+}
+
+wax.shared.FunctionForClasses = {
+	Incoming = {
+		RemoteEvent = "OnClientEvent",
+		RemoteFunction = "OnClientInvoke",
+		UnreliableRemoteEvent = "OnClientEvent",
+		BindableEvent = "Event",
+		BindableFunction = "OnInvoke",
+	},
+
+	Outgoing = {
+		RemoteEvent = "FireServer",
+		RemoteFunction = "InvokeServer",
+		UnreliableRemoteEvent = "FireServer",
+		BindableEvent = "Fire",
+		BindableFunction = "Invoke",
+	},
+}
+
+local GetNilCode = [[local function GetNil(Name, DebugId)
+	for _, Object in getnilinstances() do
+		if Object.Name == Name and Object:GetDebugId() == DebugId then
+			return Object
+		end
+	end
+end]]
+
+--// Pasted from Dex (maximum detection)
+for i = 0, 31 do
+	CodeGen.CleanTable[string.char(i)] = "\\" .. string.format("%03d", i)
+end
+for i = 127, 255 do
+	CodeGen.CleanTable[string.char(i)] = "\\" .. string.format("%03d", i)
+end
+
+function CodeGen.FormatLuaString(str)
+	return string.gsub(str, '["\\\0-\31\127-\255]', CodeGen.CleanTable)
+end
+
+local function IsEqualToInstance(Object, ToCompareTo)
+	if rawequal(Object, ToCompareTo) then
+		return true
+	end
+
+	if wax.shared.ExecutorSupport["compareinstances"].IsWorking then
+		return compareinstances(Object, ToCompareTo)
+	end
+
+	return false
+end
+
+function CodeGen.GetFullPath(Object, ExcludeCode, VariableName, IsInTable)
+	local ChildLookupMode = wax.shared.SaveManager:GetState("InstancePathLookupChain", "Index")
+
+	local function BuildDynamicAccessor(Expression: string): string
+		if ChildLookupMode == "WaitForChild" then
+			return ":WaitForChild(" .. Expression .. ")"
+		elseif ChildLookupMode == "FindFirstChild" then
+			return ":FindFirstChild(" .. Expression .. ")"
+		end
+
+		return "[" .. Expression .. "]"
+	end
+
+	local function BuildStaticAccessor(Name: string): string
+		local SanitizedName = CodeGen.FormatLuaString(Name)
+
+		if ChildLookupMode == "WaitForChild" then
+			return ':WaitForChild("' .. SanitizedName .. '")'
+		elseif ChildLookupMode == "FindFirstChild" then
+			return ':FindFirstChild("' .. SanitizedName .. '")'
+		elseif string.match(Name, "^[%a_][%w_]*$") then
+			return "." .. Name
+		end
+
+		return '["' .. SanitizedName .. '"]'
+	end
+
+	local CurrentObject = Object
+	local DidInsertNilFunction = false
+	local IsNil = false
+	local Path = ""
+
+	repeat
+		if typeof(CurrentObject) ~= "Instance" then
+			break
+		end
+
+		if IsEqualToInstance(CurrentObject, game) then
+			Path = "game" .. Path
+			break
+		end
+
+		local IndexName = ""
+
+		if IsEqualToInstance(CurrentObject, wax.shared.LocalPlayer) then
+			IndexName = ".LocalPlayer"
+		elseif
+			wax.shared.LocalPlayer.Character and IsEqualToInstance(CurrentObject, wax.shared.LocalPlayer.Character)
+		then
+			Path = 'game:GetService("Players").LocalPlayer.Character' .. Path
+			break
+		elseif CurrentObject.Name and CurrentObject.Name == wax.shared.LocalPlayer.Name then
+			IndexName = BuildDynamicAccessor('game:GetService("Players").LocalPlayer.Name')
+		elseif CurrentObject.Name and CurrentObject.Name == tostring(wax.shared.LocalPlayer.UserId) then
+			IndexName = BuildDynamicAccessor('game:GetService("Players").LocalPlayer.UserId')
+		elseif IsEqualToInstance(CurrentObject, workspace) then
+			Path = "workspace" .. Path
+			break
+		elseif CurrentObject.ClassName and CurrentObject.Name then
+			IndexName = BuildStaticAccessor(CurrentObject.Name)
+
+			local Parent = CurrentObject.Parent
+			if Parent then
+				local DirectChildPtr = Parent:FindFirstChild(CurrentObject.Name)
+
+				if
+					IsEqualToInstance(Parent, game)
+					and IsEqualToInstance(game:FindService(CurrentObject.ClassName), CurrentObject)
+				then
+					IndexName = ':GetService("' .. CurrentObject.ClassName .. '")'
+				elseif DirectChildPtr then
+					local Children = Parent:GetChildren()
+					local FoundIndex = nil
+
+					if
+						wax.shared.ExecutorSupport["compareinstances"].IsWorking
+						and not compareinstances(DirectChildPtr, CurrentObject)
+					then
+						for Index, Child in Children do
+							if not compareinstances(Child, CurrentObject) then
+								continue
+							end
+
+							FoundIndex = Index
+							break
+						end
+					elseif DirectChildPtr ~= CurrentObject then
+						FoundIndex = table.find(Children, CurrentObject)
+					end
+
+					if FoundIndex then
+						IndexName = ":GetChildren()[" .. tostring(FoundIndex) .. "]"
+					end
+				end
+			elseif Parent == nil then
+				IsNil = true
+
+				if ExcludeCode then
+					Path = Path .. " --[[Nil Parent]]"
+				else
+					local Base = `GetNil("{CodeGen.FormatLuaString(CurrentObject.Name)}", "{CodeGen.FormatLuaString(
+						CurrentObject:GetDebugId()
+					)}")`
+					DidInsertNilFunction = true
+					if IsInTable then
+						Path = Base
+						break
+					end
+
+					Path = GetNilCode .. `\n\n{VariableName and `local {VariableName} = ` or ""}` .. Base
+					break
+				end
+			end
+		end
+
+		Path = IndexName .. Path
+
+		CurrentObject = CurrentObject.Parent
+	until CurrentObject == nil
+
+	if IsNil then
+		return Path, DidInsertNilFunction
+	end
+
+	return `{VariableName and `local {VariableName} = ` or ""}{Path}`, DidInsertNilFunction
+end
+
+local function DoesUseCallbackValue(Instance: Instance)
+	return Instance.ClassName == "RemoteFunction" or Instance.ClassName == "BindableFunction"
+end
+
+local CodeGenHeaderTemplate = [[-- This code was generated by Cobalt
+-- https://github.com/notpoiu/cobalt
+
+]]
+
+function CodeGen:IndentCode(Code: string, IndentLevel: number)
+	local Indent = CodeGen.IndentTemplate:rep(IndentLevel)
+	local IndentedCode = Code:gsub("\n", "\n" .. Indent)
+	return Indent .. IndentedCode
+end
+
+local WrapperActorCode = table.concat({
+	"-- Event originated from an Actor Environment",
+	"for _, actor in getactors() do",
+	"	run_on_actor(actor, [[\n%s\n]])",
+	"end",
+}, "\n")
+
+local function WrapCodeInActor(Code: string, ShouldWrap: boolean)
+	if not ShouldWrap then
+		return Code
+	end
+
+	return string.format(WrapperActorCode, CodeGen:IndentCode(Code, 2))
+end
+
+function CodeGen:BuildHookCode(CallInfo: CallInfo)
+	local Type = CallInfo.Type
+	local Path = self.GetFullPath(CallInfo.Instance, false, "Event")
+	local IsFromActor = CallInfo.IsActor or false
+	local Method = wax.shared.FunctionForClasses[Type][CallInfo.Instance.ClassName]
+
+	local CodeGenHeader = CodeGenHeaderTemplate
+	if not wax.shared.SaveManager:GetState("ShowWatermark", true) then
+		CodeGenHeader = ""
+	end
+
+	if Type == "Incoming" then
+		if DoesUseCallbackValue(CallInfo.Instance) then
+			-- :InvokeServer -> Returned value
+			if CallInfo.OriginalInvokeArgs then
+				Method = wax.shared.FunctionForClasses.Outgoing[CallInfo.Instance.ClassName]
+
+				return CodeGenHeader
+					.. WrapCodeInActor(
+						string.format(
+							[[%s
+local mtHook; mtHook = hookmetamethod(game, "__namecall", function(...)
+	local self = ...
+
+	if rawequal(self, Event) and getnamecallmethod() == "%s" then
+		local Args = table.pack(...)
+
+		local Result = table.pack(
+			mtHook(table.unpack(Args, 1, Args.n))
+		)
+
+		return table.unpack(Result, 1, Result.n)
+	end
+
+	return mtHook(self, ...)
+end)
+
+local Old%s; Old%s = hookfunction(Event.%s, function(...)
+	local self = ...
+
+	if rawequal(self, Event) then
+		local Args = table.pack(...)
+
+		local Result = table.pack(
+			Old%s(table.unpack(Args, 1, Args.n))
+		)
+
+		return table.unpack(Result, 1, Result.n)
+	end
+
+	return Old%s(self, ...)
+end)]],
+							Path,
+							Method,
+							Method,
+							Method,
+							Method,
+							Method,
+							Method
+						),
+						IsFromActor
+					)
+			end
+
+			-- Callback value
+			return CodeGenHeader
+				.. WrapCodeInActor(
+					string.format(
+						[[%s
+local Callback = getcallbackvalue(Event, "%s")
+Event.%s = function(...)
+	print(`Intercepted (Callback) {Event.Name}.%s`, ...)
+	return Callback(...)
+end
+
+local mtHook; mtHook = hookmetamethod(game, "__newindex", function(...)
+	local self, key, value = ...
+	
+	if (
+		rawequal(self, Event) and
+		rawequal(key, "%s") and
+		typeof(value) == "function" and
+		not checkcaller()
+	) then
+		Callback = value
+	end
+
+	return mtHook(...)
+end)]],
+						Path,
+						Method,
+						Method,
+						Method,
+						Method
+					),
+					IsFromActor
+				)
+		end
+
+		return CodeGenHeader
+			.. WrapCodeInActor(
+				string.format(
+					[[%s
+for _, Connection in getconnections(Event.%s) do
+	local old; old = hookfunction(Connection.Function, function(...)
+		print(`Intercepted (Connection) {Event.Name}.%s`, ...)
+		return old(...)
+	end)
+end]],
+					Path,
+					Method,
+					Method
+				),
+				IsFromActor
+			)
+	end
+
+	return CodeGenHeader
+		.. WrapCodeInActor(
+			string.format(
+				[[%s
+local mtHook; mtHook = hookmetamethod(game, "__namecall", function(...)
+	local self = ...
+
+	if rawequal(self, Event) and getnamecallmethod() == "%s" then
+		local Args = table.pack(...)
+		
+		local Result = table.pack(
+			mtHook(self, table.unpack(Args, 1, Args.n))
+		)
+
+		print(`Intercepted (__namecall) {Event.Name}:%s()`, ...)
+
+		return table.unpack(Result, 1, Result.n)
+	end
+
+	return mtHook(...)
+end)
+
+local Old%s; Old%s = hookfunction(Event.%s, function(...)
+	local self = ...
+
+	if rawequal(self, Event) then
+		local Args = table.pack(...)
+
+		local Result = table.pack(
+			Old%s(table.unpack(Args, 1, Args.n))
+		)
+
+		print(`Intercepted (__index) {Event.Name}:%s()`, self, table.unpack(Result, 1, Result.n))
+
+		return table.unpack(Result, 1, Result.n)
+	end
+
+	return Old%s(self, ...)
+end)]],
+				Path,
+				Method,
+				Method,
+				Method,
+				Method,
+				Method,
+				Method,
+				Method,
+				Method
+			),
+			IsFromActor
+		)
+end
+
+function CreateArgsString(SerializedArgs: string, Args: { [number]: any, n: number }, Prefix: string?)
+	if Args.n == 0 then
+		return ""
+	end
+
+	return `{Prefix == nil and "" or Prefix}{string.sub(SerializedArgs, 2, #SerializedArgs - 1)}`
+end
+
+function CodeGen:BuildCallCode(CallInfo: CallInfo)
+	local Type = CallInfo.Type
+	local IsFromActor = CallInfo.IsActor or false
+	local Path = self.GetFullPath(CallInfo.Instance, false, "Event")
+	local Method = wax.shared.FunctionForClasses[Type][CallInfo.Instance.ClassName]
+	local SerializedArgs, DidInsertNilFunction = wax.shared.LuaEncode(
+		{ table.unpack(CallInfo.Arguments, 1, CallInfo.Arguments.n) },
+		{ Prettify = true, InsertCycles = true, GetNilFunctionInsert = true }
+	)
+
+	local CodeGenHeader = CodeGenHeaderTemplate
+	if not wax.shared.SaveManager:GetState("ShowWatermark", true) then
+		CodeGenHeader = ""
+	end
+
+	if Type == "Incoming" then
+		if DoesUseCallbackValue(CallInfo.Instance) then
+			local PrettifiedExpectedResult, DidInsertNilFunctionInExpectation = wax.shared.LuaEncode(
+				{ table.unpack(CallInfo.Arguments, 1, CallInfo.Arguments.n) },
+				{ Prettify = true, InsertCycles = true, GetNilFunctionInsert = true }
+			)
+
+			if CallInfo.OriginalInvokeArgs then
+				local PrettifiedOutput, InsertedNilFunction = wax.shared.LuaEncode(
+					{ table.unpack(CallInfo.OriginalInvokeArgs, 1, CallInfo.OriginalInvokeArgs.n) },
+					{ Prettify = true, InsertCycles = true }
+				)
+
+				Method = wax.shared.FunctionForClasses.Outgoing[CallInfo.Instance.ClassName]
+
+				return CodeGenHeader
+					.. string.format(
+						[[%s%s
+local Result = Event:%s(%s)
+
+local ExpectedResult = table.unpack(%s)
+
+]],
+						(
+							(InsertedNilFunction or DidInsertNilFunction or DidInsertNilFunctionInExpectation)
+								and GetNilCode .. "\n\n"
+							or ""
+						),
+						Path,
+						Method,
+						CreateArgsString(PrettifiedOutput, CallInfo.OriginalInvokeArgs),
+						PrettifiedExpectedResult
+					)
+			end
+
+			return CodeGenHeader
+				.. string.format(
+					[[%s%s
+local Callback = getcallbackvalue(Event, "%s")
+Callback(%s)
+
+local ExpectedResult = table.unpack(%s)
+
+]],
+					(DidInsertNilFunction or DidInsertNilFunctionInExpectation and GetNilCode .. "\n\n" or ""),
+					Path,
+					Method,
+					CreateArgsString(SerializedArgs, CallInfo.Arguments),
+
+					PrettifiedExpectedResult
+				)
+		end
+
+		return CodeGenHeader
+			.. WrapCodeInActor(
+				string.format(
+					[[%s%s
+firesignal(Event.%s%s)]],
+					(DidInsertNilFunction and GetNilCode .. "\n\n" or ""),
+					Path,
+					Method,
+					CreateArgsString(SerializedArgs, CallInfo.Arguments, ", ")
+				),
+				IsFromActor
+			)
+	end
+
+	return CodeGenHeader
+		.. string.format(
+			[[%s%s
+Event:%s(%s)]],
+			(DidInsertNilFunction and GetNilCode .. "\n\n" or ""),
+			Path,
+			Method,
+			CreateArgsString(SerializedArgs, CallInfo.Arguments)
+		)
+end
+
+function CodeGen:BuildFunctionInfo(CallInfo: CallInfo)
+	if CallInfo.IsActor and typeof(CallInfo.Function) == "table" then
+		return string.format(
+			[[<b>Function Address:</b> %s
+<b>Name:</b> %s
+<b>Script Path:</b> %s
+<b>Source:</b> %s
+<b>Calling Line:</b> %s
+<b>From Actor:</b> true
+%s]],
+			CallInfo.Function.Address:match("0x%x+") or tostring(CallInfo.Function),
+			CallInfo.Function.Name ~= "" and CallInfo.Function.Name or "Anonymous",
+			CallInfo.Origin and self.GetFullPath(CallInfo.Origin, true) or wax.shared.ExecutorName,
+			CallInfo.Function.Source or "N/A",
+			tostring(CallInfo.Line),
+
+			CallInfo.Function.IsC and "<b>Closure Type</b>: C closure"
+				or string.format(
+					"<b>Closure Type</b>: Luau closure\n<b>Constants:</b> %s\n<b>Upvalues:</b> %s\n<b>Protos:</b> %s",
+					debug.getconstants and tostring(#CallInfo.Function.Constants) or "N/A",
+					debug.getupvalues and tostring(#CallInfo.Function.Upvalues) or "N/A",
+					debug.getprotos and tostring(#CallInfo.Function.Protos) or "N/A"
+				)
+		)
+	end
+
+	local FunctionName = debug.info(CallInfo.Function, "n")
+
+	return string.format(
+		[[<b>Function Address:</b> %s
+<b>Name:</b> %s
+<b>Script Path:</b> %s
+<b>Source:</b> %s
+<b>Calling Line:</b> %s
+%s]],
+		tostring(CallInfo.Function):match("0x%x+") or tostring(CallInfo.Function),
+		FunctionName ~= "" and FunctionName or "Anonymous",
+		CallInfo.Origin and self.GetFullPath(CallInfo.Origin, true) or wax.shared.ExecutorName,
+		CallInfo.Source or debug.info(CallInfo.Function, "s"),
+		tostring(CallInfo.Line),
+
+		iscclosure(CallInfo.Function) and "<b>Closure Type</b>: C closure"
+			or string.format(
+				"<b>Closure Type</b>: Luau closure\n<b>Constants:</b> %s\n<b>Upvalues:</b> %s\n<b>Protos:</b> %s",
+				debug.getconstants and tostring(#debug.getconstants(CallInfo.Function)) or "N/A",
+				debug.getupvalues and tostring(#debug.getupvalues(CallInfo.Function)) or "N/A",
+				debug.getprotos and tostring(#debug.getprotos(CallInfo.Function)) or "N/A"
+			)
+	)
+end
+
+wax.shared.ReplayCallInfo = function(CallInfo: CallInfo)
+	local Type = CallInfo.Type
+	local Method = wax.shared.FunctionForClasses[Type][CallInfo.Instance.ClassName]
+
+	if Type == "Incoming" then
+		if DoesUseCallbackValue(CallInfo.Instance) then
+			if CallInfo.OriginalInvokeArgs then
+				Method = wax.shared.FunctionForClasses.Outgoing[CallInfo.Instance.ClassName]
+
+				CallInfo.Instance[Method](
+					CallInfo.Instance,
+					table.unpack(CallInfo.OriginalInvokeArgs, 1, CallInfo.OriginalInvokeArgs.n)
+				)
+				return
+			end
+
+			local Callback = getcallbackvalue(CallInfo.Instance, Method)
+
+			if not Callback then
+				return
+			end
+
+			Callback(table.unpack(CallInfo.Arguments))
+			return
+		end
+
+		assert(firesignal or getconnections, "No firesignal or getconnections found")
+
+		if firesignal then
+			firesignal(CallInfo.Instance[Method], table.unpack(CallInfo.Arguments, 1, CallInfo.Arguments.n))
+		elseif getconnections then
+			for _, conn in getconnections(CallInfo.Instance[Method]) do
+				conn:Fire(table.unpack(CallInfo.Arguments, 1, CallInfo.Arguments.n))
+			end
+		end
+
+		return
+	end
+
+	CallInfo.Instance[Method](CallInfo.Instance, table.unpack(CallInfo.Arguments, 1, CallInfo.Arguments.n))
+end
+
+return CodeGen
+
+end)() end,
+    [21] = function()local wax,script,require=ImportGlobals(21)local ImportGlobals return (function(...)wax.shared.Connections = {}
+
+wax.shared.Connect = function(Connection)
+	table.insert(wax.shared.Connections, Connection)
+	return Connection
+end
+
+wax.shared.Disconnect = function(Connection)
+	Connection:Disconnect()
+
+	local Index = table.find(wax.shared.Connections, Connection)
+	if Index then
+		table.remove(wax.shared.Connections, Index)
+	end
+
+	return true
+end
+
+return {}
+end)() end,
+    [22] = function()local wax,script,require=ImportGlobals(22)local ImportGlobals return (function(...)-- Logger
+-- ActualMasterOogway
+-- December 8, 2024
+
+--[=[
+    A simple logging utility that writes messages to a file. Supports different log levels
+    and can be configured to overwrite or append to the log file.
+
+    Log Format:  2024-12-04T15:28:31.131Z,0.131060,MyThread,Warning [FLog::RobloxStarter] Roblox stage ReadyForFlagFetch completed
+                 <timestamp>,<elapsed_time>,<thread_id>,<level> <message>
+]=]
+
+local Logger = {}
+Logger.__index = Logger
+
+Logger.LOG_LEVELS = {
+	ERROR = 1,
+	WARNING = 2,
+	INFO = 3,
+	DEBUG = 4,
+}
+
+local LOG_LEVEL_STRINGS = {
+	[Logger.LOG_LEVELS.ERROR] = "ERROR",
+	[Logger.LOG_LEVELS.WARNING] = "WARNING",
+	[Logger.LOG_LEVELS.INFO] = "INFO",
+	[Logger.LOG_LEVELS.DEBUG] = "DEBUG",
+}
+
+local startTime = tick()
+
+local function createDirectoryRecursive(path)
+	local currentPath = ""
+	for part in path:gmatch("[^\\/]+") do
+		currentPath = currentPath .. part
+		if not isfolder(currentPath) then
+			makefolder(currentPath)
+		end
+		currentPath = currentPath .. "/"
+	end
+end
+
+--[=[
+    Generates a unique file name for the log file. The file name is based on the current
+    job ID, ensuring it is unique per server instance but consistent across multiple
+    executions within the same server.
+
+    @return string A unique file name for the log file.
+]=]
+function Logger:GenerateFileName()
+	local JobIdNumber = game.JobId:gsub("%D", "")
+	local timestamp = os.date("!%Y%m%d%H%M%S")
+
+	return `{self.logFileDirectory}/{JobIdNumber * 1.7 // 1.8}_{timestamp}.log`
+end
+
+--[=[
+    Creates a new Logger instance.
+
+    @param logFilePath string The path to the log file.
+    @param logLevel number The minimum log level to write to the file. Defaults to INFO.
+    @param overwrite boolean Whether to overwrite the log file or append to it. Defaults to false (append).
+    @return Logger A new Logger instance.
+]=]
+function Logger.new(logFilePath: string, logLevel: number?, overwrite: boolean?)
+	local self = setmetatable({}, Logger)
+	self.logFilePath = logFilePath
+	self.logFileDirectory = logFilePath:match("(.+)/")
+	self.logLevel = logLevel or Logger.LOG_LEVELS.INFO
+	self.overwrite = overwrite or false
+
+	local folderPath, fileName = logFilePath:match("(.*[\\/])(.*)")
+
+	if folderPath and not isfolder(folderPath) then
+		createDirectoryRecursive(folderPath)
+	end
+
+	if self.overwrite then
+		local success, err = pcall(writefile, self.logFilePath, "")
+		if not success then
+			warn(debug.traceback(`Failed to clear log file: {self.logFilePath} - {err}`, 2))
+		end
+	end
+
+	self:Info("Logger", "Logger initialized")
+
+	return self
+end
+
+--[=[
+    Logs a message to the file.
+
+    @param level number The log level of the message.
+    @param threadId string The ID of the thread or source of the log message.
+    @param message string The message to log.
+]=]
+function Logger:Log(level: number, threadId: string, message: string)
+	if level <= self.logLevel then
+		local levelStr = LOG_LEVEL_STRINGS[level]
+
+		local timestamp = `{os.date("!%Y-%m-%dT%H:%M:%S")}{("%.3f"):format(tick() % 1)}Z`
+		local elapsedTime = ("%.6f"):format(tick() - startTime)
+
+		local logMessage = `{timestamp},{elapsedTime},{threadId},{levelStr} {message}\n`
+
+		local success, err = pcall(appendfile, self.logFilePath, logMessage)
+		if not success then
+			warn(debug.traceback(`Failed to write to log file: {self.logFilePath} - {err}`, 2))
+		end
+	end
+end
+
+--[=[
+    Logs a debug message.
+
+    @param threadId string The ID of the thread or source of the log message.
+    @param message string The message to log.
+]=]
+function Logger:Debug(threadId: string, message: string)
+	self:Log(Logger.LOG_LEVELS.DEBUG, threadId, message)
+end
+
+--[=[
+    Logs an info message.
+
+    @param threadId string The ID of the thread or source of the log message.
+    @param message string The message to log.
+]=]
+function Logger:Info(threadId: string, message: string)
+	self:Log(Logger.LOG_LEVELS.INFO, threadId, message)
+end
+
+--[=[
+    Logs a warning message.
+
+    @param threadId string The ID of the thread or source of the log message.
+    @param message string The message to log.
+]=]
+function Logger:Warning(threadId: string, message: string)
+	self:Log(Logger.LOG_LEVELS.WARNING, threadId, message)
+end
+
+--[=[
+    Logs an error message.
+
+    @param threadId string The ID of the thread or source of the log message.
+    @param message string The message to log.
+]=]
+function Logger:Error(threadId: string, message: string)
+	self:Log(Logger.LOG_LEVELS.ERROR, threadId, message)
+end
+
+return Logger
+end)() end,
+    [23] = function()local wax,script,require=ImportGlobals(23)local ImportGlobals return (function(...)local Hooking = {}
+
+local AlternativeEnabled = wax.shared.SaveManager:GetState("UseAlternativeHooks", false)
+wax.shared.AlternativeEnabled = AlternativeEnabled
+
+Hooking.HookFunction = function(Original, Replacement)
+	if wax.shared.ExecutorSupport["oth"].IsWorking and iscclosure(Original) and islclosure(Replacement) then
+		return oth.hook(Original, Replacement)
+	end
+
+	if islclosure(Replacement) then
+		Replacement = wax.shared.newcclosure(Replacement)
+	end
+
+	if not wax.shared.ExecutorSupport["hookfunction"].IsWorking then
+		return Original
+	end
+
+	return hookfunction(Original, Replacement)
+end
+Hooking.HookMetaMethod = function(object, method, hook)
+	local Metatable = wax.shared.getrawmetatable(object)
+	local originalMethod = rawget(Metatable, method)
+
+	if wax.shared.ExecutorSupport["oth"].IsWorking then
+		return oth.hook(originalMethod, hook)
+	end
+
+	if islclosure(hook) then
+		hook = wax.shared.newcclosure(hook)
+	end
+
+	if
+		AlternativeEnabled
+		or (
+			not wax.shared.ExecutorSupport["hookmetamethod"].IsWorking
+			and wax.shared.ExecutorSupport["getrawmetatable"].IsWorking
+		)
+	then
+		setreadonly(Metatable, false)
+		rawset(Metatable, method, hook)
+		setreadonly(Metatable, true)
+
+		return originalMethod
+	end
+
+	if not wax.shared.ExecutorSupport["hookmetamethod"].IsWorking then
+		if method == "__index" then
+			local _, Metamethod = xpcall(function()
+				return object[tostring(math.random())]
+			end, function(err)
+				return debug.info(2, "f")
+			end)
+
+			return Metamethod
+		elseif method == "__newindex" then
+			local _, Metamethod = xpcall(function()
+				object[tostring(math.random())] = true
+			end, function(err)
+				return debug.info(2, "f")
+			end)
+
+			return Metamethod
+		elseif method == "__namecall" then
+			local _, Metamethod = xpcall(function()
+				object:Mustard()
+			end, function(err)
+				return debug.info(2, "f")
+			end)
+
+			return Metamethod
+		end
+
+		return nil
+	end
+
+	return hookmetamethod(object, method, hook)
+end
+
+return Hooking
+
+end)() end,
+    [24] = function()local wax,script,require=ImportGlobals(24)local ImportGlobals return (function(...)local Log = {}
+Log.__index = Log
+
+function Log.new(Instance, Type, Method, Index, CallingScript)
+	local NewLog = setmetatable({
+		Instance = Instance,
+		Type = Type,
+		Method = Method,
+		Index = Index,
+		Calls = {},
+		GameCalls = {},
+		Ignored = false,
+		Blocked = false,
+		Button = nil,
+	}, Log)
+
+	return NewLog
+end
+
+function DeepClone(orig, copies)
+	copies = copies or {}
+
+	if typeof(orig) == "Instance" then
+		return cloneref(orig)
+	elseif typeof(orig) == "userdata" then
+		if getmetatable(orig) then
+			return newproxy(true)
+		else
+			return newproxy()
+		end
+	elseif typeof(orig) == "function" then
+		if clonefunction then
+			return clonefunction(orig)
+		end
+
+		return orig
+	elseif type(orig) ~= "table" then
+		return orig
+	elseif copies[orig] then
+		return copies[orig]
+	end
+
+	local copy = {}
+	copies[orig] = copy
+	for k, v in pairs(orig) do
+		copy[DeepClone(k, copies)] = DeepClone(v, copies)
+	end
+	return copy
+end
+
+function Log:Call(RawInfo)
+	local Info = DeepClone(RawInfo)
+	local Index = #self.Calls + 1
+	self.Calls[Index] = Info
+	if not Info.IsExecutor then
+		table.insert(self.GameCalls, Index)
+	end
+
+	if wax.shared.Communicator then
+		wax.shared.Communicator.Fire(wax.shared.Communicator, self.Instance, self.Type, #self.Calls)
+	end
+end
+
+function Log:Ignore()
+	if wax.shared.ActorCommunicator then
+		pcall(function()
+			wax.shared.ActorCommunicator:Fire("MainIgnore", self.Instance, self.Type)
+		end)
+	end
+
+	self.Ignored = not self.Ignored
+end
+
+local ClassesConnectionsToggle = {
+	RemoteEvent = "OnClientEvent",
+	UnreliableRemoteEvent = "OnClientEvent",
+	BindableEvent = "Event",
+}
+
+function Log:SetConnectionsEnabled(enabled: boolean)
+	if not self.Instance or not ClassesConnectionsToggle[self.Instance.ClassName] then
+		return
+	end
+
+	local ConnectionName = ClassesConnectionsToggle[self.Instance.ClassName]
+	if self.Type ~= "Incoming" or not ConnectionName then
+		return
+	end
+
+	for _, Connection in pairs(getconnections(self.Instance[ConnectionName])) do
+		if enabled then
+			Connection:Enable()
+		else
+			Connection:Disable()
+		end
+	end
+end
+
+function Log:Block()
+	if wax.shared.ActorCommunicator then
+		pcall(function()
+			wax.shared.ActorCommunicator:Fire("MainBlock", self.Instance, self.Type)
+		end)
+	end
+
+	self.Blocked = not self.Blocked
+	Log:SetConnectionsEnabled(not self.Blocked)
+end
+
+function Log:SetButton(Instance, Name, Calls)
+	self.Button = {
+		Instance = Instance,
+		Name = Name,
+		Calls = Calls,
+	}
+end
+
+return Log
+
+end)() end,
+    [25] = function()local wax,script,require=ImportGlobals(25)local ImportGlobals return (function(...)--[[
+
+Pagination Module
+made by deivid and turned into module by upio
+
+]]
+
+local Pagination = {}
+Pagination.__index = Pagination
+
+function Pagination.new(Options: {
+	TotalItems: number,
+	ItemsPerPage: number,
+	CurrentPage: number?,
+	SiblingCount: number?,
+})
+	return setmetatable({
+		TotalItems = Options.TotalItems,
+		ItemsPerPage = Options.ItemsPerPage,
+		CurrentPage = Options.CurrentPage or 1,
+		SiblingCount = Options.SiblingCount or 2,
+	}, Pagination)
+end
+
+function Pagination:GetInfo()
+	local TotalPages = math.ceil(self.TotalItems / self.ItemsPerPage)
+
+	return {
+		TotalItems = self.TotalItems,
+		ItemsPerPage = self.ItemsPerPage,
+		CurrentPage = self.CurrentPage,
+		TotalPages = TotalPages,
+	}
+end
+
+function Pagination:SetItemsPerPage(max: number)
+	self.ItemsPerPage = max
+end
+
+function Pagination:GetIndexRanges(Page: number?)
+	Page = Page or self.CurrentPage
+
+	local TotalPages = math.ceil(self.TotalItems / self.ItemsPerPage)
+	if TotalPages == 0 then
+		return 1, 0
+	end
+	assert(
+		Page <= TotalPages,
+		"Attempted to get invalid page out of range, got " .. Page .. " but max is " .. TotalPages
+	)
+
+	local Start = (((Page or self.CurrentPage) - 1) * self.ItemsPerPage) + 1
+	local End = Start + (self.ItemsPerPage - 1)
+
+	return Start, End
+end
+
+function Pagination:SetPage(Page: number)
+	local TotalPages = math.ceil(self.TotalItems / self.ItemsPerPage)
+	if TotalPages == 0 then
+		self.CurrentPage = 1
+		return
+	end
+	assert(Page <= TotalPages, "Attempted to set page out of range, got " .. Page .. " but max is " .. TotalPages)
+
+	self.CurrentPage = Page
+end
+
+function Pagination:Update(TotalItems: number?, ItemsPerPage: number?)
+	self.TotalItems = TotalItems or self.TotalItems
+	self.ItemsPerPage = ItemsPerPage or self.ItemsPerPage
+end
+
+function Pagination:GetVisualInfo(Page: number?)
+	Page = Page or self.CurrentPage
+
+	local TotalPages = math.ceil(self.TotalItems / self.ItemsPerPage)
+	if TotalPages == 0 then
+		return {}
+	end
+
+	assert(
+		Page <= TotalPages,
+		"Attempted to get invalid page out of range, got " .. Page .. " but max is " .. TotalPages
+	)
+
+	local MaxButtons = 5 + self.SiblingCount * 2
+	local Result = table.create(MaxButtons, "none")
+	if TotalPages <= MaxButtons then
+		for i = 1, TotalPages do
+			Result[i] = i
+		end
+		return Result
+	end
+
+	local LeftSibling = math.max(Page - self.SiblingCount, 1)
+	local RightSibling = math.min(Page + self.SiblingCount, TotalPages)
+
+	local FakeLeft = LeftSibling > 2
+	local FakeRight = RightSibling < TotalPages - 1
+
+	local TotalPageNumbers = math.min(2 * self.SiblingCount + 5, TotalPages)
+	local ItemCount = TotalPageNumbers - 2
+
+	if not FakeLeft and FakeRight then
+		for i = 1, ItemCount do
+			Result[i] = i
+		end
+		Result[ItemCount + 1] = "ellipsis"
+		Result[ItemCount + 2] = TotalPages
+		--return MergeTables(LeftRange, "ellipsis", TotalPages)
+		return Result
+	elseif FakeLeft and not FakeRight then
+		--local RightRange = CreateArray(TotalPages - ItemCount + 1, TotalPages)
+		Result[1] = 1
+		Result[2] = "ellipsis"
+
+		local Index = 3
+		for i = TotalPages - ItemCount + 1, TotalPages do
+			Result[Index] = i
+			Index += 1
+		end
+
+		return Result
+	elseif FakeLeft and FakeRight then
+		--local MiddleRange = CreateArray(LeftSibling, RightSibling)
+		Result[1] = 1
+		Result[2] = "ellipsis"
+		local Index = 3
+
+		for i = LeftSibling, RightSibling do
+			Result[Index] = i
+			Index += 1
+		end
+
+		Result[Index] = "ellipsis"
+		Result[Index + 1] = TotalPages
+
+		return Result
+		--return MergeTables(1, "ellipsis", MiddleRange, "ellipsis", TotalPages)
+	end
+
+	--return CreateArray(1, TotalPages)
+	for i = 1, TotalPages do
+		Result[i] = i
+	end
+	return Result
+end
+
+return Pagination
+
+end)() end,
+    [26] = function()local wax,script,require=ImportGlobals(26)local ImportGlobals return (function(...)if not isfolder("Cobalt") then
+	makefolder("Cobalt")
+end
+
+if not isfile("Cobalt/Settings.json") then
+	writefile("Cobalt/Settings.json", "{}")
+end
+
+local SaveManager = {
+	State = {},
+}
+
+local Success, Error = pcall(function()
+	SaveManager.State = wax.shared.HttpService:JSONDecode(readfile("Cobalt/Settings.json"))
+end)
+
+if not Success then
+	warn("Failed to load settings: " .. Error)
+end
+
+function SaveManager:SetState(Idx, Value)
+	SaveManager.State[Idx] = Value
+	pcall(writefile, "Cobalt/Settings.json", wax.shared.HttpService:JSONEncode(SaveManager.State))
+end
+
+function SaveManager:GetState(Idx, Default)
+	if SaveManager.State[Idx] ~= nil then
+		return SaveManager.State[Idx]
+	end
+
+	return Default
+end
+
+return SaveManager
+
+end)() end,
+    [28] = function()local wax,script,require=ImportGlobals(28)local ImportGlobals return (function(...)-- LuaEncode - Fast Table Serialization Library for Pure Luau/Lua 5.1+
+-- Copyright (c) 2022-2024 reggie@latte.to | MIT License
+-- https://github.com/regginator/LuaEncode
+
+--!optimize 2
+--!native
+
+local table, string, next, pcall, game, workspace, tostring, tonumber, getmetatable =
+	table, string, next, pcall, game, workspace, tostring, tonumber, getmetatable
+
+local GetFullPath = require(script.Parent.Parent.CodeGen).GetFullPath
+
+local string_format = string.format
+local string_char = string.char
+local string_gsub = string.gsub
+local string_match = string.match
+local string_rep = string.rep
+local string_pack = string.pack
+local string_byte = string.byte
+local string_gmatch = string.gmatch
+
+local table_concat = table.concat
+
+local Type = typeof or type
+
+local function LookupTable(array)
+	local Out = {}
+	for _, Value in next, array do
+		Out[Value] = true
+	end
+
+	return Out
+end
+
+-- Used to properly serialize NaN values
+local NumberCorrection = {
+	[string_pack(">n", 0 / 0)] = "0/0",
+	[string_pack(">n", -(0 / 0))] = "-(0/0)",
+	[string_pack(">n", tonumber("nan"))] = 'tonumber("nan")',
+	[string_pack(">n", tonumber("-nan"))] = 'tonumber("-nan")',
+}
+
+-- Used for checking direct getfield syntax; Lua keywords can't be used as keys without being a str
+-- FYI; `continue` is Luau only (in Lua it's actually a global function)
+local LuaKeywords = LookupTable({
+	"and",
+	"break",
+	"do",
+	"else",
+	"elseif",
+	"end",
+	"false",
+	"for",
+	"function",
+	"if",
+	"in",
+	"local",
+	"nil",
+	"not",
+	"or",
+	"repeat",
+	"return",
+	"then",
+	"true",
+	"until",
+	"while",
+	"continue",
+})
+
+-- Type names that can be used as manual key indexes (i.e. non-reference types)
+local KeyIndexTypes = LookupTable({
+	"number",
+	"string",
+	"boolean",
+	"Enum",
+	"EnumItem",
+	"Enums",
+})
+
+-- Returns the length of the array part (including holes) and if it's a pure array
+local function GetIsArrayAndLength(tbl)
+	local maxIndex = 0
+	local count = 0
+	for k, _ in pairs(tbl) do
+		if type(k) == "number" and k > 0 and math.floor(k) == k then
+			if k > maxIndex then
+				maxIndex = k
+			end
+			count = count + 1
+		else
+			return 0, false
+		end
+	end
+	return maxIndex, true
+end
+
+-- Simple function for directly checking the type on values, with their input, variable name,
+-- and desired type name(s) to check
+local function CheckType(inputData, dataName, ...)
+	local ValidTypes = { ... }
+	local ValidTypesLookup = LookupTable(ValidTypes)
+	local InputType = Type(inputData)
+
+	if not ValidTypesLookup[InputType] then
+		error(
+			string_format(
+				"LuaEncode: Incorrect type for `%s`: `%s` expected, got `%s`",
+				dataName,
+				table_concat(ValidTypes, ", "), -- For if multiple types are accepted
+				InputType
+			),
+			0
+		)
+	end
+
+	return inputData -- Return back input directly
+end
+
+-- This re-serializes a string back into Lua, for the interpreter AND humans to read. This fixes
+-- `string_format("%q")` only outputting in system encoding, instead of explicit Lua byte escapes
+local SerializeString
+do
+	-- These are control characters to be encoded in a certain way in Lua rather than just a byte escape
+	local SpecialCharacters = {
+		['"'] = '\\"',
+		["\\"] = "\\\\",
+		-- Special ASCII control char codes
+		["\a"] = "\\a",
+		["\b"] = "\\b",
+		["\t"] = "\\t",
+		["\n"] = "\\n",
+		["\v"] = "\\v",
+		["\f"] = "\\f",
+		["\r"] = "\\r",
+	}
+
+	-- We need to assign all extra normal byte escapes for runtime optimization
+	for Index = 0, 255 do
+		local Character = string_char(Index)
+
+		if not SpecialCharacters[Character] and (Index < 32 or Index > 126) then
+			SpecialCharacters[Character] = string_format("\\x%02X", Index)
+		end
+	end
+
+	function SerializeString(inputString)
+		-- FYI; We can't do "\0-\31" in Lua 5.1 (Only Luau/Lua 5.2+) due to an embedded zeros in pattern
+		-- issue. See: https://stackoverflow.com/a/22962409
+		return table_concat({ '"', string_gsub(inputString, '[%z\\"\1-\31\127-\255]', SpecialCharacters), '"' })
+	end
+end
+
+-- Escape warning messages and such for comment block inserts
+local function CommentBlock(inputString)
+	local Padding = ""
+	for Match in string_gmatch(inputString, "%](=*)%]") do
+		if #Match >= #Padding then
+			Padding = Match .. "="
+		end
+	end
+
+	return "--[" .. Padding .. "[" .. inputString .. "]" .. Padding .. "]"
+end
+
+--[[
+LuaEncode(inputTable: {[any]: any}, options: {[string]: any}): string
+
+    ---------- OPTIONS: ----------
+
+    Prettify <boolean:false> | Whether or not the output should use pretty printing
+
+    IndentCount <number:0> | The amount of "spaces" that should be indented per entry (*Note:
+    If `Prettify` is set to true and this is unspecified, it'll be set to `4` automatically*)
+
+    InsertCycles <boolean:false> | If there are cyclic references in your table, the output
+    will be wrapped in an anonymous function that manually sets paths to those references.
+    **NOTE: If a key in the index path to the cycle is a reference type (e.g. `table`,
+    `function`), the codegen can't externally set that path, and will be ignored.**
+
+    OutputWarnings <boolean:true> | If "warnings" should be placed to the output (as
+    comments); It's recommended to keep this enabled, however this can be disabled at ease
+
+    FunctionsReturnRaw <boolean:false> | If functions in said table return back a "raw"
+    value to place in the output as the key/value
+
+    UseInstancePaths <boolean:true> | If `Instance` reference objects should return their
+    Lua-accessable path for encoding. If the instance is parented under `nil` or isn't under
+    `game`/`workspace`, it'll always fall back to `Instance.new(ClassName)` as before
+
+    SerializeMathHuge <boolean:true> | If numbers calculated as "infinite" (or negative-inf)
+    numbers should be serialized with "math.huge". (uses the `math` import, as opposed to just
+    a direct data type) If false, "`1/0`" or "`-1/0`" will be serialized, which is supported
+    on all target versions
+
+]]
+
+local function LuaEncode(inputTable, options)
+	options = options or {}
+
+	-- Check main args
+	CheckType(inputTable, "inputTable", "table")
+	CheckType(options, "options", "table")
+
+	-- Check options
+	CheckType(options.Prettify, "options.Prettify", "boolean", "nil")
+	CheckType(options.PrettyPrinting, "options.PrettyPrinting", "boolean", "nil") -- Alias for `Options.Prettify`
+	CheckType(options.IndentCount, "options.IndentCount", "number", "nil")
+	CheckType(options.InsertCycles, "options.InsertCycles", "boolean", "nil")
+	CheckType(options.OutputWarnings, "options.OutputWarnings", "boolean", "nil")
+	CheckType(options.FunctionsReturnRaw, "options.FunctionsReturnRaw", "boolean", "nil")
+	CheckType(options.UseInstancePaths, "options.UseInstancePaths", "boolean", "nil")
+	CheckType(options.GetNilFunctionInsert, "options.GetNilFunctionInsert", "boolean", "nil")
+	CheckType(options.SerializeMathHuge, "options.SerializeMathHuge", "boolean", "nil")
+
+	CheckType(options._StackLevel, "options._StackLevel", "number", "nil")
+	CheckType(options._VisitedTables, "options._VisitedTables", "table", "nil")
+
+	local Prettify = (options.Prettify == nil and options.PrettyPrinting == nil and false)
+		or (options.Prettify ~= nil and options.Prettify)
+		or (options.PrettyPrinting and options.PrettyPrinting)
+	local IndentCount = options.IndentCount or (Prettify and 4) or 0
+	local InsertCycles = (options.InsertCycles == nil and false) or options.InsertCycles
+	local OutputWarnings = (options.OutputWarnings == nil and true) or options.OutputWarnings
+	local GetNilFunctionInsert = (options.GetNilFunctionInsert == nil and false) or options.GetNilFunctionInsert
+	local UseInstancePaths = (options.UseInstancePaths == nil and true) or options.UseInstancePaths
+	local SerializeMathHuge = (options.SerializeMathHuge == nil and true) or options.SerializeMathHuge
+
+	local RefMaps = options._RefMaps or { [inputTable] = "" } -- [Ref: table] = ".example["ref path"]'
+	local CycleMaps = options._CycleMaps or {} -- ['.example["ref path"]'] = '.another["ref path"]'
+
+	local StackLevel = options._StackLevel or 1
+	local EntryStackLevel = options._StackLevel or 1
+	local VisitedTables = options._VisitedTables or {} -- [Ref: table] = true
+	local DidInsertNilFunction = options._DidInsertNilFunction or false
+
+	-- Lazy serialization reference values
+	local PositiveInf = (SerializeMathHuge and "math.huge") or "1/0"
+	local NegativeInf = (SerializeMathHuge and "-math.huge") or "-1/0"
+	local NewEntryString = (Prettify and "\n") or ""
+	local CodegenNewline = (Prettify and "\n") or " "
+	local ValueSeperator = (Prettify and ", ") or ","
+	local BlankSeperator = (Prettify and " ") or ""
+	local EqualsSeperator = (Prettify and " = ") or "="
+
+	-- For pretty printing we need to keep track of the current stack level, then repeat IndentString by that count
+	local IndentStringBase = string_rep(" ", IndentCount)
+
+	-- Calculated in the walk loop, based on the current StackLevel
+	local IndentString = nil
+	local EndingIndentString = nil
+
+	--IndentString = (Prettify and string_rep(IndentString, StackLevel)) or IndentString
+	--local EndingIndentString = (#IndentString > 0 and string_sub(IndentString, 1, -IndentCount - 1)) or ""
+
+	-- For number key values, we want to explicitly serialize the index num ONLY when it needs to be
+	local KeyNumIndex = 1
+
+	-- Cases for encoding values, then end setup. Functions are all expected to return a (EncodedKey: string, EncloseInBrackets: boolean)
+	local TypeCases = {}
+	do
+		-- Basic func for getting the direct value of an encoded type without weird table.pack()[1] syntax
+		local function TypeCase(typeName, value)
+			-- Each of these funcs return a tuple, so it'd be annoying to do case-by-case
+			local EncodedValue = TypeCases[typeName](value, false) -- False to label as NOT `isKey`
+			return EncodedValue
+		end
+
+		-- For "tuple" args specifically, so there isn't a bunch of re-used code
+		local function Args(...)
+			local EncodedValues = {}
+
+			for _, Arg in next, { ... } do
+				EncodedValues[#EncodedValues + 1] = TypeCase(Type(Arg), Arg)
+			end
+
+			return table_concat(EncodedValues, ValueSeperator)
+		end
+
+		-- For certain Roblox data types, we use a custom serialization method for filling out params etc
+		local function Params(newData, params)
+			return "(function(v, p) for pn, pv in next, p do v[pn] = pv end return v end)("
+				.. table_concat({ newData, TypeCase("table", params) }, ValueSeperator)
+				.. ")"
+		end
+
+		TypeCases["number"] = function(value, isKey)
+			-- If the number isn't the current real index of the table, we DO want to
+			-- explicitly define it in the serialization no matter what for accuracy
+			if isKey and value == KeyNumIndex then
+				-- ^^ What's EXPECTED unless otherwise explicitly defined, if so, return no encoded num
+				KeyNumIndex = KeyNumIndex + 1
+				return nil, true
+			end
+
+			-- Lua's internal `tostring` handling will denote positive/negativie-infinite number TValues as "inf", which
+			-- makes certain numbers not encode properly. We also just want to make the output precise
+			if value == 1 / 0 then
+				return PositiveInf
+			elseif value == -1 / 0 then
+				return NegativeInf
+			elseif value == math.pi then
+				return "math.pi"
+			end
+
+			-- Provided by felixdm
+			local NumberPacked = string_pack(">n", value) -- gameguy is a boss
+			local CorrectedNumber = NumberCorrection[NumberPacked]
+			if CorrectedNumber then
+				return CorrectedNumber
+			end
+
+			if value ~= value then
+				return string_format(
+					'(string.unpack(">n", "\\%*\\%*\\%*\\%*\\%*\\%*\\%*\\%*"))',
+					string_byte(NumberPacked, 1, 8)
+				)
+			end
+
+			-- Return fixed-formatted precision num
+			return string_format("%.14g", value)
+		end
+
+		TypeCases["string"] = function(value, isKey)
+			if isKey and not LuaKeywords[value] and string_match(value, "^[A-Za-z_][A-Za-z0-9_]*$") then
+				-- ^^ Then it's a syntaxically-correct variable, doesn't need explicit string def
+				return value, true
+			end
+
+			return SerializeString(value)
+		end
+
+		-- This is NOT used for normal table depth, only tables-as-keys and Roblox data types that use tables as
+		-- arguments for constructor functions
+		TypeCases["table"] = function(value, isKey)
+			-- Primarily for tables-as-keys
+			if VisitedTables[value] and OutputWarnings then
+				return "{--[[LuaEncode: Duplicate reference]]}"
+			end
+
+			local NewOptions = setmetatable({}, { __index = options })
+			do
+				NewOptions.Prettify = (isKey and false) or Prettify
+				NewOptions.IndentCount = (isKey and ((not Prettify and IndentCount) or 1)) or IndentCount
+				NewOptions._StackLevel = (isKey and 1) or StackLevel + 1
+				NewOptions._VisitedTables = VisitedTables
+				NewOptions._DidInsertNilFunction = DidInsertNilFunction
+				NewOptions._RefMaps = RefMaps
+				NewOptions._CycleMaps = CycleMaps
+				NewOptions.InsertCycles = InsertCycles
+			end
+
+			local Result, InsertedNilFunction = LuaEncode(value, NewOptions)
+
+			if InsertedNilFunction then
+				DidInsertNilFunction = true
+			end
+
+			return Result
+		end
+
+		TypeCases["boolean"] = function(value)
+			return value and "true" or "false"
+		end
+
+		TypeCases["nil"] = function(value)
+			return "nil"
+		end
+
+		TypeCases["thread"] = function(value)
+			return "coroutine.create(function() end)"
+		end
+
+		TypeCases["function"] = function(value)
+			-- We can't serialize functions so we just return a comment block with function information
+			local FunctionName, ArgumentCount, VarArg, Line = debug.info(value, "nal")
+
+			local Arguments = {}
+			for Index = 1, ArgumentCount do
+				Arguments[Index] = string_format("arg%d", Index)
+			end
+
+			return string_format(
+				[[function(%s)%s%s%s%s%sreturn%send]],
+				`{table_concat(Arguments, ", ")}{VarArg and `{Arguments[1] and ", " or ""}...` or ""}`,
+
+				`{CodegenNewline}{IndentString}{IndentStringBase}-- Name: {FunctionName == "" and "Anonymous Function" or FunctionName} | Line: {Line}`,
+
+				`{CodegenNewline}{IndentString}{IndentStringBase}-- {islclosure(value) and `Upvalues: {#debug.getupvalues(
+					value
+				)}` or "Upvalues: N/A (C Closure)"}`,
+
+				`{CodegenNewline}{IndentString}{IndentStringBase}-- `
+					.. (
+						getfunctionhash
+							and `{islclosure(value) and `Function Hash: {getfunctionhash(value)}` or "Function Hash: N/A (C Closure)"}`
+						or "Function Hash: N/A (getfunctionhash == nil)"
+					),
+
+				OutputWarnings
+						and `{CodegenNewline}{IndentString}{IndentStringBase}-- LuaEncode: Unable to serialize function`
+					or "",
+
+				`{CodegenNewline}{IndentString}{IndentStringBase}`,
+				`{CodegenNewline}{IndentString}`
+			)
+		end
+
+		---------- ROBLOX CUSTOM DATA TYPES BELOW ----------
+
+		TypeCases["Axes"] = function(value)
+			local EncodedArgs = {}
+			local EnumValues = {
+				["Enum.Axis.X"] = value.X,
+				["Enum.Axis.Y"] = value.Y,
+				["Enum.Axis.Z"] = value.Z,
+			}
+
+			for EnumValue, IsEnabled in next, EnumValues do
+				if IsEnabled then
+					EncodedArgs[#EncodedArgs + 1] = EnumValue
+				end
+			end
+
+			return "Axes.new(" .. table_concat(EncodedArgs, ValueSeperator) .. ")"
+		end
+
+		TypeCases["BrickColor"] = function(value)
+			-- BrickColor.Number (Its enum ID) will be slightly more efficient in all cases in deser,
+			-- so we'll use it if Options.Prettify is false
+			return "BrickColor.new(" .. (Prettify and TypeCase("string", value.Name)) or value.Number .. ")"
+		end
+
+		TypeCases["CFrame"] = function(value)
+			if value == CFrame.identity then
+				return "CFrame.identity"
+			end
+
+			return "CFrame.new(" .. Args(value:components()) .. ")"
+		end
+
+		TypeCases["CatalogSearchParams"] = function(value)
+			return Params("CatalogSearchParams.new()", {
+				SearchKeyword = value.SearchKeyword,
+				MinPrice = value.MinPrice,
+				MaxPrice = value.MaxPrice,
+				SortType = value.SortType, -- EnumItem
+				CategoryFilter = value.CategoryFilter, -- EnumItem
+				BundleTypes = value.BundleTypes, -- table
+				AssetTypes = value.AssetTypes, -- table
+			})
+		end
+
+		TypeCases["Color3"] = function(value)
+			-- Using floats for RGB values, most accurate for direct serialization
+			return "Color3.new(" .. Args(value.R, value.G, value.B) .. ")"
+		end
+
+		TypeCases["ColorSequence"] = function(value)
+			return "ColorSequence.new(" .. TypeCase("table", value.Keypoints) .. ")"
+		end
+
+		TypeCases["ColorSequenceKeypoint"] = function(value)
+			return "ColorSequenceKeypoint.new(" .. Args(value.Time, value.Value) .. ")"
+		end
+
+		-- We're using fromUnixTimestamp to serialize the object
+		TypeCases["DateTime"] = function(value)
+			-- Always an int, we don't need to do anything special
+			return "DateTime.fromUnixTimestamp(" .. value.UnixTimestamp .. ")"
+		end
+
+		-- Properties seem to throw an error on index if the scope isn't a Studio plugin, so we're
+		-- directly getting values! (so fun!!!!)
+		TypeCases["DockWidgetPluginGuiInfo"] = function(value)
+			-- e.g.: "InitialDockState:Right InitialEnabled:0 InitialEnabledShouldOverrideRestore:0 FloatingXSize:0 FloatingYSize:0 MinWidth:0 MinHeight:0"
+			local ValueString = tostring(value)
+
+			return "DockWidgetPluginGuiInfo.new("
+				.. Args(
+					-- InitialDockState (Enum.InitialDockState)
+					Enum.InitialDockState[string_match(ValueString, "InitialDockState:(%w+)")], -- Enum.InitialDockState.Right
+					-- InitialEnabled and InitialEnabledShouldOverrideRestore (boolean as number; `0` or `1`)
+					string_match(ValueString, "InitialEnabled:(%w+)") == "1", -- false
+					string_match(ValueString, "InitialEnabledShouldOverrideRestore:(%w+)") == "1", -- false
+					-- FloatingXSize/FloatingYSize (numbers)
+					tonumber(string_match(ValueString, "FloatingXSize:(%w+)")), -- 0
+					tonumber(string_match(ValueString, "FloatingYSize:(%w+)")), -- 0
+					-- MinWidth/MinHeight (numbers)
+					tonumber(string_match(ValueString, "MinWidth:(%w+)")), -- 0
+					tonumber(string_match(ValueString, "MinHeight:(%w+)")) -- 0
+				)
+				.. ")"
+		end
+
+		-- e.g. `Enum.UserInputType`
+		TypeCases["Enum"] = function(value)
+			return "Enum." .. tostring(value)
+		end
+
+		-- e.g. `Enum.UserInputType.Gyro`
+		TypeCases["EnumItem"] = function(value)
+			return tostring(value) -- Returns the full enum index for now (e.g. "Enum.UserInputType.Gyro")
+		end
+
+		-- i.e. the `Enum` global return
+		TypeCases["Enums"] = function(value)
+			return "Enum"
+		end
+
+		TypeCases["Faces"] = function(value)
+			local EncodedArgs = {}
+			local EnumValues = {
+				["Enum.NormalId.Top"] = value.Top, -- These return bools
+				["Enum.NormalId.Bottom"] = value.Bottom,
+				["Enum.NormalId.Left"] = value.Left,
+				["Enum.NormalId.Right"] = value.Right,
+				["Enum.NormalId.Back"] = value.Back,
+				["Enum.NormalId.Front"] = value.Front,
+			}
+
+			for EnumValue, IsEnabled in next, EnumValues do
+				if IsEnabled then
+					EncodedArgs[#EncodedArgs + 1] = EnumValue
+				end
+			end
+
+			return "Faces.new(" .. table_concat(EncodedArgs, ValueSeperator) .. ")"
+		end
+
+		TypeCases["FloatCurveKey"] = function(value)
+			return "FloatCurveKey.new(" .. Args(value.Time, value.Value, value.Interpolation) .. ")"
+		end
+
+		TypeCases["Font"] = function(value)
+			return "Font.new(" .. Args(value.Family, value.Weight, value.Style) .. ")"
+		end
+
+		-- Instance refs can be evaluated to their paths (optional), but if parented to
+		-- nil or some DataModel not under `game`, it'll just return nil
+		TypeCases["Instance"] = function(value)
+			if UseInstancePaths then
+				local InstancePath, NilFunctionInserted = GetFullPath(value, false, nil, GetNilFunctionInsert)
+
+				if NilFunctionInserted then
+					DidInsertNilFunction = true
+				end
+
+				if InstancePath then
+					return InstancePath
+				end
+
+				-- ^^ Now, if the path isn't accessable, falls back to the return below anyway
+			end
+
+			return "nil"
+				.. BlankSeperator
+				.. CommentBlock("Instance.new(" .. TypeCase("string", value.ClassName) .. ")")
+		end
+
+		TypeCases["NumberRange"] = function(value)
+			return "NumberRange.new(" .. Args(value.Min, value.Max) .. ")"
+		end
+
+		TypeCases["NumberSequence"] = function(value)
+			return "NumberSequence.new(" .. TypeCase("table", value.Keypoints) .. ")"
+		end
+
+		TypeCases["NumberSequenceKeypoint"] = function(value)
+			return "NumberSequenceKeypoint.new(" .. Args(value.Time, value.Value, value.Envelope) .. ")"
+		end
+
+		TypeCases["OverlapParams"] = function(value)
+			return Params("OverlapParams.new()", {
+				FilterDescendantsInstances = value.FilterDescendantsInstances,
+				FilterType = value.FilterType,
+				MaxParts = value.MaxParts,
+				CollisionGroup = value.CollisionGroup,
+				RespectCanCollide = value.RespectCanCollide,
+			})
+		end
+
+		TypeCases["PathWaypoint"] = function(value)
+			return "PathWaypoint.new(" .. Args(value.Position, value.Action, value.Label) .. ")"
+		end
+
+		TypeCases["PhysicalProperties"] = function(value)
+			return "PhysicalProperties.new("
+				.. Args(value.Density, value.Friction, value.Elasticity, value.FrictionWeight, value.ElasticityWeight)
+				.. ")"
+		end
+
+		TypeCases["Random"] = function()
+			return "Random.new()"
+		end
+
+		TypeCases["Ray"] = function(value)
+			return "Ray.new(" .. Args(value.Origin, value.Direction) .. ")"
+		end
+
+		TypeCases["RaycastParams"] = function(value)
+			return Params("RaycastParams.new()", {
+				FilterDescendantsInstances = value.FilterDescendantsInstances,
+				FilterType = value.FilterType,
+				IgnoreWater = value.IgnoreWater,
+				CollisionGroup = value.CollisionGroup,
+				RespectCanCollide = value.RespectCanCollide,
+			})
+		end
+
+		TypeCases["Rect"] = function(value)
+			return "Rect.new(" .. Args(value.Min, value.Max) .. ")"
+		end
+
+		-- Roblox doesn't provide read properties for min/max on `Region3`, but they do on Region3int16.. Anyway,
+		-- we CAN calculate the min/max of a Region3 from just .CFrame and .Size.. Thanks to wally for linking me
+		-- the thread for this method lol
+		TypeCases["Region3"] = function(value)
+			local ValueCFrame = value.CFrame
+			local ValueSize = value.Size
+
+			return "Region3.new("
+				.. Args(
+					ValueCFrame * CFrame.new(-ValueSize / 2), -- Minimum
+					ValueCFrame * CFrame.new(ValueSize / 2) -- Maximum
+				)
+				.. ")"
+		end
+
+		TypeCases["Region3int16"] = function(value)
+			return "Region3int16.new(" .. Args(value.Min, value.Max) .. ")"
+		end
+
+		TypeCases["TweenInfo"] = function(value)
+			return "TweenInfo.new("
+				.. Args(
+					value.Time,
+					value.EasingStyle,
+					value.EasingDirection,
+					value.RepeatCount,
+					value.Reverses,
+					value.DelayTime
+				)
+				.. ")"
+		end
+
+		-- CURRENTLY UNDOCUMENTED*
+		TypeCases["RotationCurveKey"] = function(value)
+			return "RotationCurveKey.new(" .. Args(value.Time, value.Value, value.Interpolation) .. ")"
+		end
+
+		TypeCases["UDim"] = function(value)
+			return "UDim.new(" .. Args(value.Scale, value.Offset) .. ")"
+		end
+
+		TypeCases["UDim2"] = function(value)
+			if value.X.Offset == 0 and value.Y.Offset == 0 then
+				return "UDim2.fromScale(" .. Args(value.X.Scale, value.Y.Scale) .. ")"
+			end
+
+			if value.X.Scale == 0 and value.Y.Scale == 0 then
+				return "UDim2.fromOffset(" .. Args(value.X.Offset, value.Y.Offset) .. ")"
+			end
+
+			return "UDim2.new("
+				.. Args(
+					-- Not directly using X and Y UDims for better output (i.e. would be
+					-- UDim2.new(UDim.new(1, 0), UDim.new(1, 0)) if I did)
+					value.X.Scale,
+					value.X.Offset,
+					value.Y.Scale,
+					value.Y.Offset
+				)
+				.. ")"
+		end
+
+		local Vector2Replacements = {
+			[Vector2.zero] = "Vector2.zero",
+			[Vector2.one] = "Vector2.one",
+			[Vector2.xAxis] = "Vector2.xAxis",
+			[Vector2.yAxis] = "Vector2.yAxis",
+		}
+
+		TypeCases["Vector2"] = function(value)
+			if Vector2Replacements[value] then
+				return Vector2Replacements[value]
+			end
+
+			return "Vector2.new(" .. Args(value.X, value.Y) .. ")"
+		end
+
+		TypeCases["Vector2int16"] = function(value)
+			return "Vector2int16.new(" .. Args(value.X, value.Y) .. ")"
+		end
+
+		local Vector3Replacements = {
+			[Vector3.zero] = "Vector3.zero",
+			[Vector3.one] = "Vector3.one",
+			[Vector3.xAxis] = "Vector3.xAxis",
+			[Vector3.yAxis] = "Vector3.yAxis",
+			[Vector3.zAxis] = "Vector3.zAxis",
+		}
+
+		TypeCases["Vector3"] = function(value)
+			if Vector3Replacements[value] then
+				return Vector3Replacements[value]
+			end
+
+			return "Vector3.new(" .. Args(value.X, value.Y, value.Z) .. ")"
+		end
+
+		TypeCases["Vector3int16"] = function(value)
+			return "Vector3int16.new(" .. Args(value.X, value.Y, value.Z) .. ")"
+		end
+
+		TypeCases["buffer"] = function(value)
+			if wax.shared.SaveManager:GetState("PreferBufferFromString", false) then
+				return `buffer.fromstring({SerializeString(buffer.tostring(value))})`
+			end
+
+			local Bytes = {}
+			for i = 1, buffer.len(value) do
+				table.insert(Bytes, buffer.readu8(value, i - 1))
+			end
+
+			return table_concat({
+				"(function(bytes) ",
+				CommentBlock("Type: buffer"),
+				NewEntryString,
+				IndentString,
+				IndentStringBase,
+				"local b = buffer.create(#bytes)",
+				NewEntryString,
+				IndentString,
+				IndentStringBase,
+				"for i = 1, #bytes do",
+				NewEntryString,
+				IndentString,
+				IndentStringBase,
+				IndentStringBase,
+				"buffer.writeu8(b, i - 1, bytes[i])",
+				NewEntryString,
+				IndentString,
+				IndentStringBase,
+				"end",
+				NewEntryString,
+				IndentStringBase,
+				IndentString,
+				"return b",
+				NewEntryString,
+				IndentString,
+				"end)({ ",
+				table_concat(Bytes, ", "),
+				" })",
+			})
+		end
+
+		-- With userdata, just encode directly
+		TypeCases["userdata"] = function(value)
+			if getmetatable(value) ~= nil then -- Has mt
+				return "newproxy(true)"
+			else
+				return "newproxy()" -- newproxy() defaults to false (no mt)
+			end
+		end
+	end
+
+	-- Setup for final output, which will be concat together
+	local Output = {}
+
+	local TablePointer = inputTable
+	local NextKey = nil -- Used with TableStack so the TablePointer loop knows where to continue from upon stack pop
+	local IsNewTable = true -- Used with table stack push/pop to identify when an opening curly brace should be added
+
+	-- Stack array for table depth
+	local TableStack = {} -- [Depth: number] = {TablePointer: table, NextKey: any, KeyNumIndex: number}
+
+	while TablePointer do
+		-- Update StackLevel for formatting
+		StackLevel = EntryStackLevel + #TableStack
+		IndentString = (Prettify and string_rep(IndentStringBase, StackLevel)) or ""
+		if Prettify and StackLevel > 1 then
+			EndingIndentString = string_rep(IndentStringBase, StackLevel - 1)
+		else
+			EndingIndentString = ""
+		end
+
+		-- Only append an opening brace to the table if this isn't just a continution up the stack
+		if IsNewTable then
+			Output[#Output + 1] = "{"
+		elseif next(TablePointer, NextKey) == nil then -- Formatting for the next entry still needs to be added like any other value
+			Output[#Output + 1] = NewEntryString .. EndingIndentString
+		else
+			Output[#Output + 1] = ","
+		end
+
+		VisitedTables[TablePointer] = true
+
+		local ArrayLength, IsArray = GetIsArrayAndLength(TablePointer)
+		if IsArray and ArrayLength > 0 then
+			for i = 1, ArrayLength do
+				if Prettify then
+					Output[#Output + 1] = NewEntryString .. IndentString
+				end
+				local Value = TablePointer[i]
+				local ValueType = Type(Value)
+
+				if ValueType == "table" then
+					local RootIndexPath
+					if InsertCycles and RefMaps[TablePointer] then
+						local EncodedKeyAsValue = TypeCases["number"](i, false)
+						RootIndexPath = table_concat({ "[", EncodedKeyAsValue, "]" })
+					end
+
+					if VisitedTables[Value] then
+						local IndexPath
+						if InsertCycles and RefMaps[TablePointer] and RootIndexPath then
+							IndexPath = RefMaps[TablePointer] .. RootIndexPath
+						end
+
+						local EncodedValueOrError =
+							string_format("{%s}", (OutputWarnings and "--[[LuaEncode: Duplicate reference]]") or "")
+
+						if IndexPath and RefMaps[Value] then
+							CycleMaps[IndexPath] = RefMaps[Value]
+						end
+
+						Output[#Output + 1] = EncodedValueOrError
+
+						continue
+					end
+
+					if InsertCycles and RefMaps[TablePointer] and RootIndexPath then
+						RefMaps[Value] = RefMaps[TablePointer] .. RootIndexPath
+					end
+
+					-- Create a new options table for the recursive call
+					local Encoded, InsertedNilFunction = LuaEncode(
+						Value,
+						setmetatable({
+							Prettify = Prettify,
+							IndentCount = IndentCount,
+							_StackLevel = StackLevel + 1,
+							_VisitedTables = VisitedTables,
+							_DidInsertNilFunction = DidInsertNilFunction,
+							_RefMaps = RefMaps,
+							_CycleMaps = CycleMaps,
+							InsertCycles = InsertCycles,
+						}, { __index = options })
+					)
+
+					if InsertedNilFunction then
+						DidInsertNilFunction = true
+					end
+
+					Output[#Output + 1] = Encoded
+				elseif TypeCases[ValueType] then
+					local ValueEncodedSuccess, EncodedValueOrError = pcall(TypeCases[ValueType], Value, false)
+					if ValueEncodedSuccess and EncodedValueOrError then
+						Output[#Output + 1] = EncodedValueOrError
+					else
+						Output[#Output + 1] = `nil{OutputWarnings and " " .. CommentBlock(
+							string.format(
+								"LuaEncode: Failed to encode value of data type %s: %s",
+								ValueType,
+								SerializeString(EncodedValueOrError)
+							)
+						) or ""}`
+					end
+				else
+					Output[#Output + 1] = `nil{OutputWarnings and " " .. CommentBlock(
+						string.format("LuaEncode: Serialization of data type %s is not supported", ValueType)
+					) or ""}`
+				end
+
+				if i < ArrayLength then
+					Output[#Output + 1] = ","
+				end
+			end
+			Output[#Output + 1] = NewEntryString .. EndingIndentString .. "}"
+			if #TableStack > 0 then
+				local TableUp = TableStack[#TableStack]
+				TableStack[#TableStack] = nil
+				TablePointer, NextKey, KeyNumIndex = TableUp[1], TableUp[2], TableUp[3] -- Reverted to TablePointer, NextKey, KeyNumIndex (from outer scope)
+				IsNewTable = false
+			else
+				break
+			end
+
+			continue
+		end
+
+		-- Just because of control flow restrictions with Lua compatibility
+		local SkipStackPop = false
+
+		for Key, Value in next, TablePointer, NextKey do
+			local KeyType = Type(Key)
+			local ValueType = Type(Value)
+
+			local ValueIsTable = ValueType == "table"
+
+			if TypeCases[KeyType] and TypeCases[ValueType] then
+				if Prettify then
+					Output[#Output + 1] = NewEntryString .. IndentString
+				end
+
+				local ValueWasEncoded = false -- Keeping track of this for adding a "," to the output if needed
+
+				-- Evaluate output for key
+				local KeyEncodedSuccess, EncodedKeyOrError, DontEncloseKeyInBrackets =
+					pcall(TypeCases[KeyType], Key, true) -- The `true` represents if it's a key or not, here it is
+
+				-- Evaluate output for value, ignoring 2nd arg (`DontEncloseInBrackets`) because this isn't the key
+				local ValueEncodedSuccess, EncodedValueOrError
+				if not ValueIsTable then
+					ValueEncodedSuccess, EncodedValueOrError = pcall(TypeCases[ValueType], Value, false)
+				end
+
+				-- Ignoring `if EncodedKeyOrError` because the key doesn't actually need to ALWAYS
+				-- be explicitly encoded, like if it's a number of the current key index!
+				if KeyEncodedSuccess and (ValueIsTable or (ValueEncodedSuccess and EncodedValueOrError)) then
+					-- Append explicit key if necessary
+					if EncodedKeyOrError then
+						if DontEncloseKeyInBrackets then
+							Output[#Output + 1] = EncodedKeyOrError
+						else
+							Output[#Output + 1] = table_concat({ "[", EncodedKeyOrError, "]" })
+						end
+
+						Output[#Output + 1] = EqualsSeperator
+					end
+
+					-- Of course, recursive tables are handled differently and use the stack system
+					if ValueIsTable then
+						local IndexPath
+						if InsertCycles and KeyIndexTypes[KeyType] and RefMaps[TablePointer] then
+							if
+								KeyType == "string"
+								and not LuaKeywords[Key]
+								and string_match(Key, "^[A-Za-z_][A-Za-z0-9_]*$")
+							then
+								IndexPath = "." .. Key
+							else
+								local EncodedKeyAsValue = TypeCases[KeyType](Key)
+								IndexPath = table_concat({ "[", EncodedKeyAsValue, "]" })
+							end
+						end
+
+						if not VisitedTables[Value] then
+							if IndexPath then
+								RefMaps[Value] = RefMaps[TablePointer] .. IndexPath
+							end
+
+							TableStack[#TableStack + 1] = { TablePointer, Key, KeyNumIndex }
+
+							TablePointer = Value
+							NextKey = nil
+							KeyNumIndex = 1
+
+							IsNewTable = true
+							SkipStackPop = true
+							break
+						else
+							EncodedValueOrError =
+								string_format("{%s}", (OutputWarnings and "--[[LuaEncode: Duplicate reference]]") or "")
+
+							if IndexPath then
+								CycleMaps[IndexPath] = RefMaps[Value]
+							end
+						end
+					end
+
+					-- Append value like normal
+					Output[#Output + 1] = EncodedValueOrError
+
+					ValueWasEncoded = true
+				elseif OutputWarnings then -- Then `Encoded(Key/Value)OrError` is the error msg
+					-- ^^ Then either the key or value wasn't properly checked or encoded, and there
+					-- was an error we need to log!
+					local ErrorMessage = string_format(
+						"LuaEncode: Failed to encode %s of data type %s: %s",
+						(not KeyEncodedSuccess and "key") or (not ValueEncodedSuccess and "value") or "key/value",
+						ValueType,
+						(not KeyEncodedSuccess and SerializeString(EncodedKeyOrError))
+							or (not ValueEncodedSuccess and SerializeString(EncodedValueOrError))
+							or "(Failed to get error message)"
+					)
+
+					Output[#Output + 1] = CommentBlock(ErrorMessage)
+				end
+
+				if next(TablePointer, Key) == nil then
+					-- If there isn't another value after the current index, add ending formatting
+					Output[#Output + 1] = NewEntryString .. EndingIndentString
+				elseif ValueWasEncoded then
+					Output[#Output + 1] = ","
+				end
+			end
+		end
+
+		-- Vanilla Lua control flow is fun
+		if not SkipStackPop then
+			Output[#Output + 1] = "}"
+
+			if #TableStack > 0 then
+				local TableUp = TableStack[#TableStack]
+				TableStack[#TableStack] = nil -- Pop off the table stack
+
+				TablePointer, NextKey, KeyNumIndex = TableUp[1], TableUp[2], TableUp[3]
+				IsNewTable = false
+			else
+				break
+			end
+		end
+	end
+
+	if InsertCycles and StackLevel == 1 then
+		local CycleMapsOut = {}
+		for CycleIndex, CycleMap in next, CycleMaps do
+			CycleMapsOut[#CycleMapsOut + 1] = IndentString
+				.. "t"
+				.. CycleIndex
+				.. EqualsSeperator
+				.. "t"
+				.. CycleMap
+				.. CodegenNewline
+		end
+
+		if #CycleMapsOut > 0 then
+			return table_concat({
+				"(function(t)",
+				NewEntryString,
+				table_concat(CycleMapsOut),
+				NewEntryString,
+				IndentString,
+				"return t",
+				CodegenNewline,
+				"end)(",
+				table_concat(Output),
+				")",
+			}),
+				DidInsertNilFunction
+		end
+	end
+
+	return table_concat(Output), DidInsertNilFunction
+end
+
+return LuaEncode
+
+end)() end,
+    [30] = function()local wax,script,require=ImportGlobals(30)local ImportGlobals return (function(...)local Animations = {
+	TweenInfo = TweenInfo.new(0.25, Enum.EasingStyle.Exponential),
+	Exclusions = {},
+	Expectations = { In = {}, Out = {} },
+}
+
+local function GetTransparencyProperty(object)
+	if table.find(Animations.Exclusions, object) then
+		return nil
+	end
+
+	if object:IsA("TextButton") or object:IsA("TextLabel") or object:IsA("TextBox") then
+		return { "TextTransparency" }
+	elseif object:IsA("CanvasGroup") then
+		return { "GroupTransparency" }
+	elseif object:IsA("Frame") then
+		return { "BackgroundTransparency" }
+	elseif object:IsA("ScrollingFrame") then
+		return { "ScrollBarImageTransparency" }
+	elseif object:IsA("ImageLabel") or object:IsA("ImageButton") then
+		return { "ImageTransparency", "BackgroundTransparency" }
+	elseif object:IsA("UIStroke") then
+		return { "Transparency" }
+	end
+
+	return nil
+end
+
+local function BuildPropertyTable(properties, type, object)
+	if Animations.Expectations[type][object] then
+		return Animations.Expectations[type][object]
+	end
+
+	local propTable = {}
+	for _, prop in properties do
+		propTable[prop] = type == "In" and 0 or 1
+	end
+	return propTable
+end
+
+function Animations.FadeOut(object, time)
+	local tweenInfo = time and TweenInfo.new(time, Enum.EasingStyle.Exponential) or Animations.TweenInfo
+	local properties = GetTransparencyProperty(object)
+
+	if not properties then
+		return
+	end
+
+	wax.shared.TweenService:Create(object, tweenInfo, BuildPropertyTable(properties, "Out", object)):Play()
+
+	if object:IsA("CanvasGroup") then
+		return
+	end
+
+	for _, child in object:GetDescendants() do
+		local prop = GetTransparencyProperty(child)
+		if not prop then
+			continue
+		end
+
+		wax.shared.TweenService:Create(child, tweenInfo, BuildPropertyTable(prop, "Out", child)):Play()
+	end
+end
+
+function Animations.FadeIn(object, time)
+	local tweenInfo = time and TweenInfo.new(time, Enum.EasingStyle.Exponential) or Animations.TweenInfo
+	local property = GetTransparencyProperty(object)
+
+	if property then
+		wax.shared.TweenService:Create(object, tweenInfo, BuildPropertyTable(property, "In", object)):Play()
+	end
+
+	if object:IsA("CanvasGroup") then
+		return
+	end
+
+	for _, child in object:GetDescendants() do
+		local prop = GetTransparencyProperty(child)
+		if not prop then
+			continue
+		end
+
+		wax.shared.TweenService:Create(child, tweenInfo, BuildPropertyTable(prop, "In", child)):Play()
+	end
+end
+
+function Animations.AddFadeExclusion(object)
+	local prop = GetTransparencyProperty(object)
+	if not prop then
+		return
+	end
+
+	table.insert(Animations.Exclusions, object)
+end
+
+function Animations.AddFadeExclusions(objects)
+	for _, object in objects do
+		local prop = GetTransparencyProperty(object)
+		if not prop then
+			continue
+		end
+
+		table.insert(Animations.Exclusions, object)
+	end
+end
+
+function Animations.SetFadeExpectation(type: "In" | "Out", object: GuiBase2d, properties: { [string]: any })
+	if not Animations.Expectations[type] then
+		return
+	end
+
+	Animations.Expectations[type][object] = properties
+end
+
+return Animations
+
+end)() end,
+    [31] = function()local wax,script,require=ImportGlobals(31)local ImportGlobals return (function(...)local Drag = {
+	Dragging = false,
+	Frame = nil,
+	FramePosition = nil,
+	FrameSize = nil, -- Added to store initial frame size
+	StartPosition = nil,
+	ChangedConnection = nil,
+	Callback = nil,
+}
+
+local Helper = require(script.Parent.Helper)
+
+local function DefaultCallback(_, Input: InputObject)
+	local Delta = Input.Position - Drag.StartPosition
+	local FramePosition: UDim2 = Drag.FramePosition
+
+	Drag.Frame.Position = UDim2.new(
+		FramePosition.X.Scale,
+		FramePosition.X.Offset + Delta.X,
+		FramePosition.Y.Scale,
+		FramePosition.Y.Offset + Delta.Y
+	)
+end
+
+function Drag.Setup(Frame: GuiObject, DragFrame: GuiObject, Callback: (Info: {}, Input: InputObject) -> () | nil)
+	Callback = Callback or DefaultCallback
+
+	DragFrame.InputBegan:Connect(function(Input: InputObject)
+		if not Helper.IsClickInput(Input) then
+			return
+		end
+
+		Drag.Dragging = true
+		Drag.Frame = Frame
+		Drag.FramePosition = Frame.Position
+		Drag.StartPosition = Input.Position
+		Drag.FrameSize = Frame.Size
+		Drag.Callback = Callback
+
+		Drag.ChangedConnection = Input.Changed:Connect(function()
+			if Input.UserInputState ~= Enum.UserInputState.End then
+				return
+			end
+
+			Drag.Dragging = false
+			Drag.Frame = nil
+			Drag.Callback = nil
+
+			if Drag.ChangedConnection and Drag.ChangedConnection.Connected then
+				Drag.ChangedConnection:Disconnect()
+				Drag.ChangedConnection = nil
+			end
+		end)
+	end)
+end
+
+wax.shared.Connect(wax.shared.UserInputService.InputChanged:Connect(function(Input: InputObject)
+	if Drag.Dragging and Drag.Callback and Helper.IsMoveInput(Input) then
+		Drag.Callback(Drag, Input)
+	end
+end))
+
+return Drag
+
+end)() end,
+    [32] = function()local wax,script,require=ImportGlobals(32)local ImportGlobals return (function(...)local UIHelper = {}
+
+local CodeGen = require(script.Parent.Parent.CodeGen)
+
+function UIHelper.IsMouseOverFrame(Frame: GuiObject, Position: Vector3): boolean
+	local AbsPos, AbsSize = Frame.AbsolutePosition, Frame.AbsoluteSize
+	return Position.X >= AbsPos.X
+		and Position.X <= AbsPos.X + AbsSize.X
+		and Position.Y >= AbsPos.Y
+		and Position.Y <= AbsPos.Y + AbsSize.Y
+end
+
+function UIHelper.IsClickInput(Input: InputObject): boolean
+	return Input.UserInputState == Enum.UserInputState.Begin
+		and (Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch)
+end
+
+function UIHelper.IsMoveInput(Input: InputObject): boolean
+	return Input.UserInputState == Enum.UserInputState.Change
+		and (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch)
+end
+
+function UIHelper.QuickSerializeNumber(Number: number)
+	if Number % 1 ~= 0 then
+		return string.format("%.3f", Number)
+	elseif Number == 1 / 0 then
+		return "math.huge"
+	elseif Number == -1 / 0 then
+		return "-math.huge"
+	end
+
+	return Number
+end
+
+function UIHelper.QuickSerializeArgument(Argument)
+	if typeof(Argument) == "string" then
+		return string.format('"%s"', Argument)
+	elseif typeof(Argument) == "number" then
+		return UIHelper.QuickSerializeNumber(Argument)
+	elseif typeof(Argument) == "Vector2" then
+		return string.format(
+			"%s, %s",
+			UIHelper.QuickSerializeNumber(Argument.X),
+			UIHelper.QuickSerializeNumber(Argument.Y)
+		)
+	elseif typeof(Argument) == "Vector3" then
+		return string.format(
+			"%s, %s, %s",
+			UIHelper.QuickSerializeNumber(Argument.X),
+			UIHelper.QuickSerializeNumber(Argument.Y),
+			UIHelper.QuickSerializeNumber(Argument.Z)
+		)
+	elseif typeof(Argument) == "CFrame" then
+		local Components = { Argument:GetComponents() }
+		for Index, Value in pairs(Components) do
+			Components[Index] = UIHelper.QuickSerializeNumber(Value)
+		end
+		return table.concat(Components, ", ")
+	elseif typeof(Argument) == "table" then
+		return "{...}"
+	elseif typeof(Argument) == "Instance" then
+		return CodeGen.GetFullPath(Argument, true)
+	elseif typeof(Argument) == "userdata" then
+		return "newproxy(" .. getmetatable(Argument) and "true" or "false" .. ")"
+	end
+
+	return tostring(Argument)
+end
+
+return UIHelper
+
+end)() end,
+    [33] = function()local wax,script,require=ImportGlobals(33)local ImportGlobals return (function(...)--[[
+
+Luau syntax highlighter with studio colors
+Based on: https://devforum.roblox.com/t/realtime-richtext-lua-syntax-highlighting/2500399
+
+]]
+
+local Highlighter = {
+	Colors = {
+		Keyword = "#f86d7c",
+		String = "#adf195",
+		Number = "#ffc600",
+		Nil = "#ffc600",
+		Boolean = "#ffc600",
+		Function = "#f86d7c",
+		Self = "#f86d7c",
+		Local = "#f86d7c",
+		Text = "#ffffff",
+		LocalMethod = "#fdfbac",
+		LocalProperty = "#61a1f1",
+		BuiltIn = "#84d6f7",
+		Comment = "#666666",
+	},
+
+	Keywords = {
+		Lua = {
+			"and",
+			"break",
+			"or",
+			"else",
+			"elseif",
+			"if",
+			"then",
+			"until",
+			"repeat",
+			"while",
+			"do",
+			"for",
+			"in",
+			"end",
+			"local",
+			"return",
+			"function",
+			"export",
+		},
+		Roblox = {
+			"game",
+			"workspace",
+			"script",
+			"math",
+			"string",
+			"table",
+			"task",
+			"wait",
+			"select",
+			"next",
+			"Enum",
+			"error",
+			"warn",
+			"tick",
+			"assert",
+			"shared",
+			"loadstring",
+			"tonumber",
+			"tostring",
+			"type",
+			"typeof",
+			"unpack",
+			"print",
+			"Instance",
+			"CFrame",
+			"Vector3",
+			"Vector2",
+			"Color3",
+			"UDim",
+			"UDim2",
+			"Ray",
+			"BrickColor",
+			"OverlapParams",
+			"RaycastParams",
+			"Axes",
+			"Random",
+			"Region3",
+			"Rect",
+			"TweenInfo",
+			"collectgarbage",
+			"not",
+			"utf8",
+			"pcall",
+			"xpcall",
+			"_G",
+			"setmetatable",
+			"getmetatable",
+			"os",
+			"pairs",
+			"ipairs",
+		},
+	},
+}
+
+local function CreateKeywordSet(keywords)
+	local keywordSet = {}
+	for _, keyword in ipairs(keywords) do
+		keywordSet[keyword] = true
+	end
+	return keywordSet
+end
+
+local LuaSet = CreateKeywordSet(Highlighter.Keywords.Lua)
+local RobloxSet = CreateKeywordSet(Highlighter.Keywords.Roblox)
+
+local function GetHighlightColor(tokens, index)
+	local token = tokens[index]
+
+	if tonumber(token) then
+		return Highlighter.Colors.Number
+	elseif token == "nil" then
+		return Highlighter.Colors.Nil
+	elseif token:sub(1, 2) == "--" then
+		return Highlighter.Colors.Comment
+	elseif LuaSet[token] then
+		return Highlighter.Colors.Keyword
+	elseif RobloxSet[token] or getgenv()[token] ~= nil then
+		return Highlighter.Colors.BuiltIn
+	elseif token:sub(1, 1) == '"' or token:sub(1, 1) == "'" then
+		return Highlighter.Colors.String
+	elseif token == "true" or token == "false" then
+		return Highlighter.Colors.Boolean
+	end
+
+	if tokens[index + 1] == "(" then
+		if tokens[index - 1] == ":" then
+			return Highlighter.Colors.LocalMethod
+		end
+		return Highlighter.Colors.LocalMethod
+	end
+
+	if tokens[index - 1] == "." then
+		if tokens[index - 2] == "Enum" then
+			return Highlighter.Colors.BuiltIn
+		end
+		return Highlighter.Colors.LocalProperty
+	end
+
+	return nil
+end
+
+local ArgumentColors = {
+	["boolean"] = Highlighter.Colors.Boolean,
+	["number"] = Highlighter.Colors.Number,
+	["Vector2"] = Highlighter.Colors.Number,
+	["Vector3"] = Highlighter.Colors.Number,
+	["CFrame"] = Highlighter.Colors.Number,
+	["string"] = Highlighter.Colors.String,
+	["EnumItem"] = Highlighter.Colors.BuiltIn,
+	["nil"] = Highlighter.Colors.Nil,
+}
+function Highlighter.GetArgumentColor(Argument)
+	return ArgumentColors[typeof(Argument)] or Highlighter.Colors.Text
+end
+
+function Highlighter.Run(source)
+	local tokens = {}
+	local currentToken = ""
+
+	local inString = false
+	local inComment = false
+	local commentPersist = false
+
+	for i = 1, #source do
+		local character = source:sub(i, i)
+
+		if inComment then
+			if character == "\n" and not commentPersist then
+				table.insert(tokens, currentToken)
+				table.insert(tokens, character)
+				currentToken = ""
+
+				inComment = false
+			elseif source:sub(i - 1, i) == "]]" and commentPersist then
+				currentToken = currentToken .. "]"
+
+				table.insert(tokens, currentToken)
+				currentToken = ""
+
+				inComment = false
+				commentPersist = false
+			else
+				currentToken = currentToken .. character
+			end
+		elseif inString then
+			if character == inString and source:sub(i - 1, i - 1) ~= "\\" or character == "\n" then
+				currentToken = currentToken .. character
+				table.insert(tokens, currentToken)
+				currentToken = ""
+				inString = false
+			else
+				currentToken = currentToken .. character
+			end
+		else
+			if source:sub(i, i + 1) == "--" then
+				table.insert(tokens, currentToken)
+				currentToken = "--"
+				inComment = true
+				commentPersist = source:sub(i + 2, i + 3) == "[["
+				i = i + 1
+			elseif character == '"' or character == "'" then
+				table.insert(tokens, currentToken)
+				currentToken = character
+				inString = character
+			elseif character:match("[%p]") and character ~= "_" then
+				table.insert(tokens, currentToken)
+				table.insert(tokens, character)
+				currentToken = ""
+			elseif character:match("[%w_]") then
+				currentToken = currentToken .. character
+			else
+				table.insert(tokens, currentToken)
+				table.insert(tokens, character)
+				currentToken = ""
+			end
+		end
+	end
+
+	if currentToken ~= "" then
+		table.insert(tokens, currentToken)
+	end
+
+	for i = #tokens, 1, -1 do
+		if tokens[i] == "" then
+			table.remove(tokens, i)
+		end
+	end
+
+	local highlighted = {}
+
+	for i, token in ipairs(tokens) do
+		local highlightColor = GetHighlightColor(tokens, i)
+
+		if highlightColor then
+			local syntax =
+				string.format('<font color="%s">%s</font>', highlightColor, token:gsub("<", "&lt;"):gsub(">", "&gt;"))
+
+			table.insert(highlighted, syntax)
+		else
+			table.insert(highlighted, token)
+		end
+	end
+
+	return table.concat(highlighted)
+end
+
+return Highlighter
+
+end)() end,
     [34] = function()local wax,script,require=ImportGlobals(34)local ImportGlobals return (function(...)local Icons = {}
 
 type Icon = {
@@ -739,9 +4377,16 @@ type Icon = {
 }
 
 local Success, IconsModule = pcall(function()
-	return (loadstring(
-		game:HttpGet("https://raw.githubusercontent.com/deividcomsono/lucide-roblox-direct/refs/heads/main/source.lua")
-	) :: () -> { Icons: { string }, GetAsset: (Name: string) -> Icon? })()
+	local IconFetchSuccess, IconModuleSource = pcall(request, {
+		Url = "https://raw.githubusercontent.com/deividcomsono/lucide-roblox-direct/refs/heads/main/source.lua",
+		Method = "GET",
+	})
+
+	assert(
+		IconFetchSuccess and IconModuleSource.Success or IconModuleSource.StatusCode >= 200 and IconModuleSource.StatusCode < 300,
+		"Failed to fetch lucide icons direct module source"
+	)
+	return (loadstring(IconModuleSource.Body) :: () -> { Icons: { string }, GetAsset: (Name: string) -> Icon? })()
 end)
 
 function Icons.GetIcon(iconName: string): Icon?
@@ -771,25 +4416,802 @@ end
 return Icons
 
 end)() end,
-    [21] = function()local wax,script,require=ImportGlobals(21)local ImportGlobals return (function(...)wax.shared.Connections = {}
+    [35] = function()local wax,script,require=ImportGlobals(35)local ImportGlobals return (function(...)local ImageFetcher = {
+	FallbackMapping = {
+		Logo = "rbxassetid://91685317120520",
+	},
+}
 
-wax.shared.Connect = function(Connection)
-	table.insert(wax.shared.Connections, Connection)
-	return Connection
+if not isfolder("Cobalt/Assets") then
+	makefolder("Cobalt/Assets")
 end
 
-wax.shared.Disconnect = function(Connection)
-	Connection:Disconnect()
+function SafeFetchCustomContentID(Path: string)
+	local Success, Result = pcall(function()
+		return getcustomasset(Path)
+	end)
 
-	local Index = table.find(wax.shared.Connections, Connection)
-	if Index then
-		table.remove(wax.shared.Connections, Index)
+	return Success and Result or nil
+end
+
+function SafeFetchCustomImgData(url)
+	local Success, Response = pcall(request, {
+		Url = url,
+		Method = "GET",
+	})
+
+	if Success and Response.Success or Response.StatusCode >= 200 and Response.StatusCode < 300 then
+		return Response.Body
 	end
 
-	return true
+	return nil
 end
 
-return {}
+function ImageFetcher.GetRemoteImages(Images: { [string]: string })
+	if not getcustomasset then
+		return Images
+	end
+
+	local NewImages = {}
+	for ClassName, Image in Images do
+		if isfile(`Cobalt/Assets/{ClassName}.png`) then
+			NewImages[ClassName] = SafeFetchCustomContentID(`Cobalt/Assets/{ClassName}.png`) or Image
+			continue
+		end
+
+		local IconRawData = SafeFetchCustomImgData(`https://robloxapi.github.io/ref/icons/dark/{ClassName}.png`)
+		if not IconRawData then
+			NewImages[ClassName] = Image
+			continue
+		end
+
+		writefile(
+			`Cobalt/Assets/{ClassName}.png`,
+			IconRawData
+		)
+
+		NewImages[ClassName] = SafeFetchCustomContentID(`Cobalt/Assets/{ClassName}.png`) or Image
+	end
+
+	return NewImages
+end
+
+function ImageFetcher.GetImage(Image: string)
+	if not getcustomasset then
+		return ImageFetcher.FallbackMapping[Image] or Image
+	end
+
+	if isfile(`Cobalt/Assets/{Image}.png`) then
+		return SafeFetchCustomContentID(`Cobalt/Assets/{Image}.png`) or ImageFetcher.FallbackMapping[Image] or Image
+	end
+
+	local IconRawData = SafeFetchCustomImgData(`https://raw.githubusercontent.com/notpoiu/cobalt/refs/heads/main/Assets/{Image}.png`)
+
+	if not IconRawData then
+		return ImageFetcher.FallbackMapping[Image] or Image
+	end
+
+	writefile(`Cobalt/Assets/{Image}.png`, IconRawData)
+	return SafeFetchCustomContentID(`Cobalt/Assets/{Image}.png`) or ImageFetcher.FallbackMapping[Image] or Image
+end
+
+return ImageFetcher
+
+end)() end,
+    [36] = function()local wax,script,require=ImportGlobals(36)local ImportGlobals return (function(...)local Interface = {}
+local Icons = require(script.Parent.Icons)
+
+local DefaultFont = Font.fromId(12187365364)
+local _DefaultFontBold = Font.fromId(12187365364, Enum.FontWeight.Bold)
+
+local DefaultProperties = {
+	["Frame"] = {
+		BorderSizePixel = 0,
+	},
+	["ScrollingFrame"] = {
+		BorderSizePixel = 0,
+	},
+	["ImageLabel"] = {
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+	},
+	["ImageButton"] = {
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+	},
+
+	["TextLabel"] = {
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		FontFace = DefaultFont,
+		RichText = true,
+		TextColor3 = Color3.new(1, 1, 1),
+	},
+	["TextButton"] = {
+		AutoButtonColor = false,
+		BorderSizePixel = 0,
+		FontFace = DefaultFont,
+		RichText = true,
+		TextColor3 = Color3.new(1, 1, 1),
+	},
+	["TextBox"] = {
+		BorderSizePixel = 0,
+		FontFace = DefaultFont,
+		ClipsDescendants = true,
+		RichText = false,
+		TextColor3 = Color3.new(1, 1, 1),
+	},
+
+	["UIListLayout"] = {
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	},
+}
+
+function Interface.New(ClassName: string, Properties: { [string | number]: any })
+	local Object = Instance.new(ClassName)
+
+	for Key, Value in pairs(DefaultProperties[ClassName] or {}) do
+		if Properties and Properties[Key] ~= nil then
+			continue
+		end
+
+		Object[Key] = Value
+	end
+
+	for Key, Value in pairs(Properties or {}) do
+		if typeof(Value) == "table" then
+			local SubObject = Interface.New(Key, Value)
+			SubObject.Parent = Object
+
+			continue
+		elseif typeof(Key) ~= "string" and typeof(Value) == "Instance" then
+			local SubObject = Value:Clone()
+			SubObject.Parent = Object
+
+			continue
+		end
+
+		Object[Key] = Value
+	end
+
+	return Object
+end
+
+function Interface.NewIcon(IconName: string, Properties: { [string]: any })
+	local Image: ImageLabel = Interface.New("ImageLabel", Properties)
+	Icons.SetIcon(Image, IconName)
+
+	return Image
+end
+
+function Interface.HideCorner(Frame: GuiObject, Size: UDim2, Offset: Vector2): Frame
+	local Hider = Interface.New("Frame", {
+		AnchorPoint = Offset or Vector2.zero,
+		BackgroundColor3 = Frame.BackgroundColor3,
+		Position = UDim2.fromScale(Offset.X or 0, Offset.Y or 0),
+		Size = Size,
+		ZIndex = Frame.ZIndex,
+
+		Parent = Frame,
+	})
+
+	return Hider
+end
+
+function Interface.GetScreenParent(): Instance
+	if wax.shared.ExecutorName == "VOLT" then
+		return wax.shared.CoreGui
+	end
+	
+	local ScreenGui = Interface.New("ScreenGui", {})
+	local HiddenUI = wax.shared.gethui()
+
+	if pcall(function()
+		ScreenGui.Parent = HiddenUI
+		ScreenGui:Destroy()
+	end) then
+		return HiddenUI
+	end
+
+	return wax.shared.LocalPlayer:WaitForChild("PlayerGui")
+end
+
+return Interface
+
+end)() end,
+    [37] = function()local wax,script,require=ImportGlobals(37)local ImportGlobals return (function(...)local Resize = {}
+Resize.__index = Resize
+
+local Interface = require(script.Parent.Interface)
+local Drag = require(script.Parent.Drag)
+
+local HANDLE_SIZE = 6
+local CORNER_HANDLE_SIZE = 20
+
+function Resize.new(Options: {
+	MainFrame: Frame,
+	MinimumSize: Vector2? | UDim2?,
+	MaximumSize: UDim2?,
+	HandleSize: number?,
+	CornerHandleSize: number?,
+	Mirrored: boolean?,
+	LockedPosition: boolean? | UDim2?,
+})
+	local MainFrame = Options.MainFrame
+	local HandleSize = Options.HandleSize or HANDLE_SIZE
+	local CornerHandleSize = Options.CornerHandleSize or CORNER_HANDLE_SIZE
+	local Mirrored = Options.Mirrored or false
+	local LockedPosition = Options.LockedPosition
+
+	local MinimumSize
+	if typeof(Options.MinimumSize) == "Vector2" then
+		MinimumSize = UDim2.fromOffset(Options.MinimumSize.X, Options.MinimumSize.Y)
+	elseif typeof(Options.MinimumSize) == "UDim2" then
+		MinimumSize = Options.MinimumSize
+	else
+		MinimumSize = UDim2.fromOffset(100, 100)
+	end
+
+	local MaximumSize = Options.MaximumSize
+
+	local self = setmetatable({
+		MainFrame = MainFrame,
+		ScreenGui = MainFrame:FindFirstAncestorOfClass("ScreenGui"),
+		Parent = MainFrame.Parent,
+	}, Resize)
+
+	local function CalculateResizeProperties(
+		initialFramePosition: UDim2,
+		initialFrameSize: UDim2,
+		mouseDelta: Vector2,
+		resizeTypeX: string?,
+		resizeTypeY: string?
+	)
+		if Mirrored then
+			local parentAbsSize = self.Parent.AbsoluteSize
+
+			local newSizeOffsetX = initialFrameSize.X.Offset
+			local newSizeOffsetY = initialFrameSize.Y.Offset
+
+			if resizeTypeX then
+				local deltaX = 0
+				if resizeTypeX == "Right" then
+					deltaX = 2 * mouseDelta.X
+				elseif resizeTypeX == "Left" then
+					deltaX = -2 * mouseDelta.X
+				end
+				newSizeOffsetX = initialFrameSize.X.Offset + deltaX
+
+				local minWidthAbs = MinimumSize.X.Scale * parentAbsSize.X + MinimumSize.X.Offset
+				local maxWidthAbs = (MaximumSize and (MaximumSize.X.Scale * parentAbsSize.X + MaximumSize.X.Offset))
+					or math.huge
+				local scaleContributionX = initialFrameSize.X.Scale * parentAbsSize.X
+				local minAllowedTotalOffsetX = minWidthAbs - scaleContributionX
+				local maxAllowedTotalOffsetX = maxWidthAbs - scaleContributionX
+				newSizeOffsetX = math.clamp(newSizeOffsetX, minAllowedTotalOffsetX, maxAllowedTotalOffsetX)
+			end
+
+			if resizeTypeY then
+				local deltaY = 0
+				if resizeTypeY == "Bottom" then
+					deltaY = 2 * mouseDelta.Y
+				elseif resizeTypeY == "Top" then
+					deltaY = -2 * mouseDelta.Y
+				end
+				newSizeOffsetY = initialFrameSize.Y.Offset + deltaY
+
+				local minHeightAbs = MinimumSize.Y.Scale * parentAbsSize.Y + MinimumSize.Y.Offset
+				local maxHeightAbs = (MaximumSize and (MaximumSize.Y.Scale * parentAbsSize.Y + MaximumSize.Y.Offset))
+					or math.huge
+				local scaleContributionY = initialFrameSize.Y.Scale * parentAbsSize.Y
+				local minAllowedTotalOffsetY = minHeightAbs - scaleContributionY
+				local maxAllowedTotalOffsetY = maxHeightAbs - scaleContributionY
+				newSizeOffsetY = math.clamp(newSizeOffsetY, minAllowedTotalOffsetY, maxAllowedTotalOffsetY)
+			end
+
+			local finalNewSize =
+				UDim2.new(initialFrameSize.X.Scale, newSizeOffsetX, initialFrameSize.Y.Scale, newSizeOffsetY)
+			local finalNewPosition = initialFramePosition
+			if typeof(LockedPosition) == "UDim2" then
+				finalNewPosition = LockedPosition
+			end
+			return finalNewSize, finalNewPosition
+		else
+			-- Non-mirrored logic
+			local currentScreenGuiAbsSize = self.ScreenGui.AbsoluteSize
+			local parentAbsSizeForMinMax = currentScreenGuiAbsSize -- As per original non-mirrored logic for min/max context
+
+			-- These will store the final UDim offset values for position and the absolute pixel values for size calculation
+			local finalPosOffsetX = initialFramePosition.X.Offset
+			local finalPosOffsetY = initialFramePosition.Y.Offset
+
+			-- Initial absolute pixel size of the frame
+			local initialAbsWidthPx = initialFrameSize.X.Scale * self.Parent.AbsoluteSize.X + initialFrameSize.X.Offset
+			local initialAbsHeightPx = initialFrameSize.Y.Scale * self.Parent.AbsoluteSize.Y + initialFrameSize.Y.Offset
+
+			local newAbsWidthPx = initialAbsWidthPx
+			local newAbsHeightPx = initialAbsHeightPx
+
+			-- Min/max pixel dimensions
+			local minWidthPx = MinimumSize.X.Scale * parentAbsSizeForMinMax.X + MinimumSize.X.Offset
+			local minHeightPx = MinimumSize.Y.Scale * parentAbsSizeForMinMax.Y + MinimumSize.Y.Offset
+			local maxWidthPx = MaximumSize and (MaximumSize.X.Scale * parentAbsSizeForMinMax.X + MaximumSize.X.Offset)
+				or math.huge
+			local maxHeightPx = MaximumSize and (MaximumSize.Y.Scale * parentAbsSizeForMinMax.Y + MaximumSize.Y.Offset)
+				or math.huge
+
+			-- Original edge calculation logic (assuming MainFrame.Position is center if AnchorPoint is 0.5,0.5 for these calcs)
+			local initialAbsCenterX = currentScreenGuiAbsSize.X * initialFramePosition.X.Scale
+				+ initialFramePosition.X.Offset
+			local initialAbsSizeX_forEdgeCalc = initialFrameSize.X.Offset -- Original code used offset for this part of edge calculation
+			local initialRightEdgeX = initialAbsCenterX + initialAbsSizeX_forEdgeCalc / 2
+			local initialLeftEdgeX = initialAbsCenterX - initialAbsSizeX_forEdgeCalc / 2
+
+			local initialAbsCenterY = currentScreenGuiAbsSize.Y * initialFramePosition.Y.Scale
+				+ initialFramePosition.Y.Offset
+			local initialAbsSizeY_forEdgeCalc = initialFrameSize.Y.Offset -- Original code used offset for this part of edge calculation
+			local initialBottomEdgeY = initialAbsCenterY + initialAbsSizeY_forEdgeCalc / 2
+			local initialTopEdgeY = initialAbsCenterY - initialAbsSizeY_forEdgeCalc / 2
+
+			if resizeTypeX then
+				if resizeTypeX == "Left" then
+					local newLeftEdge = initialLeftEdgeX + mouseDelta.X
+					newAbsWidthPx = math.clamp(initialRightEdgeX - newLeftEdge, minWidthPx, maxWidthPx)
+					if newAbsWidthPx ~= (initialRightEdgeX - newLeftEdge) then -- Readjust edge if clamped
+						newLeftEdge = initialRightEdgeX - newAbsWidthPx
+					end
+					if not LockedPosition then
+						local newAbsCenterX = newLeftEdge + newAbsWidthPx / 2 -- Assuming center is halfway for position update
+						finalPosOffsetX = newAbsCenterX - currentScreenGuiAbsSize.X * initialFramePosition.X.Scale
+					end
+				elseif resizeTypeX == "Right" then
+					local newRightEdge = initialRightEdgeX + mouseDelta.X
+					newAbsWidthPx = math.clamp(newRightEdge - initialLeftEdgeX, minWidthPx, maxWidthPx)
+					if not LockedPosition then
+						local newAbsCenterX = initialLeftEdgeX + newAbsWidthPx / 2 -- Assuming center is halfway
+						finalPosOffsetX = newAbsCenterX - currentScreenGuiAbsSize.X * initialFramePosition.X.Scale
+					end
+				end
+			end
+
+			if resizeTypeY then
+				if resizeTypeY == "Top" then
+					local newTopEdge = initialTopEdgeY + mouseDelta.Y
+					newAbsHeightPx = math.clamp(initialBottomEdgeY - newTopEdge, minHeightPx, maxHeightPx)
+					if newAbsHeightPx ~= (initialBottomEdgeY - newTopEdge) then -- Readjust edge if clamped
+						newTopEdge = initialBottomEdgeY - newAbsHeightPx
+					end
+					if not LockedPosition then
+						local newAbsCenterY = newTopEdge + newAbsHeightPx / 2 -- Assuming center is halfway
+						finalPosOffsetY = newAbsCenterY - currentScreenGuiAbsSize.Y * initialFramePosition.Y.Scale
+					end
+				elseif resizeTypeY == "Bottom" then
+					local newBottomEdge = initialBottomEdgeY + mouseDelta.Y
+					newAbsHeightPx = math.clamp(newBottomEdge - initialTopEdgeY, minHeightPx, maxHeightPx)
+					if not LockedPosition then
+						local newAbsCenterY = initialTopEdgeY + newAbsHeightPx / 2 -- Assuming center is halfway
+						finalPosOffsetY = newAbsCenterY - currentScreenGuiAbsSize.Y * initialFramePosition.Y.Scale
+					end
+				end
+			end
+
+			-- Convert final absolute pixel dimensions back to UDim offsets for size
+			local finalSizeOffsetX = newAbsWidthPx - (initialFrameSize.X.Scale * self.Parent.AbsoluteSize.X)
+			local finalSizeOffsetY = newAbsHeightPx - (initialFrameSize.Y.Scale * self.Parent.AbsoluteSize.Y)
+
+			local finalNewSize =
+				UDim2.new(initialFrameSize.X.Scale, finalSizeOffsetX, initialFrameSize.Y.Scale, finalSizeOffsetY)
+			local finalNewPosition = initialFramePosition -- Default if LockedPosition is true
+			if typeof(LockedPosition) == "UDim2" then
+				finalNewPosition = LockedPosition
+			elseif not LockedPosition then -- Only update if not locked (boolean false)
+				finalNewPosition = UDim2.new(
+					initialFramePosition.X.Scale,
+					finalPosOffsetX,
+					initialFramePosition.Y.Scale,
+					finalPosOffsetY
+				)
+			end
+			return finalNewSize, finalNewPosition
+		end
+	end
+
+	local function createDragHandler(resizeTypeX, resizeTypeY)
+		return function(Info, Input: InputObject)
+			local mouseDelta = Input.Position - Info.StartPosition
+			local newSize, newPosition =
+				CalculateResizeProperties(Info.FramePosition, Info.FrameSize, mouseDelta, resizeTypeX, resizeTypeY)
+
+			MainFrame.Size = newSize
+			MainFrame.Position = newPosition
+		end
+	end
+
+	local LeftSide = Interface.New("Frame", {
+		Size = UDim2.new(0, HandleSize, 1, -CornerHandleSize * 2),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.fromScale(0, 0.5),
+		BackgroundTransparency = 1,
+		Parent = MainFrame,
+		ZIndex = 9e6,
+	})
+	Drag.Setup(MainFrame, LeftSide, createDragHandler("Left", nil))
+
+	local RightSide = Interface.New("Frame", {
+		Size = UDim2.new(0, HandleSize, 1, -CornerHandleSize * 2),
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.fromScale(1, 0.5),
+		BackgroundTransparency = 1,
+		Parent = MainFrame,
+		ZIndex = 9e6,
+	})
+	Drag.Setup(MainFrame, RightSide, createDragHandler("Right", nil))
+
+	local TopSide = Interface.New("Frame", {
+		Size = UDim2.new(1, -CornerHandleSize * 2, 0, HandleSize),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.5, 0),
+		BackgroundTransparency = 1,
+		Parent = MainFrame,
+		ZIndex = 9e6,
+	})
+	Drag.Setup(MainFrame, TopSide, createDragHandler(nil, "Top"))
+
+	local BottomSide = Interface.New("Frame", {
+		Size = UDim2.new(1, -CornerHandleSize * 2, 0, HandleSize),
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.fromScale(0.5, 1),
+		BackgroundTransparency = 1,
+		Parent = MainFrame,
+		ZIndex = 9e6,
+	})
+	Drag.Setup(MainFrame, BottomSide, createDragHandler(nil, "Bottom"))
+
+	local TopLeftCorner = Interface.New("Frame", {
+		Size = UDim2.fromOffset(CornerHandleSize, CornerHandleSize),
+		AnchorPoint = Vector2.new(0, 0),
+		Position = UDim2.fromScale(0, 0),
+		BackgroundTransparency = 1,
+		Parent = MainFrame,
+		ZIndex = 9e6 + 1,
+	})
+	Drag.Setup(MainFrame, TopLeftCorner, createDragHandler("Left", "Top"))
+
+	local TopRightCorner = Interface.New("Frame", {
+		Size = UDim2.fromOffset(CornerHandleSize, CornerHandleSize),
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.fromScale(1, 0),
+		BackgroundTransparency = 1,
+		Parent = MainFrame,
+		ZIndex = 9e6 + 1,
+	})
+	Drag.Setup(MainFrame, TopRightCorner, createDragHandler("Right", "Top"))
+
+	local BottomLeftCorner = Interface.New("Frame", {
+		Size = UDim2.fromOffset(CornerHandleSize, CornerHandleSize),
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromScale(0, 1),
+		BackgroundTransparency = 1,
+		Parent = MainFrame,
+		ZIndex = 9e6 + 1,
+	})
+	Drag.Setup(MainFrame, BottomLeftCorner, createDragHandler("Left", "Bottom"))
+
+	local BottomRightCorner = Interface.New("Frame", {
+		Size = UDim2.fromOffset(CornerHandleSize, CornerHandleSize),
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Parent = MainFrame,
+		ZIndex = 9e6 + 1,
+	})
+	Drag.Setup(MainFrame, BottomRightCorner, createDragHandler("Right", "Bottom"))
+
+	return self
+end
+
+return Resize
+
+end)() end,
+    [38] = function()local wax,script,require=ImportGlobals(38)local ImportGlobals return (function(...)--[[[
+
+Sonner Luau Port by upio
+Original Sonner by Emil Kowalski (https://sonner.emilkowal.ski/)
+
+TODO (which will almost probably never be done):
+ - Add a way to view the previous notifications (hovering over the notifs but im lazy)
+ - Handle too many notifications breaking the UI
+ - Fix inconsistant notification positioning
+]]
+
+local Sonner = {
+	Queue = {},
+	TweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Exponential),
+	Wrapper = nil,
+}
+
+local Icons = require(script.Parent.Icons)
+local Interface = require(script.Parent.Interface)
+local Animations = require(script.Parent.Animations)
+
+local function InternalCreateNotificationObject(zindex, image, text)
+	local NotificationTemplate = Interface.New("CanvasGroup", {
+		BorderSizePixel = 0,
+		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+		AnchorPoint = Vector2.new(0.5, 1),
+		Size = UDim2.new(0, 250, 0, 50),
+		Position = UDim2.new(0.5, 0, 1, 50),
+		BorderColor3 = Color3.fromRGB(0, 0, 0),
+		ZIndex = zindex,
+
+		["UICorner"] = {
+			CornerRadius = UDim.new(0, 4),
+		},
+
+		["UIStroke"] = {
+			Color = Color3.fromRGB(39, 42, 42),
+		},
+
+		["UIScale"] = {},
+	})
+
+	local ImageLabel = Interface.New("ImageLabel", {
+		SizeConstraint = Enum.SizeConstraint.RelativeYY,
+		ScaleType = Enum.ScaleType.Fit,
+		Size = UDim2.new(0, 20, 0, 20),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0, 20, 0.5, 0),
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		ZIndex = zindex + 1,
+		Parent = NotificationTemplate,
+	})
+
+	if image then
+		if image:find("rbxasset") then
+			ImageLabel.Image = image
+		else
+			Icons.SetIcon(ImageLabel, image)
+		end
+	else
+		ImageLabel.Visible = false
+	end
+
+	local Frame = Interface.New("Frame", {
+		BorderSizePixel = 0,
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		Size = UDim2.new(1, -50, 1, 0),
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -10, 0, 0),
+		BorderColor3 = Color3.fromRGB(0, 0, 0),
+		BackgroundTransparency = 1,
+		ZIndex = zindex + 1,
+		Parent = NotificationTemplate,
+	})
+
+	Interface.New("TextLabel", {
+		BorderSizePixel = 0,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
+		TextColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = 1,
+		Size = UDim2.new(0, 200, 0, 50),
+		BorderColor3 = Color3.fromRGB(0, 0, 0),
+		Text = text,
+		ZIndex = zindex + 1,
+		Parent = Frame,
+		TextWrapped = true,
+	})
+
+	return NotificationTemplate
+end
+
+local function toast(image, text, internalTime, removeCallback)
+	assert(Sonner.Wrapper, "Sonner has not been initialized")
+	assert(typeof(image) == "string" or image == nil, "Image must be a string or nil")
+	assert(typeof(text) == "string", "Text is required!")
+	assert(typeof(internalTime) == "number" or internalTime == nil, "Time must be a number or nil")
+
+	local time = internalTime or 4.5
+
+	local Notif = InternalCreateNotificationObject(500, image, text)
+
+	Notif.Position = UDim2.new(0.5, 0, 1, 30)
+	Notif.Parent = Sonner.Wrapper
+
+	table.insert(Sonner.Queue, Notif)
+
+	local ScaleMultiplier = 0.9
+	local RemovalQueue = {}
+
+	for index, object in Sonner.Queue do
+		if object == Notif then
+			continue
+		end
+
+		object.ZIndex = 500 - (#Sonner.Queue - index)
+
+		-- shift them down
+		wax.shared.TweenService
+			:Create(object.UIScale, Sonner.TweenInfo, {
+				Scale = object.UIScale.Scale * ScaleMultiplier,
+			})
+			:Play()
+
+		wax.shared.TweenService
+			:Create(object, Sonner.TweenInfo, {
+				Position = object.Position - UDim2.fromOffset(0, object.AbsoluteSize.Y * 0.35),
+			})
+			:Play()
+
+		if ((#Sonner.Queue - index) + 1) >= 4 then
+			Animations.FadeOut(object)
+			task.delay(0.5, function()
+				object:Destroy()
+			end)
+			table.insert(RemovalQueue, object)
+		end
+	end
+
+	for _, obj in RemovalQueue do
+		table.remove(Sonner.Queue, table.find(Sonner.Queue, obj))
+	end
+
+	wax.shared.TweenService
+		:Create(Notif, Sonner.TweenInfo, {
+			Position = UDim2.new(0.5, 0, 1, -20),
+		})
+		:Play()
+	Animations.FadeIn(Notif)
+
+	if removeCallback then
+		task.spawn(removeCallback, Notif, time)
+	else
+		task.delay(time, function()
+			if not table.find(Sonner.Queue, Notif) then
+				return
+			end
+			table.remove(Sonner.Queue, table.find(Sonner.Queue, Notif))
+
+			Animations.FadeOut(Notif, 0.35)
+			wax.shared.TweenService
+				:Create(Notif, Sonner.TweenInfo, {
+					Position = UDim2.new(0.5, 0, 1, 50),
+				})
+				:Play()
+			task.wait(0.5)
+			Notif:Destroy()
+		end)
+	end
+end
+
+function Sonner.info(text, internalTime)
+	toast("info", text, internalTime)
+end
+
+function Sonner.success(text, internalTime)
+	toast("circle-check", text, internalTime)
+end
+
+function Sonner.warning(text, internalTime)
+	toast("triangle-alert", text, internalTime)
+end
+
+function Sonner.error(text, internalTime)
+	toast("circle-alert", text, internalTime)
+end
+
+function Sonner.toast(text, internalTime)
+	toast(nil, text, internalTime)
+end
+
+function Sonner.promise(func, options)
+	local loadingText = options.loadingText or "Loading..."
+	local successText = options.successText or "Success!"
+	local errorText = options.errorText or "Error!"
+	local internalTime = options.time or 4.5
+
+	toast("loader-circle", loadingText, internalTime, function(notif, time)
+		local success, resultOrError = nil, nil
+
+		local spinnerThread = task.spawn(function()
+			repeat
+				wax.shared.RunService.RenderStepped:Wait()
+
+				local icon = notif:FindFirstChild("ImageLabel")
+				if not icon then
+					continue
+				end
+				icon.Rotation = (icon.Rotation + 1) % 360
+			until success == false or resultOrError ~= nil
+		end)
+
+		success, resultOrError = pcall(func) -- yes mstudio45, your famous pcall is better (- deivid)
+
+		task.spawn(function()
+			setthreadidentity(8)
+
+			-- The thread identity is 8 when setting it on the parent thread (Sonner.promise), but it still lacks capabilities when running another child thread
+			-- Capabilities here should pass from a thread to another... Could be an upstream (executor) issue ?
+
+			Animations.FadeOut(notif.ImageLabel, 0.15)
+			wax.shared.TweenService
+				:Create(notif.ImageLabel, TweenInfo.new(0.25, Enum.EasingStyle.Exponential), {
+					Size = UDim2.new(0, 0, 0, 0),
+				})
+				:Play()
+			task.wait(0.15)
+
+			if coroutine.status(spinnerThread) ~= "dead" then
+				coroutine.close(spinnerThread)
+			end
+			notif.ImageLabel.Rotation = 0
+
+			if success then
+				Icons.SetIcon(notif.ImageLabel, "check")
+				local message = (
+					typeof(successText) == "string" and successText
+					or typeof(successText) == "function" and successText(resultOrError)
+					or "Success!"
+				)
+
+				if message:match("%s") then
+					notif.Frame.TextLabel.Text = string.format(message, tostring(resultOrError))
+				else
+					notif.Frame.TextLabel.Text = message
+				end
+			else
+				Icons.SetIcon(notif.ImageLabel, "circle-alert")
+				notif.Frame.TextLabel.Text = (
+					typeof(errorText) == "string" and errorText
+					or typeof(errorText) == "function" and errorText(resultOrError)
+					or "Error!"
+				)
+			end
+
+			Animations.FadeIn(notif.ImageLabel)
+			wax.shared.TweenService
+				:Create(notif.ImageLabel, TweenInfo.new(0.25, Enum.EasingStyle.Exponential), {
+					Size = UDim2.new(0, 20, 0, 20),
+				})
+				:Play()
+
+			task.delay(time, function()
+				if not table.find(Sonner.Queue, notif) then
+					return
+				end
+				table.remove(Sonner.Queue, table.find(Sonner.Queue, notif))
+
+				Animations.FadeOut(notif, 0.35)
+				wax.shared.TweenService
+					:Create(notif, Sonner.TweenInfo, {
+						Position = UDim2.new(0.5, 0, 1, 50),
+					})
+					:Play()
+
+				task.wait(0.5)
+				notif:Destroy()
+			end)
+		end)
+	end)
+end
+
+function Sonner.rawtoast(options)
+	local image = options.image
+	local text = options.text or "No Text Provided"
+	local internalTime = options.time or 4.5
+
+	toast(image, text, internalTime)
+end
+
+function Sonner.init(wrapper)
+	Sonner.Wrapper = wrapper
+end
+
+return Sonner
+
 end)() end,
     [39] = function()local wax,script,require=ImportGlobals(39)local ImportGlobals return (function(...)--[[
 	Main Window Logic for cobalt, all UI elements are created and managed here.
@@ -1512,7 +5934,9 @@ local function CreateSettingsCheckbox(
 
 	function Checkbox:SetValue(NewValue)
 		if wax.shared.ActorCommunicator then
-			wax.shared.ActorCommunicator:Fire("MainSettingsSync", Idx, NewValue)
+			pcall(function()
+				wax.shared.ActorCommunicator:Fire("MainSettingsSync", Idx, NewValue)
+			end)
 		end
 
 		wax.shared.SaveManager:SetState(Idx, NewValue)
@@ -1526,7 +5950,9 @@ local function CreateSettingsCheckbox(
 	end
 
 	if wax.shared.ActorCommunicator then
-		wax.shared.ActorCommunicator:Fire("MainSettingsSync", Idx, Checkbox.Value)
+		pcall(function()
+			wax.shared.ActorCommunicator:Fire("MainSettingsSync", Idx, Checkbox.Value)
+		end)
 	end
 	wax.shared.Settings[Idx] = Checkbox
 	return Checkbox
@@ -1679,7 +6105,9 @@ local function CreateSettingsTextBox(
 		end
 
 		if wax.shared.ActorCommunicator then
-			wax.shared.ActorCommunicator:Fire("MainSettingsSync", Idx, PreparedValue)
+			pcall(function()
+				wax.shared.ActorCommunicator:Fire("MainSettingsSync", Idx, PreparedValue)
+			end)
 		end
 
 		wax.shared.SaveManager:SetState(Idx, PreparedValue)
@@ -1691,7 +6119,9 @@ local function CreateSettingsTextBox(
 	end)
 
 	if wax.shared.ActorCommunicator then
-		wax.shared.ActorCommunicator:Fire("MainSettingsSync", Idx, TextSetting.Value)
+		pcall(function()
+			wax.shared.ActorCommunicator:Fire("MainSettingsSync", Idx, TextSetting.Value)
+		end)
 	end
 
 	SyncValue(TextSetting.Value, false)
@@ -1903,7 +6333,9 @@ local function CreateSettingsDropdown(
 					end
 
 					if wax.shared.ActorCommunicator then
-						wax.shared.ActorCommunicator:Fire("MainSettingsSync", Idx, Dropdown.Value)
+						pcall(function()
+							wax.shared.ActorCommunicator:Fire("MainSettingsSync", Idx, Dropdown.Value)
+						end)
 					end
 
 					wax.shared.SaveManager:SetState(Idx, Dropdown.Value)
@@ -1958,7 +6390,9 @@ local function CreateSettingsDropdown(
 
 	function Dropdown:SetValue(NewValue)
 		if wax.shared.ActorCommunicator then
-			wax.shared.ActorCommunicator:Fire("MainSettingsSync", Idx, NewValue)
+			pcall(function()
+				wax.shared.ActorCommunicator:Fire("MainSettingsSync", Idx, NewValue)
+			end)
 		end
 
 		wax.shared.SaveManager:SetState(Idx, NewValue)
@@ -1980,7 +6414,9 @@ local function CreateSettingsDropdown(
 	end
 
 	if wax.shared.ActorCommunicator then
-		wax.shared.ActorCommunicator:Fire("MainSettingsSync", Idx, Dropdown.Default)
+		pcall(function()
+			wax.shared.ActorCommunicator:Fire("MainSettingsSync", Idx, Dropdown.Default)
+		end)
 	end
 
 	UpdateValueLabel()
@@ -2196,12 +6632,86 @@ local function CreateSettingsRemoteList(
 	return RemoteList
 end
 
+-- God this warning box code is so ass 🥀
+if #wax.shared.ExecutorSupport.FailedChecks.NonEssential > 0 then
+	local WarningDisplay = Interface.New("Frame", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundColor3 = Color3.fromRGB(245, 60, 54),
+		BackgroundTransparency = 0.75,
+		Position = UDim2.new(1, 0, 0.5, 0),
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Parent = SettingsScrollingFrame,
+
+		["UICorner"] = {
+			CornerRadius = UDim.new(0, 4),
+		},
+
+		["UIStroke"] = {
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+			Color = Color3.fromRGB(245, 60, 54),
+			Thickness = 1,
+		},
+
+		["UIPadding"] = {
+			PaddingLeft = UDim.new(0, 8),
+			PaddingRight = UDim.new(0, 8),
+			PaddingTop = UDim.new(0, 8),
+			PaddingBottom = UDim.new(0, 8),
+		},
+
+		["UIListLayout"] = {
+			FillDirection = Enum.FillDirection.Vertical,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+		},
+	})
+
+	local function CreatePaddingText(size: number)
+		return `<font size="{size}"> \n</font>`
+	end
+
+	local NoticeTitleInfoSeperator = CreatePaddingText(4)
+
+	Interface.New("TextLabel", {
+		Text = `<font size="16"><b>DETECTION NOTICE ⚠️</b></font>\n{NoticeTitleInfoSeperator}Cobalt can get detected because your executor does not support the following functions/libraries:`,
+		TextSize = 15,
+		Size = UDim2.fromScale(1, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		BackgroundTransparency = 1,
+		Parent = WarningDisplay,
+		TextWrapped = true,
+	})
+
+	local NonEssentialFailures = wax.shared.ExecutorSupport.FailedChecks.NonEssential
+	local DetectionDetails = CreatePaddingText(6)
+	local DetectionSuffix = `\n{CreatePaddingText(7)}`
+	for _, Name in NonEssentialFailures do
+		DetectionDetails ..= `⚠️ <b><font color="#ff9900">{Name}</font></b>\n<i><font size="14" transparency="0.5">{wax.shared.ExecutorSupport[Name].Details}</font></i>{DetectionSuffix}`
+	end
+
+	DetectionDetails = DetectionDetails:sub(1, (#DetectionSuffix * -1) - 1)
+
+	Interface.New("TextLabel", {
+		Text = DetectionDetails,
+		TextSize = 15,
+		Size = UDim2.fromScale(1, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		BackgroundTransparency = 1,
+		Parent = WarningDisplay,
+		TextWrapped = true,
+	})
+end
+
 local ExecSupportSection = CreateSettingsSection("Support Info")
 do
 	Interface.New("TextLabel", {
 		Text = table.concat({
 			`Executor: <b>{wax.shared.ExecutorName}</b>`,
-			`Support: {#wax.shared.ExecutorSupport.FailedChecks == 0 and "<b>Full</b>" or "<b>Partial</b> (" .. #wax.shared.ExecutorSupport.FailedChecks .. " check(s) failed)"}`,
+			`Support: {#wax.shared.ExecutorSupport.FailedChecks.Essential == 0 and "<b>Full</b>" or "<b>Partial</b> (" .. #wax.shared.ExecutorSupport.FailedChecks.Essential .. " check(s) failed)"}`,
 		}, "\n"),
 		TextSize = 16,
 		Size = UDim2.fromScale(1, 0),
@@ -2218,13 +6728,13 @@ do
 
 	local PartialSupportText = ""
 	local SupportSuffix = "\n\n"
-	for _, Name in wax.shared.ExecutorSupport.FailedChecks do
+	for _, Name in wax.shared.ExecutorSupport.FailedChecks.Essential do
 		PartialSupportText ..= `❌ <b><font color="#ff0000">{Name}</font></b>\n<i><font size="14" transparency="0.5">{wax.shared.ExecutorSupport[Name].Details}</font></i>{SupportSuffix}`
 	end
 
 	PartialSupportText = PartialSupportText:sub(1, (#SupportSuffix * -1) - 1)
 
-	if #wax.shared.ExecutorSupport.FailedChecks > 0 then
+	if #wax.shared.ExecutorSupport.FailedChecks.Essential > 0 then
 		Interface.New("TextLabel", {
 			Text = PartialSupportText,
 			TextSize = 16,
@@ -2318,18 +6828,19 @@ if AnticheatData.Disabled then
 end
 
 CreateSettingsButton("Clear All Logs", function()
-	for _, Logs in pairs(wax.shared.Logs) do
-		for Index, Log in pairs(Logs) do
+	for _, LogCategory in pairs(wax.shared.Logs) do
+		for Index, Log in pairs(LogCategory) do
 			if Log.Button then
 				Log.Button.Instance:Destroy()
 				Log.Button = nil
 			end
 
 			CurrentPage[Log] = nil
-			Logs[Index] = nil
-		end
 
-		table.clear(Logs)
+			table.clear(Log.Calls)
+			table.clear(Log.GameCalls)
+			Log.Index = 0
+		end
 	end
 
 	CleanLogsList()
@@ -2960,38 +7471,6 @@ CreateInfoDropdownButton("code", "Code", {
 		end,
 	},
 	{
-		Text = "Copy Code",
-		Icon = "copy",
-		Callback = function()
-			if not CurrentInfo then
-				return
-			end
-
-			local displayedCode = ""
-			for _, label in ipairs(CodeTextLabels) do
-				if label.Text and label.Text ~= "" then
-					local cleanText = label.Text:gsub('<[^>]+>', ''):gsub('&lt;', '<'):gsub('&gt;', '>')
-					displayedCode = displayedCode .. cleanText .. "\n"
-				end
-			end
-			
-			displayedCode = displayedCode:gsub("\n+$", "")
-			
-			if displayedCode == "" then
-				wax.shared.Sonner.error("No code to copy")
-				return
-			end
-
-			local Success, Error = pcall(setclipboard, displayedCode)
-			if Success then
-				wax.shared.Sonner.success("Copied displayed code to clipboard")
-			else
-				wax.shared.Sonner.error("Failed to copy displayed code")
-				warn("Failed to copy displayed code", Error)
-			end
-		end,
-	},
-	{
 		Text = "Function Info",
 		Icon = "parentheses",
 		Callback = function()
@@ -3002,6 +7481,9 @@ CreateInfoDropdownButton("code", "Code", {
 			local Info = {
 				Function = typeof(CurrentInfo.Function) == "function" and {
 					Name = CurrentInfo.Function and debug.info(CurrentInfo.Function, "n") or "Unknown",
+					Source = CurrentInfo.Source
+						or (CurrentInfo.Function and debug.info(CurrentInfo.Function, "s"))
+						or "Unknown",
 					Type = CurrentInfo.Function
 							and (iscclosure(CurrentInfo.Function) and "C Closure" or "Luau function")
 						or "N/A",
@@ -3034,7 +7516,7 @@ CreateInfoDropdownButton("code", "Code", {
 
 			local Success, Error = pcall(setclipboard, `local Info = {LuaEncode(Info, { Prettify = true })}`)
 			if Success then
-				wax.shared.Sonner.success("Copied to clipboard")
+				wax.shared.Sonner.success("Copied function info to clipboard")
 			else
 				wax.shared.Sonner.error("Failed to copy function info to clipboard")
 				warn("Failed to copy function info to clipboard", Error)
@@ -3833,6 +8315,10 @@ function ShowTab(Tab)
 		:Play()
 
 	for _, Log in pairs(Tab.Logs) do
+		if #Log.Calls == 0 then
+			continue
+		end
+
 		if not Log.Button then
 			local Button, Name, Calls = CreateLogButton(Log)
 			Log:SetButton(Button, Name, Calls)
@@ -4729,6 +9215,10 @@ wax.shared.Connect(wax.shared.Communicator.Event:Connect(function(Instance, Type
 		return
 	end
 
+	if #Log.Calls == 0 then
+		return
+	end
+
 	local CallInfo = Log.Calls[CallIndex]
 
 	local Page = CurrentPage[Log]
@@ -4803,4125 +9293,6 @@ end))
 
 return {}
 
-end)() end,
-    [36] = function()local wax,script,require=ImportGlobals(36)local ImportGlobals return (function(...)local Interface = {}
-local Icons = require(script.Parent.Icons)
-
-local DefaultFont = Font.fromId(12187365364)
-local _DefaultFontBold = Font.fromId(12187365364, Enum.FontWeight.Bold)
-
-local DefaultProperties = {
-	["Frame"] = {
-		BorderSizePixel = 0,
-	},
-	["ScrollingFrame"] = {
-		BorderSizePixel = 0,
-	},
-	["ImageLabel"] = {
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-	},
-	["ImageButton"] = {
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-	},
-
-	["TextLabel"] = {
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		FontFace = DefaultFont,
-		RichText = true,
-		TextColor3 = Color3.new(1, 1, 1),
-	},
-	["TextButton"] = {
-		AutoButtonColor = false,
-		BorderSizePixel = 0,
-		FontFace = DefaultFont,
-		RichText = true,
-		TextColor3 = Color3.new(1, 1, 1),
-	},
-	["TextBox"] = {
-		BorderSizePixel = 0,
-		FontFace = DefaultFont,
-		ClipsDescendants = true,
-		RichText = false,
-		TextColor3 = Color3.new(1, 1, 1),
-	},
-
-	["UIListLayout"] = {
-		SortOrder = Enum.SortOrder.LayoutOrder,
-	},
-}
-
-function Interface.New(ClassName: string, Properties: { [string | number]: any })
-	local Object = Instance.new(ClassName)
-
-	for Key, Value in pairs(DefaultProperties[ClassName] or {}) do
-		if Properties and Properties[Key] ~= nil then
-			continue
-		end
-
-		Object[Key] = Value
-	end
-
-	for Key, Value in pairs(Properties or {}) do
-		if typeof(Value) == "table" then
-			local SubObject = Interface.New(Key, Value)
-			SubObject.Parent = Object
-
-			continue
-		elseif typeof(Key) ~= "string" and typeof(Value) == "Instance" then
-			local SubObject = Value:Clone()
-			SubObject.Parent = Object
-
-			continue
-		end
-
-		Object[Key] = Value
-	end
-
-	return Object
-end
-
-function Interface.NewIcon(IconName: string, Properties: { [string]: any })
-	local Image: ImageLabel = Interface.New("ImageLabel", Properties)
-	Icons.SetIcon(Image, IconName)
-
-	return Image
-end
-
-function Interface.HideCorner(Frame: GuiObject, Size: UDim2, Offset: Vector2): Frame
-	local Hider = Interface.New("Frame", {
-		AnchorPoint = Offset or Vector2.zero,
-		BackgroundColor3 = Frame.BackgroundColor3,
-		Position = UDim2.fromScale(Offset.X or 0, Offset.Y or 0),
-		Size = Size,
-		ZIndex = Frame.ZIndex,
-
-		Parent = Frame,
-	})
-
-	return Hider
-end
-
-function Interface.GetScreenParent(): Instance
-	local ScreenGui = Interface.New("ScreenGui", {})
-	local HiddenUI = wax.shared.gethui()
-
-	if pcall(function()
-		ScreenGui.Parent = HiddenUI
-		ScreenGui:Destroy()
-	end) then
-		return HiddenUI
-	end
-
-	return wax.shared.LocalPlayer:WaitForChild("PlayerGui")
-end
-
-return Interface
-
-end)() end,
-    [28] = function()local wax,script,require=ImportGlobals(28)local ImportGlobals return (function(...)-- LuaEncode - Fast Table Serialization Library for Pure Luau/Lua 5.1+
--- Copyright (c) 2022-2024 reggie@latte.to | MIT License
--- https://github.com/regginator/LuaEncode
-
---!optimize 2
---!native
-
-local table, string, next, pcall, game, workspace, tostring, tonumber, getmetatable =
-	table, string, next, pcall, game, workspace, tostring, tonumber, getmetatable
-
-local GetFullPath = require(script.Parent.Parent.CodeGen).GetFullPath
-
-local string_format = string.format
-local string_char = string.char
-local string_gsub = string.gsub
-local string_match = string.match
-local string_rep = string.rep
-local string_pack = string.pack
-local string_byte = string.byte
-local string_gmatch = string.gmatch
-
-local table_concat = table.concat
-
-local Type = typeof or type
-
-local function LookupTable(array)
-	local Out = {}
-	for _, Value in next, array do
-		Out[Value] = true
-	end
-
-	return Out
-end
-
--- Used to properly serialize NaN values
-local NumberCorrection = {
-	[string_pack(">n", 0 / 0)] = "0/0",
-	[string_pack(">n", -(0 / 0))] = "-(0/0)",
-	[string_pack(">n", tonumber("nan"))] = 'tonumber("nan")',
-	[string_pack(">n", tonumber("-nan"))] = 'tonumber("-nan")',
-}
-
--- Used for checking direct getfield syntax; Lua keywords can't be used as keys without being a str
--- FYI; `continue` is Luau only (in Lua it's actually a global function)
-local LuaKeywords = LookupTable({
-	"and",
-	"break",
-	"do",
-	"else",
-	"elseif",
-	"end",
-	"false",
-	"for",
-	"function",
-	"if",
-	"in",
-	"local",
-	"nil",
-	"not",
-	"or",
-	"repeat",
-	"return",
-	"then",
-	"true",
-	"until",
-	"while",
-	"continue",
-})
-
--- Type names that can be used as manual key indexes (i.e. non-reference types)
-local KeyIndexTypes = LookupTable({
-	"number",
-	"string",
-	"boolean",
-	"Enum",
-	"EnumItem",
-	"Enums",
-})
-
--- Returns the length of the array part (including holes) and if it's a pure array
-local function GetIsArrayAndLength(tbl)
-	local maxIndex = 0
-	local count = 0
-	for k, _ in pairs(tbl) do
-		if type(k) == "number" and k > 0 and math.floor(k) == k then
-			if k > maxIndex then
-				maxIndex = k
-			end
-			count = count + 1
-		else
-			return 0, false
-		end
-	end
-	return maxIndex, true
-end
-
--- Simple function for directly checking the type on values, with their input, variable name,
--- and desired type name(s) to check
-local function CheckType(inputData, dataName, ...)
-	local ValidTypes = { ... }
-	local ValidTypesLookup = LookupTable(ValidTypes)
-	local InputType = Type(inputData)
-
-	if not ValidTypesLookup[InputType] then
-		error(
-			string_format(
-				"LuaEncode: Incorrect type for `%s`: `%s` expected, got `%s`",
-				dataName,
-				table_concat(ValidTypes, ", "), -- For if multiple types are accepted
-				InputType
-			),
-			0
-		)
-	end
-
-	return inputData -- Return back input directly
-end
-
--- This re-serializes a string back into Lua, for the interpreter AND humans to read. This fixes
--- `string_format("%q")` only outputting in system encoding, instead of explicit Lua byte escapes
-local SerializeString
-do
-	-- These are control characters to be encoded in a certain way in Lua rather than just a byte escape
-	local SpecialCharacters = {
-		['"'] = '\\"',
-		["\\"] = "\\\\",
-		-- Special ASCII control char codes
-		["\a"] = "\\a",
-		["\b"] = "\\b",
-		["\t"] = "\\t",
-		["\n"] = "\\n",
-		["\v"] = "\\v",
-		["\f"] = "\\f",
-		["\r"] = "\\r",
-	}
-
-	-- We need to assign all extra normal byte escapes for runtime optimization
-	for Index = 0, 255 do
-		local Character = string_char(Index)
-
-		if not SpecialCharacters[Character] and (Index < 32 or Index > 126) then
-			SpecialCharacters[Character] = string_format("\\x%02X", Index)
-		end
-	end
-
-	function SerializeString(inputString)
-		-- FYI; We can't do "\0-\31" in Lua 5.1 (Only Luau/Lua 5.2+) due to an embedded zeros in pattern
-		-- issue. See: https://stackoverflow.com/a/22962409
-		return table_concat({ '"', string_gsub(inputString, '[%z\\"\1-\31\127-\255]', SpecialCharacters), '"' })
-	end
-end
-
--- Escape warning messages and such for comment block inserts
-local function CommentBlock(inputString)
-	local Padding = ""
-	for Match in string_gmatch(inputString, "%](=*)%]") do
-		if #Match >= #Padding then
-			Padding = Match .. "="
-		end
-	end
-
-	return "--[" .. Padding .. "[" .. inputString .. "]" .. Padding .. "]"
-end
-
---[[
-LuaEncode(inputTable: {[any]: any}, options: {[string]: any}): string
-
-    ---------- OPTIONS: ----------
-
-    Prettify <boolean:false> | Whether or not the output should use pretty printing
-
-    IndentCount <number:0> | The amount of "spaces" that should be indented per entry (*Note:
-    If `Prettify` is set to true and this is unspecified, it'll be set to `4` automatically*)
-
-    InsertCycles <boolean:false> | If there are cyclic references in your table, the output
-    will be wrapped in an anonymous function that manually sets paths to those references.
-    **NOTE: If a key in the index path to the cycle is a reference type (e.g. `table`,
-    `function`), the codegen can't externally set that path, and will be ignored.**
-
-    OutputWarnings <boolean:true> | If "warnings" should be placed to the output (as
-    comments); It's recommended to keep this enabled, however this can be disabled at ease
-
-    FunctionsReturnRaw <boolean:false> | If functions in said table return back a "raw"
-    value to place in the output as the key/value
-
-    UseInstancePaths <boolean:true> | If `Instance` reference objects should return their
-    Lua-accessable path for encoding. If the instance is parented under `nil` or isn't under
-    `game`/`workspace`, it'll always fall back to `Instance.new(ClassName)` as before
-
-    SerializeMathHuge <boolean:true> | If numbers calculated as "infinite" (or negative-inf)
-    numbers should be serialized with "math.huge". (uses the `math` import, as opposed to just
-    a direct data type) If false, "`1/0`" or "`-1/0`" will be serialized, which is supported
-    on all target versions
-
-]]
-
-local function LuaEncode(inputTable, options)
-	options = options or {}
-
-	-- Check main args
-	CheckType(inputTable, "inputTable", "table")
-	CheckType(options, "options", "table")
-
-	-- Check options
-	CheckType(options.Prettify, "options.Prettify", "boolean", "nil")
-	CheckType(options.PrettyPrinting, "options.PrettyPrinting", "boolean", "nil") -- Alias for `Options.Prettify`
-	CheckType(options.IndentCount, "options.IndentCount", "number", "nil")
-	CheckType(options.InsertCycles, "options.InsertCycles", "boolean", "nil")
-	CheckType(options.OutputWarnings, "options.OutputWarnings", "boolean", "nil")
-	CheckType(options.FunctionsReturnRaw, "options.FunctionsReturnRaw", "boolean", "nil")
-	CheckType(options.UseInstancePaths, "options.UseInstancePaths", "boolean", "nil")
-	CheckType(options.GetNilFunctionInsert, "options.GetNilFunctionInsert", "boolean", "nil")
-	CheckType(options.SerializeMathHuge, "options.SerializeMathHuge", "boolean", "nil")
-
-	CheckType(options._StackLevel, "options._StackLevel", "number", "nil")
-	CheckType(options._VisitedTables, "options._VisitedTables", "table", "nil")
-
-	local Prettify = (options.Prettify == nil and options.PrettyPrinting == nil and false)
-		or (options.Prettify ~= nil and options.Prettify)
-		or (options.PrettyPrinting and options.PrettyPrinting)
-	local IndentCount = options.IndentCount or (Prettify and 4) or 0
-	local InsertCycles = (options.InsertCycles == nil and false) or options.InsertCycles
-	local OutputWarnings = (options.OutputWarnings == nil and true) or options.OutputWarnings
-	local GetNilFunctionInsert = (options.GetNilFunctionInsert == nil and false) or options.GetNilFunctionInsert
-	local UseInstancePaths = (options.UseInstancePaths == nil and true) or options.UseInstancePaths
-	local SerializeMathHuge = (options.SerializeMathHuge == nil and true) or options.SerializeMathHuge
-
-	local RefMaps = options._RefMaps or { [inputTable] = "" } -- [Ref: table] = ".example["ref path"]'
-	local CycleMaps = options._CycleMaps or {} -- ['.example["ref path"]'] = '.another["ref path"]'
-
-	local StackLevel = options._StackLevel or 1
-	local EntryStackLevel = options._StackLevel or 1
-	local VisitedTables = options._VisitedTables or {} -- [Ref: table] = true
-	local DidInsertNilFunction = options._DidInsertNilFunction or false
-
-	-- Lazy serialization reference values
-	local PositiveInf = (SerializeMathHuge and "math.huge") or "1/0"
-	local NegativeInf = (SerializeMathHuge and "-math.huge") or "-1/0"
-	local NewEntryString = (Prettify and "\n") or ""
-	local CodegenNewline = (Prettify and "\n") or " "
-	local ValueSeperator = (Prettify and ", ") or ","
-	local BlankSeperator = (Prettify and " ") or ""
-	local EqualsSeperator = (Prettify and " = ") or "="
-
-	-- For pretty printing we need to keep track of the current stack level, then repeat IndentString by that count
-	local IndentStringBase = string_rep(" ", IndentCount)
-
-	-- Calculated in the walk loop, based on the current StackLevel
-	local IndentString = nil
-	local EndingIndentString = nil
-
-	--IndentString = (Prettify and string_rep(IndentString, StackLevel)) or IndentString
-	--local EndingIndentString = (#IndentString > 0 and string_sub(IndentString, 1, -IndentCount - 1)) or ""
-
-	-- For number key values, we want to explicitly serialize the index num ONLY when it needs to be
-	local KeyNumIndex = 1
-
-	-- Cases for encoding values, then end setup. Functions are all expected to return a (EncodedKey: string, EncloseInBrackets: boolean)
-	local TypeCases = {}
-	do
-		-- Basic func for getting the direct value of an encoded type without weird table.pack()[1] syntax
-		local function TypeCase(typeName, value)
-			-- Each of these funcs return a tuple, so it'd be annoying to do case-by-case
-			local EncodedValue = TypeCases[typeName](value, false) -- False to label as NOT `isKey`
-			return EncodedValue
-		end
-
-		-- For "tuple" args specifically, so there isn't a bunch of re-used code
-		local function Args(...)
-			local EncodedValues = {}
-
-			for _, Arg in next, { ... } do
-				EncodedValues[#EncodedValues + 1] = TypeCase(Type(Arg), Arg)
-			end
-
-			return table_concat(EncodedValues, ValueSeperator)
-		end
-
-		-- For certain Roblox data types, we use a custom serialization method for filling out params etc
-		local function Params(newData, params)
-			return "(function(v, p) for pn, pv in next, p do v[pn] = pv end return v end)("
-				.. table_concat({ newData, TypeCase("table", params) }, ValueSeperator)
-				.. ")"
-		end
-
-		TypeCases["number"] = function(value, isKey)
-			-- If the number isn't the current real index of the table, we DO want to
-			-- explicitly define it in the serialization no matter what for accuracy
-			if isKey and value == KeyNumIndex then
-				-- ^^ What's EXPECTED unless otherwise explicitly defined, if so, return no encoded num
-				KeyNumIndex = KeyNumIndex + 1
-				return nil, true
-			end
-
-			-- Lua's internal `tostring` handling will denote positive/negativie-infinite number TValues as "inf", which
-			-- makes certain numbers not encode properly. We also just want to make the output precise
-			if value == 1 / 0 then
-				return PositiveInf
-			elseif value == -1 / 0 then
-				return NegativeInf
-			elseif value == math.pi then
-				return "math.pi"
-			end
-
-			-- Provided by felixdm
-			local NumberPacked = string_pack(">n", value) -- gameguy is a boss
-			local CorrectedNumber = NumberCorrection[NumberPacked]
-			if CorrectedNumber then
-				return CorrectedNumber
-			end
-
-			if value ~= value then
-				return string_format(
-					'(string.unpack(">n", "\\%*\\%*\\%*\\%*\\%*\\%*\\%*\\%*"))',
-					string_byte(NumberPacked, 1, 8)
-				)
-			end
-
-			-- Return fixed-formatted precision num
-			return string_format("%.14g", value)
-		end
-
-		TypeCases["string"] = function(value, isKey)
-			if isKey and not LuaKeywords[value] and string_match(value, "^[A-Za-z_][A-Za-z0-9_]*$") then
-				-- ^^ Then it's a syntaxically-correct variable, doesn't need explicit string def
-				return value, true
-			end
-
-			return SerializeString(value)
-		end
-
-		-- This is NOT used for normal table depth, only tables-as-keys and Roblox data types that use tables as
-		-- arguments for constructor functions
-		TypeCases["table"] = function(value, isKey)
-			-- Primarily for tables-as-keys
-			if VisitedTables[value] and OutputWarnings then
-				return "{--[[LuaEncode: Duplicate reference]]}"
-			end
-
-			local NewOptions = setmetatable({}, { __index = options })
-			do
-				NewOptions.Prettify = (isKey and false) or Prettify
-				NewOptions.IndentCount = (isKey and ((not Prettify and IndentCount) or 1)) or IndentCount
-				NewOptions._StackLevel = (isKey and 1) or StackLevel + 1
-				NewOptions._VisitedTables = VisitedTables
-				NewOptions._DidInsertNilFunction = DidInsertNilFunction
-				NewOptions._RefMaps = RefMaps
-				NewOptions._CycleMaps = CycleMaps
-				NewOptions.InsertCycles = InsertCycles
-			end
-
-			local Result, InsertedNilFunction = LuaEncode(value, NewOptions)
-
-			if InsertedNilFunction then
-				DidInsertNilFunction = true
-			end
-
-			return Result
-		end
-
-		TypeCases["boolean"] = function(value)
-			return value and "true" or "false"
-		end
-
-		TypeCases["nil"] = function(value)
-			return "nil"
-		end
-
-		TypeCases["function"] = function(value)
-			-- We can't serialize functions so we just return a comment block with function information
-			local FunctionName, ArgumentCount, VarArg, Line = debug.info(value, "nal")
-
-			local Arguments = {}
-			for Index = 1, ArgumentCount do
-				Arguments[Index] = string_format("arg%d", Index)
-			end
-
-			return string_format(
-				[[function(%s)%s%s%s%s%sreturn%send]],
-				`{table_concat(Arguments, ", ")}{VarArg and `{Arguments[1] and ", " or ""}...` or ""}`,
-
-				`{CodegenNewline}{IndentString}{IndentStringBase}-- Name: {FunctionName == "" and "Anonymous Function" or FunctionName} | Line: {Line}`,
-
-				`{CodegenNewline}{IndentString}{IndentStringBase}-- {islclosure(value) and `Upvalues: {#debug.getupvalues(
-					value
-				)}` or "Upvalues: N/A (C Closure)"}`,
-
-				`{CodegenNewline}{IndentString}{IndentStringBase}-- `
-					.. (
-						getfunctionhash
-							and `{islclosure(value) and `Function Hash: {getfunctionhash(value)}` or "Function Hash: N/A (C Closure)"}`
-						or "Function Hash: N/A (getfunctionhash == nil)"
-					),
-
-				OutputWarnings
-						and `{CodegenNewline}{IndentString}{IndentStringBase}-- LuaEncode: Unable to serialize function`
-					or "",
-
-				`{CodegenNewline}{IndentString}{IndentStringBase}`,
-				`{CodegenNewline}{IndentString}`
-			)
-		end
-
-		---------- ROBLOX CUSTOM DATA TYPES BELOW ----------
-
-		TypeCases["Axes"] = function(value)
-			local EncodedArgs = {}
-			local EnumValues = {
-				["Enum.Axis.X"] = value.X,
-				["Enum.Axis.Y"] = value.Y,
-				["Enum.Axis.Z"] = value.Z,
-			}
-
-			for EnumValue, IsEnabled in next, EnumValues do
-				if IsEnabled then
-					EncodedArgs[#EncodedArgs + 1] = EnumValue
-				end
-			end
-
-			return "Axes.new(" .. table_concat(EncodedArgs, ValueSeperator) .. ")"
-		end
-
-		TypeCases["BrickColor"] = function(value)
-			-- BrickColor.Number (Its enum ID) will be slightly more efficient in all cases in deser,
-			-- so we'll use it if Options.Prettify is false
-			return "BrickColor.new(" .. (Prettify and TypeCase("string", value.Name)) or value.Number .. ")"
-		end
-
-		TypeCases["CFrame"] = function(value)
-			if value == CFrame.identity then
-				return "CFrame.identity"
-			end
-
-			return "CFrame.new(" .. Args(value:components()) .. ")"
-		end
-
-		TypeCases["CatalogSearchParams"] = function(value)
-			return Params("CatalogSearchParams.new()", {
-				SearchKeyword = value.SearchKeyword,
-				MinPrice = value.MinPrice,
-				MaxPrice = value.MaxPrice,
-				SortType = value.SortType, -- EnumItem
-				CategoryFilter = value.CategoryFilter, -- EnumItem
-				BundleTypes = value.BundleTypes, -- table
-				AssetTypes = value.AssetTypes, -- table
-			})
-		end
-
-		TypeCases["Color3"] = function(value)
-			-- Using floats for RGB values, most accurate for direct serialization
-			return "Color3.new(" .. Args(value.R, value.G, value.B) .. ")"
-		end
-
-		TypeCases["ColorSequence"] = function(value)
-			return "ColorSequence.new(" .. TypeCase("table", value.Keypoints) .. ")"
-		end
-
-		TypeCases["ColorSequenceKeypoint"] = function(value)
-			return "ColorSequenceKeypoint.new(" .. Args(value.Time, value.Value) .. ")"
-		end
-
-		-- We're using fromUnixTimestamp to serialize the object
-		TypeCases["DateTime"] = function(value)
-			-- Always an int, we don't need to do anything special
-			return "DateTime.fromUnixTimestamp(" .. value.UnixTimestamp .. ")"
-		end
-
-		-- Properties seem to throw an error on index if the scope isn't a Studio plugin, so we're
-		-- directly getting values! (so fun!!!!)
-		TypeCases["DockWidgetPluginGuiInfo"] = function(value)
-			-- e.g.: "InitialDockState:Right InitialEnabled:0 InitialEnabledShouldOverrideRestore:0 FloatingXSize:0 FloatingYSize:0 MinWidth:0 MinHeight:0"
-			local ValueString = tostring(value)
-
-			return "DockWidgetPluginGuiInfo.new("
-				.. Args(
-					-- InitialDockState (Enum.InitialDockState)
-					Enum.InitialDockState[string_match(ValueString, "InitialDockState:(%w+)")], -- Enum.InitialDockState.Right
-					-- InitialEnabled and InitialEnabledShouldOverrideRestore (boolean as number; `0` or `1`)
-					string_match(ValueString, "InitialEnabled:(%w+)") == "1", -- false
-					string_match(ValueString, "InitialEnabledShouldOverrideRestore:(%w+)") == "1", -- false
-					-- FloatingXSize/FloatingYSize (numbers)
-					tonumber(string_match(ValueString, "FloatingXSize:(%w+)")), -- 0
-					tonumber(string_match(ValueString, "FloatingYSize:(%w+)")), -- 0
-					-- MinWidth/MinHeight (numbers)
-					tonumber(string_match(ValueString, "MinWidth:(%w+)")), -- 0
-					tonumber(string_match(ValueString, "MinHeight:(%w+)")) -- 0
-				)
-				.. ")"
-		end
-
-		-- e.g. `Enum.UserInputType`
-		TypeCases["Enum"] = function(value)
-			return "Enum." .. tostring(value)
-		end
-
-		-- e.g. `Enum.UserInputType.Gyro`
-		TypeCases["EnumItem"] = function(value)
-			return tostring(value) -- Returns the full enum index for now (e.g. "Enum.UserInputType.Gyro")
-		end
-
-		-- i.e. the `Enum` global return
-		TypeCases["Enums"] = function(value)
-			return "Enum"
-		end
-
-		TypeCases["Faces"] = function(value)
-			local EncodedArgs = {}
-			local EnumValues = {
-				["Enum.NormalId.Top"] = value.Top, -- These return bools
-				["Enum.NormalId.Bottom"] = value.Bottom,
-				["Enum.NormalId.Left"] = value.Left,
-				["Enum.NormalId.Right"] = value.Right,
-				["Enum.NormalId.Back"] = value.Back,
-				["Enum.NormalId.Front"] = value.Front,
-			}
-
-			for EnumValue, IsEnabled in next, EnumValues do
-				if IsEnabled then
-					EncodedArgs[#EncodedArgs + 1] = EnumValue
-				end
-			end
-
-			return "Faces.new(" .. table_concat(EncodedArgs, ValueSeperator) .. ")"
-		end
-
-		TypeCases["FloatCurveKey"] = function(value)
-			return "FloatCurveKey.new(" .. Args(value.Time, value.Value, value.Interpolation) .. ")"
-		end
-
-		TypeCases["Font"] = function(value)
-			return "Font.new(" .. Args(value.Family, value.Weight, value.Style) .. ")"
-		end
-
-		-- Instance refs can be evaluated to their paths (optional), but if parented to
-		-- nil or some DataModel not under `game`, it'll just return nil
-		TypeCases["Instance"] = function(value)
-			if UseInstancePaths then
-				local InstancePath, NilFunctionInserted = GetFullPath(value, false, nil, GetNilFunctionInsert)
-
-				if NilFunctionInserted then
-					DidInsertNilFunction = true
-				end
-
-				if InstancePath then
-					return InstancePath
-				end
-
-				-- ^^ Now, if the path isn't accessable, falls back to the return below anyway
-			end
-
-			return "nil"
-				.. BlankSeperator
-				.. CommentBlock("Instance.new(" .. TypeCase("string", value.ClassName) .. ")")
-		end
-
-		TypeCases["NumberRange"] = function(value)
-			return "NumberRange.new(" .. Args(value.Min, value.Max) .. ")"
-		end
-
-		TypeCases["NumberSequence"] = function(value)
-			return "NumberSequence.new(" .. TypeCase("table", value.Keypoints) .. ")"
-		end
-
-		TypeCases["NumberSequenceKeypoint"] = function(value)
-			return "NumberSequenceKeypoint.new(" .. Args(value.Time, value.Value, value.Envelope) .. ")"
-		end
-
-		TypeCases["OverlapParams"] = function(value)
-			return Params("OverlapParams.new()", {
-				FilterDescendantsInstances = value.FilterDescendantsInstances,
-				FilterType = value.FilterType,
-				MaxParts = value.MaxParts,
-				CollisionGroup = value.CollisionGroup,
-				RespectCanCollide = value.RespectCanCollide,
-			})
-		end
-
-		TypeCases["PathWaypoint"] = function(value)
-			return "PathWaypoint.new(" .. Args(value.Position, value.Action, value.Label) .. ")"
-		end
-
-		TypeCases["PhysicalProperties"] = function(value)
-			return "PhysicalProperties.new("
-				.. Args(value.Density, value.Friction, value.Elasticity, value.FrictionWeight, value.ElasticityWeight)
-				.. ")"
-		end
-
-		TypeCases["Random"] = function()
-			return "Random.new()"
-		end
-
-		TypeCases["Ray"] = function(value)
-			return "Ray.new(" .. Args(value.Origin, value.Direction) .. ")"
-		end
-
-		TypeCases["RaycastParams"] = function(value)
-			return Params("RaycastParams.new()", {
-				FilterDescendantsInstances = value.FilterDescendantsInstances,
-				FilterType = value.FilterType,
-				IgnoreWater = value.IgnoreWater,
-				CollisionGroup = value.CollisionGroup,
-				RespectCanCollide = value.RespectCanCollide,
-			})
-		end
-
-		TypeCases["Rect"] = function(value)
-			return "Rect.new(" .. Args(value.Min, value.Max) .. ")"
-		end
-
-		-- Roblox doesn't provide read properties for min/max on `Region3`, but they do on Region3int16.. Anyway,
-		-- we CAN calculate the min/max of a Region3 from just .CFrame and .Size.. Thanks to wally for linking me
-		-- the thread for this method lol
-		TypeCases["Region3"] = function(value)
-			local ValueCFrame = value.CFrame
-			local ValueSize = value.Size
-
-			return "Region3.new("
-				.. Args(
-					ValueCFrame * CFrame.new(-ValueSize / 2), -- Minimum
-					ValueCFrame * CFrame.new(ValueSize / 2) -- Maximum
-				)
-				.. ")"
-		end
-
-		TypeCases["Region3int16"] = function(value)
-			return "Region3int16.new(" .. Args(value.Min, value.Max) .. ")"
-		end
-
-		TypeCases["TweenInfo"] = function(value)
-			return "TweenInfo.new("
-				.. Args(
-					value.Time,
-					value.EasingStyle,
-					value.EasingDirection,
-					value.RepeatCount,
-					value.Reverses,
-					value.DelayTime
-				)
-				.. ")"
-		end
-
-		-- CURRENTLY UNDOCUMENTED*
-		TypeCases["RotationCurveKey"] = function(value)
-			return "RotationCurveKey.new(" .. Args(value.Time, value.Value, value.Interpolation) .. ")"
-		end
-
-		TypeCases["UDim"] = function(value)
-			return "UDim.new(" .. Args(value.Scale, value.Offset) .. ")"
-		end
-
-		TypeCases["UDim2"] = function(value)
-			if value.X.Offset == 0 and value.Y.Offset == 0 then
-				return "UDim2.fromScale(" .. Args(value.X.Scale, value.Y.Scale) .. ")"
-			end
-
-			if value.X.Scale == 0 and value.Y.Scale == 0 then
-				return "UDim2.fromOffset(" .. Args(value.X.Offset, value.Y.Offset) .. ")"
-			end
-
-			return "UDim2.new("
-				.. Args(
-					-- Not directly using X and Y UDims for better output (i.e. would be
-					-- UDim2.new(UDim.new(1, 0), UDim.new(1, 0)) if I did)
-					value.X.Scale,
-					value.X.Offset,
-					value.Y.Scale,
-					value.Y.Offset
-				)
-				.. ")"
-		end
-
-		local Vector2Replacements = {
-			[Vector2.zero] = "Vector2.zero",
-			[Vector2.one] = "Vector2.one",
-			[Vector2.xAxis] = "Vector2.xAxis",
-			[Vector2.yAxis] = "Vector2.yAxis",
-		}
-
-		TypeCases["Vector2"] = function(value)
-			if Vector2Replacements[value] then
-				return Vector2Replacements[value]
-			end
-
-			return "Vector2.new(" .. Args(value.X, value.Y) .. ")"
-		end
-
-		TypeCases["Vector2int16"] = function(value)
-			return "Vector2int16.new(" .. Args(value.X, value.Y) .. ")"
-		end
-
-		local Vector3Replacements = {
-			[Vector3.zero] = "Vector3.zero",
-			[Vector3.one] = "Vector3.one",
-			[Vector3.xAxis] = "Vector3.xAxis",
-			[Vector3.yAxis] = "Vector3.yAxis",
-			[Vector3.zAxis] = "Vector3.zAxis",
-		}
-
-		TypeCases["Vector3"] = function(value)
-			if Vector3Replacements[value] then
-				return Vector3Replacements[value]
-			end
-
-			return "Vector3.new(" .. Args(value.X, value.Y, value.Z) .. ")"
-		end
-
-		TypeCases["Vector3int16"] = function(value)
-			return "Vector3int16.new(" .. Args(value.X, value.Y, value.Z) .. ")"
-		end
-
-		TypeCases["buffer"] = function(value)
-			if wax.shared.SaveManager:GetState("PreferBufferFromString", false) then
-				return `buffer.fromstring({SerializeString(buffer.tostring(value))})`
-			end
-
-			local Bytes = {}
-			for i = 1, buffer.len(value) do
-				table.insert(Bytes, buffer.readu8(value, i - 1))
-			end
-
-			return table_concat({
-				"(function(bytes) ",
-				CommentBlock("Type: buffer"),
-				NewEntryString,
-				IndentString,
-				IndentStringBase,
-				"local b = buffer.create(#bytes)",
-				NewEntryString,
-				IndentString,
-				IndentStringBase,
-				"for i = 1, #bytes do",
-				NewEntryString,
-				IndentString,
-				IndentStringBase,
-				IndentStringBase,
-				"buffer.writeu8(b, i - 1, bytes[i])",
-				NewEntryString,
-				IndentString,
-				IndentStringBase,
-				"end",
-				NewEntryString,
-				IndentStringBase,
-				IndentString,
-				"return b",
-				NewEntryString,
-				IndentString,
-				"end)({ ",
-				table_concat(Bytes, ", "),
-				" })",
-			})
-		end
-
-		-- With userdata, just encode directly
-		TypeCases["userdata"] = function(value)
-			if getmetatable(value) ~= nil then -- Has mt
-				return "newproxy(true)"
-			else
-				return "newproxy()" -- newproxy() defaults to false (no mt)
-			end
-		end
-	end
-
-	-- Setup for final output, which will be concat together
-	local Output = {}
-
-	local TablePointer = inputTable
-	local NextKey = nil -- Used with TableStack so the TablePointer loop knows where to continue from upon stack pop
-	local IsNewTable = true -- Used with table stack push/pop to identify when an opening curly brace should be added
-
-	-- Stack array for table depth
-	local TableStack = {} -- [Depth: number] = {TablePointer: table, NextKey: any, KeyNumIndex: number}
-
-	while TablePointer do
-		-- Update StackLevel for formatting
-		StackLevel = EntryStackLevel + #TableStack
-		IndentString = (Prettify and string_rep(IndentStringBase, StackLevel)) or ""
-		if Prettify and StackLevel > 1 then
-			EndingIndentString = string_rep(IndentStringBase, StackLevel - 1)
-		else
-			EndingIndentString = ""
-		end
-
-		-- Only append an opening brace to the table if this isn't just a continution up the stack
-		if IsNewTable then
-			Output[#Output + 1] = "{"
-		elseif next(TablePointer, NextKey) == nil then -- Formatting for the next entry still needs to be added like any other value
-			Output[#Output + 1] = NewEntryString .. EndingIndentString
-		else
-			Output[#Output + 1] = ","
-		end
-
-		VisitedTables[TablePointer] = true
-
-		local ArrayLength, IsArray = GetIsArrayAndLength(TablePointer)
-		if IsArray and ArrayLength > 0 then
-			for i = 1, ArrayLength do
-				if Prettify then
-					Output[#Output + 1] = NewEntryString .. IndentString
-				end
-				local Value = TablePointer[i]
-				local ValueType = Type(Value)
-
-				if ValueType == "table" then
-					local RootIndexPath
-					if InsertCycles and RefMaps[TablePointer] then
-						local EncodedKeyAsValue = TypeCases["number"](i, false)
-						RootIndexPath = table_concat({ "[", EncodedKeyAsValue, "]" })
-					end
-
-					if VisitedTables[Value] then
-						local IndexPath
-						if InsertCycles and RefMaps[TablePointer] and RootIndexPath then
-							IndexPath = RefMaps[TablePointer] .. RootIndexPath
-						end
-
-						local EncodedValueOrError =
-							string_format("{%s}", (OutputWarnings and "--[[LuaEncode: Duplicate reference]]") or "")
-
-						if IndexPath and RefMaps[Value] then
-							CycleMaps[IndexPath] = RefMaps[Value]
-						end
-
-						Output[#Output + 1] = EncodedValueOrError
-
-						continue
-					end
-
-					if InsertCycles and RefMaps[TablePointer] and RootIndexPath then
-						RefMaps[Value] = RefMaps[TablePointer] .. RootIndexPath
-					end
-
-					-- Create a new options table for the recursive call
-					local Encoded, InsertedNilFunction = LuaEncode(
-						Value,
-						setmetatable({
-							Prettify = Prettify,
-							IndentCount = IndentCount,
-							_StackLevel = StackLevel + 1,
-							_VisitedTables = VisitedTables,
-							_DidInsertNilFunction = DidInsertNilFunction,
-							_RefMaps = RefMaps,
-							_CycleMaps = CycleMaps,
-							InsertCycles = InsertCycles,
-						}, { __index = options })
-					)
-
-					if InsertedNilFunction then
-						DidInsertNilFunction = true
-					end
-
-					Output[#Output + 1] = Encoded
-				elseif TypeCases[ValueType] then
-					local ValueEncodedSuccess, EncodedValueOrError = pcall(TypeCases[ValueType], Value, false)
-					if ValueEncodedSuccess and EncodedValueOrError then
-						Output[#Output + 1] = EncodedValueOrError
-					else
-						Output[#Output + 1] = `nil{OutputWarnings and " " .. CommentBlock(
-							string.format(
-								"LuaEncode: Failed to encode value of data type %s: %s",
-								ValueType,
-								SerializeString(EncodedValueOrError)
-							)
-						) or ""}`
-					end
-				else
-					Output[#Output + 1] = `nil{OutputWarnings and " " .. CommentBlock(
-						string.format("LuaEncode: Serialization of data type %s is not supported", ValueType)
-					) or ""}`
-				end
-
-				if i < ArrayLength then
-					Output[#Output + 1] = ","
-				end
-			end
-			Output[#Output + 1] = NewEntryString .. EndingIndentString .. "}"
-			if #TableStack > 0 then
-				local TableUp = TableStack[#TableStack]
-				TableStack[#TableStack] = nil
-				TablePointer, NextKey, KeyNumIndex = TableUp[1], TableUp[2], TableUp[3] -- Reverted to TablePointer, NextKey, KeyNumIndex (from outer scope)
-				IsNewTable = false
-			else
-				break
-			end
-
-			continue
-		end
-
-		-- Just because of control flow restrictions with Lua compatibility
-		local SkipStackPop = false
-
-		for Key, Value in next, TablePointer, NextKey do
-			local KeyType = Type(Key)
-			local ValueType = Type(Value)
-
-			local ValueIsTable = ValueType == "table"
-
-			if TypeCases[KeyType] and TypeCases[ValueType] then
-				if Prettify then
-					Output[#Output + 1] = NewEntryString .. IndentString
-				end
-
-				local ValueWasEncoded = false -- Keeping track of this for adding a "," to the output if needed
-
-				-- Evaluate output for key
-				local KeyEncodedSuccess, EncodedKeyOrError, DontEncloseKeyInBrackets =
-					pcall(TypeCases[KeyType], Key, true) -- The `true` represents if it's a key or not, here it is
-
-				-- Evaluate output for value, ignoring 2nd arg (`DontEncloseInBrackets`) because this isn't the key
-				local ValueEncodedSuccess, EncodedValueOrError
-				if not ValueIsTable then
-					ValueEncodedSuccess, EncodedValueOrError = pcall(TypeCases[ValueType], Value, false)
-				end
-
-				-- Ignoring `if EncodedKeyOrError` because the key doesn't actually need to ALWAYS
-				-- be explicitly encoded, like if it's a number of the current key index!
-				if KeyEncodedSuccess and (ValueIsTable or (ValueEncodedSuccess and EncodedValueOrError)) then
-					-- Append explicit key if necessary
-					if EncodedKeyOrError then
-						if DontEncloseKeyInBrackets then
-							Output[#Output + 1] = EncodedKeyOrError
-						else
-							Output[#Output + 1] = table_concat({ "[", EncodedKeyOrError, "]" })
-						end
-
-						Output[#Output + 1] = EqualsSeperator
-					end
-
-					-- Of course, recursive tables are handled differently and use the stack system
-					if ValueIsTable then
-						local IndexPath
-						if InsertCycles and KeyIndexTypes[KeyType] and RefMaps[TablePointer] then
-							if
-								KeyType == "string"
-								and not LuaKeywords[Key]
-								and string_match(Key, "^[A-Za-z_][A-Za-z0-9_]*$")
-							then
-								IndexPath = "." .. Key
-							else
-								local EncodedKeyAsValue = TypeCases[KeyType](Key)
-								IndexPath = table_concat({ "[", EncodedKeyAsValue, "]" })
-							end
-						end
-
-						if not VisitedTables[Value] then
-							if IndexPath then
-								RefMaps[Value] = RefMaps[TablePointer] .. IndexPath
-							end
-
-							TableStack[#TableStack + 1] = { TablePointer, Key, KeyNumIndex }
-
-							TablePointer = Value
-							NextKey = nil
-							KeyNumIndex = 1
-
-							IsNewTable = true
-							SkipStackPop = true
-							break
-						else
-							EncodedValueOrError =
-								string_format("{%s}", (OutputWarnings and "--[[LuaEncode: Duplicate reference]]") or "")
-
-							if IndexPath then
-								CycleMaps[IndexPath] = RefMaps[Value]
-							end
-						end
-					end
-
-					-- Append value like normal
-					Output[#Output + 1] = EncodedValueOrError
-
-					ValueWasEncoded = true
-				elseif OutputWarnings then -- Then `Encoded(Key/Value)OrError` is the error msg
-					-- ^^ Then either the key or value wasn't properly checked or encoded, and there
-					-- was an error we need to log!
-					local ErrorMessage = string_format(
-						"LuaEncode: Failed to encode %s of data type %s: %s",
-						(not KeyEncodedSuccess and "key") or (not ValueEncodedSuccess and "value") or "key/value",
-						ValueType,
-						(not KeyEncodedSuccess and SerializeString(EncodedKeyOrError))
-							or (not ValueEncodedSuccess and SerializeString(EncodedValueOrError))
-							or "(Failed to get error message)"
-					)
-
-					Output[#Output + 1] = CommentBlock(ErrorMessage)
-				end
-
-				if next(TablePointer, Key) == nil then
-					-- If there isn't another value after the current index, add ending formatting
-					Output[#Output + 1] = NewEntryString .. EndingIndentString
-				elseif ValueWasEncoded then
-					Output[#Output + 1] = ","
-				end
-			end
-		end
-
-		-- Vanilla Lua control flow is fun
-		if not SkipStackPop then
-			Output[#Output + 1] = "}"
-
-			if #TableStack > 0 then
-				local TableUp = TableStack[#TableStack]
-				TableStack[#TableStack] = nil -- Pop off the table stack
-
-				TablePointer, NextKey, KeyNumIndex = TableUp[1], TableUp[2], TableUp[3]
-				IsNewTable = false
-			else
-				break
-			end
-		end
-	end
-
-	if InsertCycles and StackLevel == 1 then
-		local CycleMapsOut = {}
-		for CycleIndex, CycleMap in next, CycleMaps do
-			CycleMapsOut[#CycleMapsOut + 1] = IndentString
-				.. "t"
-				.. CycleIndex
-				.. EqualsSeperator
-				.. "t"
-				.. CycleMap
-				.. CodegenNewline
-		end
-
-		if #CycleMapsOut > 0 then
-			return table_concat({
-				"(function(t)",
-				NewEntryString,
-				table_concat(CycleMapsOut),
-				NewEntryString,
-				IndentString,
-				"return t",
-				CodegenNewline,
-				"end)(",
-				table_concat(Output),
-				")",
-			}),
-				DidInsertNilFunction
-		end
-	end
-
-	return table_concat(Output), DidInsertNilFunction
-end
-
-return LuaEncode
-
-end)() end,
-    [35] = function()local wax,script,require=ImportGlobals(35)local ImportGlobals return (function(...)local ImageFetcher = {
-	FallbackMapping = {
-		Logo = "rbxassetid://91685317120520",
-	},
-}
-
-if not isfolder("Cobalt/Assets") then
-	makefolder("Cobalt/Assets")
-end
-
-function SafeFetch(Path: string)
-	local Success, Result = pcall(function()
-		return getcustomasset(Path)
-	end)
-
-	return Success and Result or nil
-end
-
-function ImageFetcher.GetRemoteImages(Images: { [string]: string })
-	if not getcustomasset then
-		return Images
-	end
-
-	local NewImages = {}
-	for ClassName, Image in Images do
-		if isfile(`Cobalt/Assets/{ClassName}.png`) then
-			NewImages[ClassName] = SafeFetch(`Cobalt/Assets/{ClassName}.png`) or Image
-			continue
-		end
-
-		writefile(
-			`Cobalt/Assets/{ClassName}.png`,
-			game:HttpGet(`https://robloxapi.github.io/ref/icons/dark/{ClassName}.png`)
-		)
-
-		NewImages[ClassName] = SafeFetch(`Cobalt/Assets/{ClassName}.png`) or Image
-	end
-
-	return NewImages
-end
-
-function ImageFetcher.GetImage(Image: string)
-	if not getcustomasset then
-		return ImageFetcher.FallbackMapping[Image] or Image
-	end
-
-	if isfile(`Cobalt/Assets/{Image}.png`) then
-		return SafeFetch(`Cobalt/Assets/{Image}.png`) or ImageFetcher.FallbackMapping[Image] or Image
-	end
-
-	local Response = request({
-		Url = `https://raw.githubusercontent.com/notpoiu/cobalt/refs/heads/main/Assets/{Image}.png`,
-		Method = "GET",
-	})
-
-	if not Response.Success then
-		return ImageFetcher.FallbackMapping[Image] or Image
-	end
-
-	writefile(`Cobalt/Assets/{Image}.png`, Response.Body)
-	return SafeFetch(`Cobalt/Assets/{Image}.png`) or ImageFetcher.FallbackMapping[Image] or Image
-end
-
-return ImageFetcher
-
-end)() end,
-    [19] = function()local wax,script,require=ImportGlobals(19)local ImportGlobals return (function(...)local Adonis = {
-	Name = "Adonis",
-	Game = "*",
-}
-
-local AdonisAnticheatThreads = {}
-function Adonis.Detect()
-	if not getreg or not getgc or not isfunctionhooked then
-		return false
-	end
-
-	local AdonisDetected = false
-
-	for _, thread in getreg() do
-		if typeof(thread) ~= "thread" then
-			continue
-		end
-
-		local Source = debug.info(thread, 1, "s")
-		if Source and (Source:match(".Core.Anti") or Source:match(".Plugins.Anti_Cheat")) then
-			AdonisDetected = true
-			table.insert(AdonisAnticheatThreads, thread)
-		end
-	end
-
-	return AdonisDetected
-end
-
-function Adonis.Bypass()
-	for _, thread in AdonisAnticheatThreads do
-		pcall(coroutine.close, thread)
-	end
-
-	for _, value in getgc(true) do
-		if typeof(value) ~= "table" then
-			continue
-		end
-
-		local IsAdonisOrigin = typeof(rawget(value, "Detected")) == "function" and rawget(value, "RLocked")
-		if IsAdonisOrigin then
-			for _, DetectionFunc in value do
-				-- Just in case they already loaded a custom anticheat bypass for adonis
-				if typeof(DetectionFunc) ~= "function" or isfunctionhooked(DetectionFunc) then
-					continue
-				end
-
-				wax.shared.Hooks[DetectionFunc] = wax.shared.Hooking.HookFunction(
-					DetectionFunc,
-					function(action, info, nocrash)
-						coroutine.yield(coroutine.running())
-						return task.wait(9e9)
-					end
-				)
-			end
-		end
-	end
-
-	return true
-end
-
-return Adonis
-
-end)() end,
-    [22] = function()local wax,script,require=ImportGlobals(22)local ImportGlobals return (function(...)-- Logger
--- ActualMasterOogway
--- December 8, 2024
-
---[=[
-    A simple logging utility that writes messages to a file. Supports different log levels
-    and can be configured to overwrite or append to the log file.
-
-    Log Format:  2024-12-04T15:28:31.131Z,0.131060,MyThread,Warning [FLog::RobloxStarter] Roblox stage ReadyForFlagFetch completed
-                 <timestamp>,<elapsed_time>,<thread_id>,<level> <message>
-]=]
-
-local Logger = {}
-Logger.__index = Logger
-
-Logger.LOG_LEVELS = {
-	ERROR = 1,
-	WARNING = 2,
-	INFO = 3,
-	DEBUG = 4,
-}
-
-local LOG_LEVEL_STRINGS = {
-	[Logger.LOG_LEVELS.ERROR] = "ERROR",
-	[Logger.LOG_LEVELS.WARNING] = "WARNING",
-	[Logger.LOG_LEVELS.INFO] = "INFO",
-	[Logger.LOG_LEVELS.DEBUG] = "DEBUG",
-}
-
-local startTime = tick()
-
-local function createDirectoryRecursive(path)
-	local currentPath = ""
-	for part in path:gmatch("[^\\/]+") do
-		currentPath = currentPath .. part
-		if not isfolder(currentPath) then
-			makefolder(currentPath)
-		end
-		currentPath = currentPath .. "/"
-	end
-end
-
---[=[
-    Generates a unique file name for the log file. The file name is based on the current
-    job ID, ensuring it is unique per server instance but consistent across multiple
-    executions within the same server.
-
-    @return string A unique file name for the log file.
-]=]
-function Logger:GenerateFileName()
-	local JobIdNumber = game.JobId:gsub("%D", "")
-	local timestamp = os.date("!%Y%m%d%H%M%S")
-
-	return `{self.logFileDirectory}/{JobIdNumber * 1.7 // 1.8}_{timestamp}.log`
-end
-
---[=[
-    Creates a new Logger instance.
-
-    @param logFilePath string The path to the log file.
-    @param logLevel number The minimum log level to write to the file. Defaults to INFO.
-    @param overwrite boolean Whether to overwrite the log file or append to it. Defaults to false (append).
-    @return Logger A new Logger instance.
-]=]
-function Logger.new(logFilePath: string, logLevel: number?, overwrite: boolean?)
-	local self = setmetatable({}, Logger)
-	self.logFilePath = logFilePath
-	self.logFileDirectory = logFilePath:match("(.+)/")
-	self.logLevel = logLevel or Logger.LOG_LEVELS.INFO
-	self.overwrite = overwrite or false
-
-	local folderPath, fileName = logFilePath:match("(.*[\\/])(.*)")
-
-	if folderPath and not isfolder(folderPath) then
-		createDirectoryRecursive(folderPath)
-	end
-
-	if self.overwrite then
-		local success, err = pcall(writefile, self.logFilePath, "")
-		if not success then
-			warn(debug.traceback(`Failed to clear log file: {self.logFilePath} - {err}`, 2))
-		end
-	end
-
-	self:Info("Logger", "Logger initialized")
-
-	return self
-end
-
---[=[
-    Logs a message to the file.
-
-    @param level number The log level of the message.
-    @param threadId string The ID of the thread or source of the log message.
-    @param message string The message to log.
-]=]
-function Logger:Log(level: number, threadId: string, message: string)
-	if level <= self.logLevel then
-		local levelStr = LOG_LEVEL_STRINGS[level]
-
-		local timestamp = `{os.date("!%Y-%m-%dT%H:%M:%S")}{("%.3f"):format(tick() % 1)}Z`
-		local elapsedTime = ("%.6f"):format(tick() - startTime)
-
-		local logMessage = `{timestamp},{elapsedTime},{threadId},{levelStr} {message}\n`
-
-		local success, err = pcall(appendfile, self.logFilePath, logMessage)
-		if not success then
-			warn(debug.traceback(`Failed to write to log file: {self.logFilePath} - {err}`, 2))
-		end
-	end
-end
-
---[=[
-    Logs a debug message.
-
-    @param threadId string The ID of the thread or source of the log message.
-    @param message string The message to log.
-]=]
-function Logger:Debug(threadId: string, message: string)
-	self:Log(Logger.LOG_LEVELS.DEBUG, threadId, message)
-end
-
---[=[
-    Logs an info message.
-
-    @param threadId string The ID of the thread or source of the log message.
-    @param message string The message to log.
-]=]
-function Logger:Info(threadId: string, message: string)
-	self:Log(Logger.LOG_LEVELS.INFO, threadId, message)
-end
-
---[=[
-    Logs a warning message.
-
-    @param threadId string The ID of the thread or source of the log message.
-    @param message string The message to log.
-]=]
-function Logger:Warning(threadId: string, message: string)
-	self:Log(Logger.LOG_LEVELS.WARNING, threadId, message)
-end
-
---[=[
-    Logs an error message.
-
-    @param threadId string The ID of the thread or source of the log message.
-    @param message string The message to log.
-]=]
-function Logger:Error(threadId: string, message: string)
-	self:Log(Logger.LOG_LEVELS.ERROR, threadId, message)
-end
-
-return Logger
-end)() end,
-    [12] = function()local wax,script,require=ImportGlobals(12)local ImportGlobals return (function(...)local ClassesToHook = {
-	RemoteEvent = "OnClientEvent",
-	RemoteFunction = "OnClientInvoke",
-	UnreliableRemoteEvent = "OnClientEvent",
-	BindableEvent = "Event",
-	BindableFunction = "OnInvoke",
-}
-
-type InstancesToHook = RemoteEvent | UnreliableRemoteEvent | RemoteFunction | BindableEvent | BindableFunction
-type MethodsToHook = "OnClientEvent" | "OnClientInvoke" | "Event" | "OnInvoke"
-
-local LogConnectionFunctions = {}
-local SignalMapping = setmetatable({}, { __mode = "kv" })
-
---[[
-	Individually logs an incoming remote call.
-
-	@param Instance The instance that was called.
-	@param Method The method that was called (e.g., "OnClientEvent").
-	@param Function The function that was called, if applicable.
-	@param Info The information about the call, including arguments and origin. Can be nil.
-	@param ... The arguments passed from the server to the client.
-	@return boolean Returns true if the call was blocked, false otherwise.
-]]
-local function LogRemote(
-	Instance: InstancesToHook,
-	Method: MethodsToHook,
-	Function: (...any) -> ...any,
-	Info: {
-		Arguments: { [number]: any, n: number },
-		Time: string,
-		Origin: Instance,
-		Function: (...any) -> ...any,
-		Line: number,
-		IsExecutor: boolean,
-	}
-)
-	if not wax.shared.ShouldIgnore(Instance, getcallingscript()) and not LogConnectionFunctions[Function] then
-		local Log = wax.shared.Logs.Incoming[Instance]
-		if not Log then
-			Log = wax.shared.NewLog(Instance, "Incoming", Method, getcallingscript())
-		end
-
-		if Log.Blocked then
-			return true
-		elseif not Log.Ignored then
-			Log:Call(Info)
-		end
-	end
-
-	return false
-end
-
---[[
-	Creates a function that can be used to pass to `Connect` which will log all the incoming calls. It will additonally add the function to a ignore list (`LogConnectionFunctions`) to prevent unneccessary logging.
-	
-	@param Instance The instance to log.
-	@param Method The method to log (e.g., "OnClientEvent").
-	@return function Returns a function that logs all calls to the given instance and method.
-]]
-local function CreateConnectionFunction(Instance: InstancesToHook, Method: MethodsToHook)
-	local ConnectionFunction = function(...)
-		for _, Connection in pairs(getconnections((Instance :: any)[Method])) do
-			if Connection.ForeignState then
-				continue
-			end
-
-			local Function = typeof(Connection.Function) == "function" and Connection.Function or nil
-			local Thread = Connection.Thread
-
-			local Origin = nil
-
-			if Thread and getscriptfromthread then
-				Origin = getscriptfromthread(Thread)
-			end
-
-			if not Origin and Function then
-				-- ts is unreliable because people could js set the script global to nil
-				-- if only debug.getinfo(Function).source or debug.info(Function, "s") returned an Instance...
-
-				local Script = rawget(getfenv(Function), "script")
-				if typeof(Script) == "Instance" then
-					Origin = Script
-				end
-			end
-
-			LogRemote(Instance, Method, Function, {
-				Arguments = table.pack(...),
-				Time = os.date("%X"),
-				Origin = Origin,
-				Function = Function,
-				Line = nil,
-				IsExecutor = Function and isexecutorclosure(Function) or false,
-			})
-		end
-	end
-
-	LogConnectionFunctions[ConnectionFunction] = true
-	return ConnectionFunction
-end
-
---[[
-	Creates a function that can be used to pass to callbacks (.OnInvoke & .OnClientInvoke) which will log all the incoming calls.
-	
-	@param Instance The instance to log.
-	@param Method The method to log (e.g., "OnClientEvent").
-	@param Function The original callback of the RemoteFunction
-	@return function Returns a function that logs all function calls to the given instance and method.
-]]
-local function CreateCallbackDetour(Instance: InstancesToHook, Method: MethodsToHook, Callback: (...any) -> ...any)
-	return function(...)
-		local Origin = nil
-
-		-- May not exist in all executors
-		if getscriptfromthread then
-			Origin = getscriptfromthread(coroutine.running())
-		end
-
-		-- Unreliable method to get script.
-		if not Origin then
-			local Script = rawget(getfenv(Callback), "script")
-			if typeof(Script) == "Instance" then
-				Origin = Script
-			end
-		end
-
-		local FunctionCaller = debug.info(2, "f")
-		local IsExecutor = if typeof(FunctionCaller) == "function"
-			then isexecutorclosure(FunctionCaller)
-			else isexecutorclosure(Callback)
-
-		if
-			LogRemote(Instance, Method, Callback, {
-				Arguments = table.pack(...),
-				Time = os.date("%X"),
-				Origin = Origin,
-				Function = Callback,
-				Line = nil,
-				IsExecutor = IsExecutor,
-			})
-		then
-			return
-		end
-
-		return Callback(...)
-	end
-end
-
---[[
-	Handles setting up logging for the appropriate instances.
-
-	@param Instance The instance to handle.
-]]
-local function HandleInstance(Instance: any)
-	if
-		not ClassesToHook[Instance.ClassName]
-		or Instance == wax.shared.Communicator
-		or Instance == wax.shared.ActorCommunicator
-	then
-		return
-	end
-
-	local Method = ClassesToHook[Instance.ClassName]
-
-	if Instance.ClassName == "RemoteEvent" or Instance.ClassName == "UnreliableRemoteEvent" then
-		wax.shared.Connect(Instance.OnClientEvent:Connect(CreateConnectionFunction(Instance, Method)))
-
-		SignalMapping[Instance.OnClientEvent] = Instance
-	elseif Instance.ClassName == "BindableEvent" then
-		wax.shared.Connect(Instance.Event:Connect(CreateConnectionFunction(Instance, Method)))
-
-		SignalMapping[Instance.Event] = Instance
-	elseif Instance.ClassName == "RemoteFunction" or Instance.ClassName == "BindableFunction" then
-		local Success, Callback = pcall(getcallbackvalue, Instance, Method)
-		local IsCallable = (
-			typeof(Callback) == "function"
-			or wax.shared.getrawmetatable(Callback) ~= nil and typeof(wax.shared.getrawmetatable(Callback)["__call"]) == "function"
-			or false
-		)
-
-		if not Success or not IsCallable then
-			return
-		end
-
-		Instance[Method] = CreateCallbackDetour(Instance, Method, Callback)
-	end
-end
-
-wax.shared.Connect(game.DescendantAdded:Connect(HandleInstance))
-
--- getinstances() was unreliable and failed to find some instances... ts pmo bro..
-local CategoryToSearch = { game:GetDescendants() }
-if wax.shared.ExecutorSupport["getnilinstances"].IsWorking then
-	table.insert(CategoryToSearch, getnilinstances())
-end
-
-for _, Category in CategoryToSearch do
-	for _, Instance in pairs(Category) do
-		HandleInstance(Instance)
-	end
-end
-
-wax.shared.NewIndexHook = wax.shared.Hooking.HookMetaMethod(
-	game,
-	"__newindex",
-	wax.shared.newcclosure(function(...)
-		local self, key, value = ...
-
-		if typeof(self) ~= "Instance" or not ClassesToHook[self.ClassName] then
-			return wax.shared.NewIndexHook(...)
-		end
-
-		if self.ClassName == "RemoteFunction" or self.ClassName == "BindableFunction" then
-			local Method = ClassesToHook[self.ClassName]
-
-			local IsCallable = (
-				typeof(value) == "function"
-				or wax.shared.getrawmetatable(value) ~= nil and typeof(wax.shared.getrawmetatable(value)["__call"]) == "function"
-				or false
-			)
-
-			if key == Method and IsCallable then
-				return wax.shared.NewIndexHook(self, key, CreateCallbackDetour(self :: InstancesToHook, Method, value))
-			end
-		end
-
-		return wax.shared.NewIndexHook(...)
-	end)
-)
-
-local ConnectionKeys = {
-	"Connect",
-	"ConnectParallel",
-	"connect",
-	"connectParallel",
-	"once",
-	"Once",
-}
-
-local SignalMetatable = wax.shared.getrawmetatable(Instance.new("Part").Touched)
-wax.shared.Hooks[SignalMetatable.__index] = wax.shared.Hooking.HookFunction(SignalMetatable.__index, function(...)
-	local self, key = ...
-
-	if table.find(ConnectionKeys, key) then
-		local Instance = SignalMapping[self]
-		local Connect = wax.shared.Hooks[SignalMetatable.__index](...)
-
-		if not Instance then
-			return Connect
-		end
-
-		local Method = ClassesToHook[Instance.ClassName]
-		wax.shared.Hooks[Connect] = wax.shared.Hooking.HookFunction(
-			Connect,
-			wax.shared.newcclosure(function(...)
-				local _self, callback = ...
-
-				local Result = table.pack(wax.shared.Hooks[Connect](...))
-				local Log = wax.shared.Logs.Incoming[Instance]
-
-				if Log and Log.Blocked then
-					for _, Connection in pairs(getconnections(Instance[Method])) do
-						if not Connection.ForeignState and Connection.Function ~= callback then
-							continue
-						end
-
-						Connection:Disable()
-					end
-				end
-
-				return table.unpack(Result, 1, Result.n)
-			end)
-		)
-
-		return Connect
-	end
-
-	return wax.shared.Hooks[SignalMetatable.__index](...)
-end)
-
-end)() end,
-    [24] = function()local wax,script,require=ImportGlobals(24)local ImportGlobals return (function(...)local Log = {}
-Log.__index = Log
-
-function Log.new(Instance, Type, Method, Index, CallingScript)
-	local NewLog = setmetatable({
-		Instance = Instance,
-		Type = Type,
-		Method = Method,
-		Index = Index,
-		Calls = {},
-		GameCalls = {},
-		Ignored = false,
-		Blocked = false,
-		Button = nil,
-	}, Log)
-
-	return NewLog
-end
-
-function DeepClone(orig, copies)
-	copies = copies or {}
-
-	if typeof(orig) == "Instance" then
-		return cloneref(orig)
-	elseif type(orig) ~= "table" then
-		return orig
-	elseif copies[orig] then
-		return copies[orig]
-	end
-
-	local copy = {}
-	copies[orig] = copy
-	for k, v in pairs(orig) do
-		copy[DeepClone(k, copies)] = DeepClone(v, copies)
-	end
-	return copy
-end
-
-function Log:Call(RawInfo)
-	local Info = DeepClone(RawInfo)
-	local Index = #self.Calls + 1
-	self.Calls[Index] = Info
-	if not Info.IsExecutor then
-		table.insert(self.GameCalls, Index)
-	end
-
-	if wax.shared.Communicator then
-		wax.shared.Communicator.Fire(wax.shared.Communicator, self.Instance, self.Type, #self.Calls)
-	end
-end
-
-function Log:Ignore()
-	if wax.shared.ActorCommunicator then
-		wax.shared.ActorCommunicator:Fire("MainIgnore", self.Instance, self.Type)
-	end
-
-	self.Ignored = not self.Ignored
-end
-
-local ClassesConnectionsToggle = {
-	RemoteEvent = "OnClientEvent",
-	UnreliableRemoteEvent = "OnClientEvent",
-	BindableEvent = "Event",
-}
-
-function Log:SetConnectionsEnabled(enabled: boolean)
-	if not self.Instance or not ClassesConnectionsToggle[self.Instance.ClassName] then
-		return
-	end
-
-	local ConnectionName = ClassesConnectionsToggle[self.Instance.ClassName]
-	if self.Type ~= "Incoming" or not ConnectionName then
-		return
-	end
-
-	for _, Connection in pairs(getconnections(self.Instance[ConnectionName])) do
-		if enabled then
-			Connection:Enable()
-		else
-			Connection:Disable()
-		end
-	end
-end
-
-function Log:Block()
-	if wax.shared.ActorCommunicator then
-		wax.shared.ActorCommunicator:Fire("MainBlock", self.Instance, self.Type)
-	end
-
-	self.Blocked = not self.Blocked
-	Log:SetConnectionsEnabled(not self.Blocked)
-end
-
-function Log:SetButton(Instance, Name, Calls)
-	self.Button = {
-		Instance = Instance,
-		Name = Name,
-		Calls = Calls,
-	}
-end
-
-return Log
-
-end)() end,
-    [14] = function()local wax,script,require=ImportGlobals(14)local ImportGlobals return (function(...)local LuaEncode = require(script.Parent.Parent.Utils.Serializer.LuaEncode)
-local Hooks = script.Parent.Hooks
-
--- Main Thread Hooks
-for _, Hook in ipairs(Hooks.Default:GetChildren()) do
-	task.spawn(require, Hook)
-end
-
--- Actors use a different lua vm
--- This means that our main thread metatable hooks dont apply in the actor's vm
--- So we need to set up the hooks again in the actor lua vm in order to log everything
-local ActorsUtils = script.Parent.Actors
-
-local TargetActor = getactors and getactors()[1] or nil
-wax.shared.ActorsEnabled = (create_comm_channel and run_on_actor and TargetActor) ~= nil
-
-if wax.shared.ActorsEnabled then
-	local ActorEnvironementCode = ActorsUtils.Environement.Value
-
-	local CommunicationChannelID, Channel = create_comm_channel()
-	wax.shared.ActorCommunicator = get_comm_channel(CommunicationChannelID)
-
-	local AlternativeEnabled = wax.shared.SaveManager:GetState("UseAlternativeHooks", false)
-
-	local IgnorePlayerModule = wax.shared.SaveManager:GetState("IgnorePlayerModule", true)
-	local IngoredRemotesDropdown = wax.shared.SaveManager:GetState("IgnoredRemotesDropdown", {
-		["BindableEvent"] = true,
-		["BindableFunction"] = true,
-	})
-
-	local ActorData = LuaEncode({
-		Token = wax.shared.CobaltVerificationToken,
-
-		IgnorePlayerModule = IgnorePlayerModule,
-		IgnoredRemotesDropdown = IngoredRemotesDropdown,
-		UseAlternativeHooks = AlternativeEnabled,
-
-		ExecutorSupport = wax.shared.ExecutorSupport,
-	})
-
-	ActorEnvironementCode = ActorEnvironementCode:gsub("COBALT_ACTOR_DATA", ActorData)
-
-	local function ReconstructTable(Info, CyclicRefs)
-		local Reconstructed = {}
-
-		for Key, Value in Info do
-			if type(Value) == "table" then
-				if Value["__Function"] and Value["Validation"] == wax.shared.CobaltVerificationToken then
-					local FunctionData = table.clone(Value)
-					FunctionData["__Function"] = nil
-					FunctionData["Validation"] = nil
-
-					Reconstructed[Key] = FunctionData
-					continue
-				end
-
-				-- Check for Cobalt Created Object
-				if not Value["__CyclicRef"] then
-					Reconstructed[Key] = ReconstructTable(Value, CyclicRefs)
-					continue
-				end
-
-				local CyclicId = Value["__Id"]
-
-				if not CyclicRefs[CyclicId] then
-					warn("CyclicRef not found: " .. CyclicId)
-					continue
-				end
-
-				Reconstructed[Key] = CyclicRefs[CyclicId]
-				continue
-			end
-
-			Reconstructed[Key] = Value
-		end
-
-		return Reconstructed
-	end
-
-	wax.shared.Connect(Channel.Event:Connect(function(EventType, ...)
-		local ShouldLogActors = wax.shared.SaveManager:GetState("LogActors", true)
-
-		if not ShouldLogActors then
-			return
-		end
-
-		if EventType ~= "ActorCall" then
-			return
-		end
-
-		local Instance, Type, RawInfo, CyclicRefs = ...
-		if Instance == Channel or Instance == wax.shared.Communicator then
-			return
-		end
-
-		local Method = wax.shared.FunctionForClasses[Type][Instance.ClassName]
-		local Log = wax.shared.Logs[Type][Instance]
-
-		if not Log then
-			Log = wax.shared.NewLog(Instance, Type, Method, RawInfo.Origin)
-		end
-
-		if Log.Blocked then
-			return
-		elseif not Log.Ignored then
-			local ReconstructedInfo = ReconstructTable(RawInfo, CyclicRefs)
-
-			Log:Call(ReconstructedInfo)
-			wax.shared.Communicator:Fire(Log.Instance, Type, #Log.Calls)
-		end
-	end))
-
-	for _, ActorHook in ipairs(Hooks.Actors:GetChildren()) do
-		run_on_actor(TargetActor, ActorEnvironementCode .. ActorHook.Value, CommunicationChannelID)
-	end
-
-	run_on_actor(TargetActor, ActorsUtils.Unload.Value, CommunicationChannelID)
-end
-
-return {}
-
-end)() end,
-    [13] = function()local wax,script,require=ImportGlobals(13)local ImportGlobals return (function(...)local NamecallMethods = {
-	"FireServer",
-	"InvokeServer",
-	"Fire",
-	"Invoke",
-	"fireServer",
-	"invokeServer",
-	"fire",
-	"invoke",
-}
-local AllowedClassNames =
-	{ "RemoteEvent", "RemoteFunction", "UnreliableRemoteEvent", "BindableEvent", "BindableFunction" }
-
---[[
-	Returns the calling function via `debug.info`
-
-	@return `function | nil` The calling function or nil if not found.
-]]
-local function getcallingfunction()
-	for i = 4, 10 do
-		local Function, Source = debug.info(i, "fs")
-		if not Function or not Source then
-			break
-		end
-
-		if Source == "[C]" then
-			continue
-		end
-
-		return Function
-	end
-
-	return debug.info(4, "f")
-end
-
---[[
-	Returns the calling line of the script that called the function via `debug.info`
-
-	@return number Returns the line number of the calling script.
-]]
-local function getcallingline()
-	for i = 4, 10 do
-		local Source, Line = debug.info(i, "sl")
-		if not Source then
-			break
-		end
-
-		if Source == "[C]" then
-			continue
-		end
-
-		return Line
-	end
-
-	return debug.info(4, "l")
-end
-
--- metamethod hooks
-wax.shared.NamecallHook = wax.shared.Hooking.HookMetaMethod(
-	game,
-	"__namecall",
-	wax.shared.newcclosure(function(...)
-		local self = ...
-		local Method = getnamecallmethod()
-
-		if
-			typeof(self) == "Instance"
-			and table.find(AllowedClassNames, self.ClassName)
-			and not rawequal(self, wax.shared.Communicator)
-			and not rawequal(self, wax.shared.ActorCommunicator)
-			and table.find(NamecallMethods, Method)
-			and not wax.shared.ShouldIgnore(self, getcallingscript())
-		then
-			local Log = wax.shared.Logs.Outgoing[self]
-			if not Log then
-				Log = wax.shared.NewLog(self, "Outgoing", Method, getcallingscript())
-			end
-
-			if Log.Blocked then
-				return
-			elseif not Log.Ignored then
-				local Info = {
-					Arguments = table.pack(select(2, ...)),
-					Time = os.date("%X"),
-					Origin = getcallingscript(),
-					Function = getcallingfunction(),
-					Line = getcallingline(),
-					IsExecutor = checkcaller(),
-				}
-				Log:Call(Info)
-
-				-- For RemoteFunction return value (ex: local result = RemoteFunction:InvokeServer())
-				if self.ClassName == "RemoteFunction" and (Method == "InvokeServer" or Method == "invokeServer") then
-					Log = wax.shared.Logs.Incoming[self]
-					if not Log then
-						Log = wax.shared.NewLog(self, "Incoming", Method, getcallingscript())
-					end
-
-					if Log.Blocked then
-						return
-					end
-
-					local Result = table.pack(wax.shared.NamecallHook(...))
-					if not Log.Ignored then
-						local RFResultInfo = {
-							Arguments = Result,
-							Time = os.date("%X"),
-							Origin = getcallingscript(),
-							Function = getcallingfunction(),
-							Line = getcallingline(),
-							IsExecutor = checkcaller(),
-							OriginalInvokeArgs = table.pack(select(2, ...)),
-						}
-						Log:Call(RFResultInfo)
-					end
-
-					return table.unpack(Result, 1, Result.n)
-				end
-			end
-		end
-
-		return wax.shared.NamecallHook(...)
-	end)
-)
-
--- function hooks
-local FunctionsToHook = {
-	Instance.new("BindableFunction").Invoke,
-	Instance.new("RemoteFunction").InvokeServer,
-	Instance.new("BindableEvent").Fire,
-	Instance.new("RemoteEvent").FireServer,
-	Instance.new("UnreliableRemoteEvent").FireServer,
-}
-
-for _, Function in pairs(FunctionsToHook) do
-	local Method = debug.info(Function, "n")
-
-	wax.shared.Hooks[Function] = wax.shared.Hooking.HookFunction(
-		Function,
-		wax.shared.newcclosure(function(...)
-			local self = ...
-
-			if
-				typeof(self) == "Instance"
-				and table.find(AllowedClassNames, self.ClassName)
-				and not rawequal(self, wax.shared.Communicator)
-				and not wax.shared.ShouldIgnore(self, getcallingscript())
-			then
-				local Log = wax.shared.Logs.Outgoing[self]
-				if not Log then
-					Log = wax.shared.NewLog(self, "Outgoing", Method, getcallingscript())
-				end
-
-				if Log.Blocked then
-					return
-				elseif not Log.Ignored then
-					local Info = {
-						Arguments = table.pack(select(2, ...)),
-						Time = os.date("%X"),
-						Origin = getcallingscript(),
-						Function = getcallingfunction(),
-						Line = getcallingline(),
-						IsExecutor = checkcaller(),
-					}
-					Log:Call(Info)
-
-					-- For RemoteFunction return value (ex: local result = RemoteFunction:InvokeServer())
-					if
-						self.ClassName == "RemoteFunction"
-						and (Method == "InvokeServer" or Method == "invokeServer")
-					then
-						Log = wax.shared.Logs.Incoming[self]
-						if not Log then
-							Log = wax.shared.NewLog(self, "Incoming", Method, getcallingscript())
-						end
-
-						if Log.Blocked then
-							return
-						end
-
-						local Result = table.pack(wax.shared.Hooks[Function](...))
-						if not Log.Ignored then
-							local RFResultInfo = {
-								Arguments = Result,
-								Time = os.date("%X"),
-								Origin = getcallingscript(),
-								Function = getcallingfunction(),
-								Line = getcallingline(),
-								IsExecutor = checkcaller(),
-								OriginalInvokeArgs = table.pack(select(2, ...)),
-							}
-							Log:Call(RFResultInfo)
-						end
-
-						return table.unpack(Result, 1, Result.n)
-					end
-				end
-			end
-
-			return wax.shared.Hooks[Function](...)
-		end)
-	)
-end
-
-end)() end,
-    [37] = function()local wax,script,require=ImportGlobals(37)local ImportGlobals return (function(...)local Resize = {}
-Resize.__index = Resize
-
-local Interface = require(script.Parent.Interface)
-local Drag = require(script.Parent.Drag)
-
-local HANDLE_SIZE = 6
-local CORNER_HANDLE_SIZE = 20
-
-function Resize.new(Options: {
-	MainFrame: Frame,
-	MinimumSize: Vector2? | UDim2?,
-	MaximumSize: UDim2?,
-	HandleSize: number?,
-	CornerHandleSize: number?,
-	Mirrored: boolean?,
-	LockedPosition: boolean? | UDim2?,
-})
-	local MainFrame = Options.MainFrame
-	local HandleSize = Options.HandleSize or HANDLE_SIZE
-	local CornerHandleSize = Options.CornerHandleSize or CORNER_HANDLE_SIZE
-	local Mirrored = Options.Mirrored or false
-	local LockedPosition = Options.LockedPosition
-
-	local MinimumSize
-	if typeof(Options.MinimumSize) == "Vector2" then
-		MinimumSize = UDim2.fromOffset(Options.MinimumSize.X, Options.MinimumSize.Y)
-	elseif typeof(Options.MinimumSize) == "UDim2" then
-		MinimumSize = Options.MinimumSize
-	else
-		MinimumSize = UDim2.fromOffset(100, 100)
-	end
-
-	local MaximumSize = Options.MaximumSize
-
-	local self = setmetatable({
-		MainFrame = MainFrame,
-		ScreenGui = MainFrame:FindFirstAncestorOfClass("ScreenGui"),
-		Parent = MainFrame.Parent,
-	}, Resize)
-
-	local function CalculateResizeProperties(
-		initialFramePosition: UDim2,
-		initialFrameSize: UDim2,
-		mouseDelta: Vector2,
-		resizeTypeX: string?,
-		resizeTypeY: string?
-	)
-		if Mirrored then
-			local parentAbsSize = self.Parent.AbsoluteSize
-
-			local newSizeOffsetX = initialFrameSize.X.Offset
-			local newSizeOffsetY = initialFrameSize.Y.Offset
-
-			if resizeTypeX then
-				local deltaX = 0
-				if resizeTypeX == "Right" then
-					deltaX = 2 * mouseDelta.X
-				elseif resizeTypeX == "Left" then
-					deltaX = -2 * mouseDelta.X
-				end
-				newSizeOffsetX = initialFrameSize.X.Offset + deltaX
-
-				local minWidthAbs = MinimumSize.X.Scale * parentAbsSize.X + MinimumSize.X.Offset
-				local maxWidthAbs = (MaximumSize and (MaximumSize.X.Scale * parentAbsSize.X + MaximumSize.X.Offset))
-					or math.huge
-				local scaleContributionX = initialFrameSize.X.Scale * parentAbsSize.X
-				local minAllowedTotalOffsetX = minWidthAbs - scaleContributionX
-				local maxAllowedTotalOffsetX = maxWidthAbs - scaleContributionX
-				newSizeOffsetX = math.clamp(newSizeOffsetX, minAllowedTotalOffsetX, maxAllowedTotalOffsetX)
-			end
-
-			if resizeTypeY then
-				local deltaY = 0
-				if resizeTypeY == "Bottom" then
-					deltaY = 2 * mouseDelta.Y
-				elseif resizeTypeY == "Top" then
-					deltaY = -2 * mouseDelta.Y
-				end
-				newSizeOffsetY = initialFrameSize.Y.Offset + deltaY
-
-				local minHeightAbs = MinimumSize.Y.Scale * parentAbsSize.Y + MinimumSize.Y.Offset
-				local maxHeightAbs = (MaximumSize and (MaximumSize.Y.Scale * parentAbsSize.Y + MaximumSize.Y.Offset))
-					or math.huge
-				local scaleContributionY = initialFrameSize.Y.Scale * parentAbsSize.Y
-				local minAllowedTotalOffsetY = minHeightAbs - scaleContributionY
-				local maxAllowedTotalOffsetY = maxHeightAbs - scaleContributionY
-				newSizeOffsetY = math.clamp(newSizeOffsetY, minAllowedTotalOffsetY, maxAllowedTotalOffsetY)
-			end
-
-			local finalNewSize =
-				UDim2.new(initialFrameSize.X.Scale, newSizeOffsetX, initialFrameSize.Y.Scale, newSizeOffsetY)
-			local finalNewPosition = initialFramePosition
-			if typeof(LockedPosition) == "UDim2" then
-				finalNewPosition = LockedPosition
-			end
-			return finalNewSize, finalNewPosition
-		else
-			-- Non-mirrored logic
-			local currentScreenGuiAbsSize = self.ScreenGui.AbsoluteSize
-			local parentAbsSizeForMinMax = currentScreenGuiAbsSize -- As per original non-mirrored logic for min/max context
-
-			-- These will store the final UDim offset values for position and the absolute pixel values for size calculation
-			local finalPosOffsetX = initialFramePosition.X.Offset
-			local finalPosOffsetY = initialFramePosition.Y.Offset
-
-			-- Initial absolute pixel size of the frame
-			local initialAbsWidthPx = initialFrameSize.X.Scale * self.Parent.AbsoluteSize.X + initialFrameSize.X.Offset
-			local initialAbsHeightPx = initialFrameSize.Y.Scale * self.Parent.AbsoluteSize.Y + initialFrameSize.Y.Offset
-
-			local newAbsWidthPx = initialAbsWidthPx
-			local newAbsHeightPx = initialAbsHeightPx
-
-			-- Min/max pixel dimensions
-			local minWidthPx = MinimumSize.X.Scale * parentAbsSizeForMinMax.X + MinimumSize.X.Offset
-			local minHeightPx = MinimumSize.Y.Scale * parentAbsSizeForMinMax.Y + MinimumSize.Y.Offset
-			local maxWidthPx = MaximumSize and (MaximumSize.X.Scale * parentAbsSizeForMinMax.X + MaximumSize.X.Offset)
-				or math.huge
-			local maxHeightPx = MaximumSize and (MaximumSize.Y.Scale * parentAbsSizeForMinMax.Y + MaximumSize.Y.Offset)
-				or math.huge
-
-			-- Original edge calculation logic (assuming MainFrame.Position is center if AnchorPoint is 0.5,0.5 for these calcs)
-			local initialAbsCenterX = currentScreenGuiAbsSize.X * initialFramePosition.X.Scale
-				+ initialFramePosition.X.Offset
-			local initialAbsSizeX_forEdgeCalc = initialFrameSize.X.Offset -- Original code used offset for this part of edge calculation
-			local initialRightEdgeX = initialAbsCenterX + initialAbsSizeX_forEdgeCalc / 2
-			local initialLeftEdgeX = initialAbsCenterX - initialAbsSizeX_forEdgeCalc / 2
-
-			local initialAbsCenterY = currentScreenGuiAbsSize.Y * initialFramePosition.Y.Scale
-				+ initialFramePosition.Y.Offset
-			local initialAbsSizeY_forEdgeCalc = initialFrameSize.Y.Offset -- Original code used offset for this part of edge calculation
-			local initialBottomEdgeY = initialAbsCenterY + initialAbsSizeY_forEdgeCalc / 2
-			local initialTopEdgeY = initialAbsCenterY - initialAbsSizeY_forEdgeCalc / 2
-
-			if resizeTypeX then
-				if resizeTypeX == "Left" then
-					local newLeftEdge = initialLeftEdgeX + mouseDelta.X
-					newAbsWidthPx = math.clamp(initialRightEdgeX - newLeftEdge, minWidthPx, maxWidthPx)
-					if newAbsWidthPx ~= (initialRightEdgeX - newLeftEdge) then -- Readjust edge if clamped
-						newLeftEdge = initialRightEdgeX - newAbsWidthPx
-					end
-					if not LockedPosition then
-						local newAbsCenterX = newLeftEdge + newAbsWidthPx / 2 -- Assuming center is halfway for position update
-						finalPosOffsetX = newAbsCenterX - currentScreenGuiAbsSize.X * initialFramePosition.X.Scale
-					end
-				elseif resizeTypeX == "Right" then
-					local newRightEdge = initialRightEdgeX + mouseDelta.X
-					newAbsWidthPx = math.clamp(newRightEdge - initialLeftEdgeX, minWidthPx, maxWidthPx)
-					if not LockedPosition then
-						local newAbsCenterX = initialLeftEdgeX + newAbsWidthPx / 2 -- Assuming center is halfway
-						finalPosOffsetX = newAbsCenterX - currentScreenGuiAbsSize.X * initialFramePosition.X.Scale
-					end
-				end
-			end
-
-			if resizeTypeY then
-				if resizeTypeY == "Top" then
-					local newTopEdge = initialTopEdgeY + mouseDelta.Y
-					newAbsHeightPx = math.clamp(initialBottomEdgeY - newTopEdge, minHeightPx, maxHeightPx)
-					if newAbsHeightPx ~= (initialBottomEdgeY - newTopEdge) then -- Readjust edge if clamped
-						newTopEdge = initialBottomEdgeY - newAbsHeightPx
-					end
-					if not LockedPosition then
-						local newAbsCenterY = newTopEdge + newAbsHeightPx / 2 -- Assuming center is halfway
-						finalPosOffsetY = newAbsCenterY - currentScreenGuiAbsSize.Y * initialFramePosition.Y.Scale
-					end
-				elseif resizeTypeY == "Bottom" then
-					local newBottomEdge = initialBottomEdgeY + mouseDelta.Y
-					newAbsHeightPx = math.clamp(newBottomEdge - initialTopEdgeY, minHeightPx, maxHeightPx)
-					if not LockedPosition then
-						local newAbsCenterY = initialTopEdgeY + newAbsHeightPx / 2 -- Assuming center is halfway
-						finalPosOffsetY = newAbsCenterY - currentScreenGuiAbsSize.Y * initialFramePosition.Y.Scale
-					end
-				end
-			end
-
-			-- Convert final absolute pixel dimensions back to UDim offsets for size
-			local finalSizeOffsetX = newAbsWidthPx - (initialFrameSize.X.Scale * self.Parent.AbsoluteSize.X)
-			local finalSizeOffsetY = newAbsHeightPx - (initialFrameSize.Y.Scale * self.Parent.AbsoluteSize.Y)
-
-			local finalNewSize =
-				UDim2.new(initialFrameSize.X.Scale, finalSizeOffsetX, initialFrameSize.Y.Scale, finalSizeOffsetY)
-			local finalNewPosition = initialFramePosition -- Default if LockedPosition is true
-			if typeof(LockedPosition) == "UDim2" then
-				finalNewPosition = LockedPosition
-			elseif not LockedPosition then -- Only update if not locked (boolean false)
-				finalNewPosition = UDim2.new(
-					initialFramePosition.X.Scale,
-					finalPosOffsetX,
-					initialFramePosition.Y.Scale,
-					finalPosOffsetY
-				)
-			end
-			return finalNewSize, finalNewPosition
-		end
-	end
-
-	local function createDragHandler(resizeTypeX, resizeTypeY)
-		return function(Info, Input: InputObject)
-			local mouseDelta = Input.Position - Info.StartPosition
-			local newSize, newPosition =
-				CalculateResizeProperties(Info.FramePosition, Info.FrameSize, mouseDelta, resizeTypeX, resizeTypeY)
-
-			MainFrame.Size = newSize
-			MainFrame.Position = newPosition
-		end
-	end
-
-	local LeftSide = Interface.New("Frame", {
-		Size = UDim2.new(0, HandleSize, 1, -CornerHandleSize * 2),
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.fromScale(0, 0.5),
-		BackgroundTransparency = 1,
-		Parent = MainFrame,
-		ZIndex = 9e6,
-	})
-	Drag.Setup(MainFrame, LeftSide, createDragHandler("Left", nil))
-
-	local RightSide = Interface.New("Frame", {
-		Size = UDim2.new(0, HandleSize, 1, -CornerHandleSize * 2),
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.fromScale(1, 0.5),
-		BackgroundTransparency = 1,
-		Parent = MainFrame,
-		ZIndex = 9e6,
-	})
-	Drag.Setup(MainFrame, RightSide, createDragHandler("Right", nil))
-
-	local TopSide = Interface.New("Frame", {
-		Size = UDim2.new(1, -CornerHandleSize * 2, 0, HandleSize),
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.fromScale(0.5, 0),
-		BackgroundTransparency = 1,
-		Parent = MainFrame,
-		ZIndex = 9e6,
-	})
-	Drag.Setup(MainFrame, TopSide, createDragHandler(nil, "Top"))
-
-	local BottomSide = Interface.New("Frame", {
-		Size = UDim2.new(1, -CornerHandleSize * 2, 0, HandleSize),
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.fromScale(0.5, 1),
-		BackgroundTransparency = 1,
-		Parent = MainFrame,
-		ZIndex = 9e6,
-	})
-	Drag.Setup(MainFrame, BottomSide, createDragHandler(nil, "Bottom"))
-
-	local TopLeftCorner = Interface.New("Frame", {
-		Size = UDim2.fromOffset(CornerHandleSize, CornerHandleSize),
-		AnchorPoint = Vector2.new(0, 0),
-		Position = UDim2.fromScale(0, 0),
-		BackgroundTransparency = 1,
-		Parent = MainFrame,
-		ZIndex = 9e6 + 1,
-	})
-	Drag.Setup(MainFrame, TopLeftCorner, createDragHandler("Left", "Top"))
-
-	local TopRightCorner = Interface.New("Frame", {
-		Size = UDim2.fromOffset(CornerHandleSize, CornerHandleSize),
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.fromScale(1, 0),
-		BackgroundTransparency = 1,
-		Parent = MainFrame,
-		ZIndex = 9e6 + 1,
-	})
-	Drag.Setup(MainFrame, TopRightCorner, createDragHandler("Right", "Top"))
-
-	local BottomLeftCorner = Interface.New("Frame", {
-		Size = UDim2.fromOffset(CornerHandleSize, CornerHandleSize),
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.fromScale(0, 1),
-		BackgroundTransparency = 1,
-		Parent = MainFrame,
-		ZIndex = 9e6 + 1,
-	})
-	Drag.Setup(MainFrame, BottomLeftCorner, createDragHandler("Left", "Bottom"))
-
-	local BottomRightCorner = Interface.New("Frame", {
-		Size = UDim2.fromOffset(CornerHandleSize, CornerHandleSize),
-		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-		Parent = MainFrame,
-		ZIndex = 9e6 + 1,
-	})
-	Drag.Setup(MainFrame, BottomRightCorner, createDragHandler("Right", "Bottom"))
-
-	return self
-end
-
-return Resize
-
-end)() end,
-    [38] = function()local wax,script,require=ImportGlobals(38)local ImportGlobals return (function(...)--[[[
-
-Sonner Luau Port by upio
-Original Sonner by Emil Kowalski (https://sonner.emilkowal.ski/)
-
-TODO (which will almost probably never be done):
- - Add a way to view the previous notifications (hovering over the notifs but im lazy)
- - Handle too many notifications breaking the UI
- - Fix inconsistant notification positioning
-]]
-
-local Sonner = {
-	Queue = {},
-	TweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Exponential),
-	Wrapper = nil,
-}
-
-local Icons = require(script.Parent.Icons)
-local Interface = require(script.Parent.Interface)
-local Animations = require(script.Parent.Animations)
-
-local function InternalCreateNotificationObject(zindex, image, text)
-	local NotificationTemplate = Interface.New("Frame", {
-		BorderSizePixel = 0,
-		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-		AnchorPoint = Vector2.new(0.5, 1),
-		Size = UDim2.new(0, 250, 0, 50),
-		Position = UDim2.new(0.5, 0, 1, 50),
-		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		ZIndex = zindex,
-
-		["UICorner"] = {
-			CornerRadius = UDim.new(0, 4),
-		},
-
-		["UIStroke"] = {
-			Color = Color3.fromRGB(39, 42, 42),
-		},
-
-		["UIScale"] = {},
-	})
-
-	local ImageLabel = Interface.New("ImageLabel", {
-		SizeConstraint = Enum.SizeConstraint.RelativeYY,
-		ScaleType = Enum.ScaleType.Fit,
-		Size = UDim2.new(0, 20, 0, 20),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0, 20, 0.5, 0),
-		BorderSizePixel = 0,
-		BackgroundTransparency = 1,
-		ZIndex = zindex + 1,
-		Parent = NotificationTemplate,
-	})
-
-	if image then
-		if image:find("rbxasset") then
-			ImageLabel.Image = image
-		else
-			Icons.SetIcon(ImageLabel, image)
-		end
-	else
-		ImageLabel.Visible = false
-	end
-
-	Animations.SetFadeExpectation("In", ImageLabel, {
-		ImageTransparency = 0,
-	})
-
-	Animations.SetFadeExpectation("Out", ImageLabel, {
-		ImageTransparency = 1,
-	})
-
-	local Frame = Interface.New("Frame", {
-		BorderSizePixel = 0,
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-		Size = UDim2.new(1, -50, 1, 0),
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -10, 0, 0),
-		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		BackgroundTransparency = 1,
-		ZIndex = zindex + 1,
-		Parent = NotificationTemplate,
-	})
-
-	Animations.AddFadeExclusion(Frame)
-
-	Interface.New("TextLabel", {
-		BorderSizePixel = 0,
-		TextSize = 14,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-		FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
-		TextColor3 = Color3.fromRGB(255, 255, 255),
-		BackgroundTransparency = 1,
-		Size = UDim2.new(0, 200, 0, 50),
-		BorderColor3 = Color3.fromRGB(0, 0, 0),
-		Text = text,
-		ZIndex = zindex + 1,
-		Parent = Frame,
-		TextWrapped = true,
-	})
-
-	return NotificationTemplate
-end
-
-local function toast(image, text, internalTime, removeCallback)
-	assert(Sonner.Wrapper, "Sonner has not been initialized")
-	assert(typeof(image) == "string" or image == nil, "Image must be a string or nil")
-	assert(typeof(text) == "string", "Text is required!")
-	assert(typeof(internalTime) == "number" or internalTime == nil, "Time must be a number or nil")
-
-	local time = internalTime or 4.5
-
-	local Notif = InternalCreateNotificationObject(500, image, text)
-
-	Notif.Position = UDim2.new(0.5, 0, 1, 30)
-	Notif.Parent = Sonner.Wrapper
-
-	table.insert(Sonner.Queue, Notif)
-
-	local ScaleMultiplier = 0.9
-	local RemovalQueue = {}
-
-	for index, object in Sonner.Queue do
-		if object == Notif then
-			continue
-		end
-
-		object.ZIndex = 500 - (#Sonner.Queue - index)
-
-		-- shift them down
-		wax.shared.TweenService
-			:Create(object.UIScale, Sonner.TweenInfo, {
-				Scale = object.UIScale.Scale * ScaleMultiplier,
-			})
-			:Play()
-
-		wax.shared.TweenService
-			:Create(object, Sonner.TweenInfo, {
-				Position = object.Position - UDim2.fromOffset(0, object.AbsoluteSize.Y * 0.35),
-			})
-			:Play()
-
-		if ((#Sonner.Queue - index) + 1) >= 4 then
-			Animations.FadeOut(object)
-			task.delay(0.5, function()
-				object:Destroy()
-			end)
-			table.insert(RemovalQueue, object)
-		end
-	end
-
-	for _, obj in RemovalQueue do
-		table.remove(Sonner.Queue, table.find(Sonner.Queue, obj))
-	end
-
-	wax.shared.TweenService
-		:Create(Notif, Sonner.TweenInfo, {
-			Position = UDim2.new(0.5, 0, 1, -20),
-		})
-		:Play()
-	Animations.FadeIn(Notif)
-
-	if removeCallback then
-		task.spawn(removeCallback, Notif, time)
-	else
-		task.delay(time, function()
-			if not table.find(Sonner.Queue, Notif) then
-				return
-			end
-			table.remove(Sonner.Queue, table.find(Sonner.Queue, Notif))
-
-			Animations.FadeOut(Notif, 0.35)
-			wax.shared.TweenService
-				:Create(Notif, Sonner.TweenInfo, {
-					Position = UDim2.new(0.5, 0, 1, 50),
-				})
-				:Play()
-			task.wait(0.5)
-			Notif:Destroy()
-		end)
-	end
-end
-
-function Sonner.info(text, internalTime)
-	toast("info", text, internalTime)
-end
-
-function Sonner.success(text, internalTime)
-	toast("circle-check", text, internalTime)
-end
-
-function Sonner.warning(text, internalTime)
-	toast("triangle-alert", text, internalTime)
-end
-
-function Sonner.error(text, internalTime)
-	toast("circle-alert", text, internalTime)
-end
-
-function Sonner.toast(text, internalTime)
-	toast(nil, text, internalTime)
-end
-
-function Sonner.promise(func, options)
-	local loadingText = options.loadingText or "Loading..."
-	local successText = options.successText or "Success!"
-	local errorText = options.errorText or "Error!"
-	local internalTime = options.time or 4.5
-
-	toast("loader-circle", loadingText, internalTime, function(notif, time)
-		local success, resultOrError = nil, nil
-
-		local spinnerThread = task.spawn(function()
-			repeat
-				wax.shared.RunService.RenderStepped:Wait()
-
-				local icon = notif:FindFirstChild("ImageLabel")
-				if not icon then
-					continue
-				end
-				icon.Rotation = (icon.Rotation + 1) % 360
-			until success == false or resultOrError ~= nil
-		end)
-
-		success, resultOrError = pcall(func) -- yes mstudio45, your famous pcall is better (- deivid)
-
-		task.spawn(function()
-			setthreadidentity(8)
-
-			-- The thread identity is 8 when setting it on the parent thread (Sonner.promise), but it still lacks capabilities when running another child thread
-			-- Capabilities here should pass from a thread to another... Could be an upstream (executor) issue ?
-
-			Animations.FadeOut(notif.ImageLabel, 0.15)
-			wax.shared.TweenService
-				:Create(notif.ImageLabel, TweenInfo.new(0.25, Enum.EasingStyle.Exponential), {
-					Size = UDim2.new(0, 0, 0, 0),
-				})
-				:Play()
-			task.wait(0.15)
-
-			if coroutine.status(spinnerThread) ~= "dead" then
-				coroutine.close(spinnerThread)
-			end
-			notif.ImageLabel.Rotation = 0
-
-			if success then
-				Icons.SetIcon(notif.ImageLabel, "check")
-				local message = (
-					typeof(successText) == "string" and successText
-					or typeof(successText) == "function" and successText(resultOrError)
-					or "Success!"
-				)
-
-				if message:match("%s") then
-					notif.Frame.TextLabel.Text = string.format(message, tostring(resultOrError))
-				else
-					notif.Frame.TextLabel.Text = message
-				end
-			else
-				Icons.SetIcon(notif.ImageLabel, "circle-alert")
-				notif.Frame.TextLabel.Text = (
-					typeof(errorText) == "string" and errorText
-					or typeof(errorText) == "function" and errorText(resultOrError)
-					or "Error!"
-				)
-			end
-
-			Animations.FadeIn(notif.ImageLabel)
-			wax.shared.TweenService
-				:Create(notif.ImageLabel, TweenInfo.new(0.25, Enum.EasingStyle.Exponential), {
-					Size = UDim2.new(0, 20, 0, 20),
-				})
-				:Play()
-
-			task.delay(time, function()
-				if not table.find(Sonner.Queue, notif) then
-					return
-				end
-				table.remove(Sonner.Queue, table.find(Sonner.Queue, notif))
-
-				Animations.FadeOut(notif, 0.35)
-				wax.shared.TweenService
-					:Create(notif, Sonner.TweenInfo, {
-						Position = UDim2.new(0.5, 0, 1, 50),
-					})
-					:Play()
-
-				task.wait(0.5)
-				notif:Destroy()
-			end)
-		end)
-	end)
-end
-
-function Sonner.rawtoast(options)
-	local image = options.image
-	local text = options.text or "No Text Provided"
-	local internalTime = options.time or 4.5
-
-	toast(image, text, internalTime)
-end
-
-function Sonner.init(wrapper)
-	Sonner.Wrapper = wrapper
-end
-
-return Sonner
-
-end)() end,
-    [20] = function()local wax,script,require=ImportGlobals(20)local ImportGlobals return (function(...)local CodeGen = {
-	CleanTable = { ['"'] = '\\"', ["\\"] = "\\\\" },
-	IndentTemplate = string.rep(" ", 4),
-}
-
-export type SupportedRemoteTypes = RemoteEvent | RemoteFunction | BindableEvent | BindableFunction | UnreliableRemoteEvent
-export type CallInfo = {
-	Arguments: { [number]: any, n: number },
-	Time: string,
-	Origin: BaseScript?,
-	Function: (
-		...any
-	) -> any | {
-		Address: string,
-		Name: string,
-		IsC: boolean,
-		Constants: { any }?,
-		Upvalues: { any }?,
-		Protos: { any }?,
-	},
-	Line: number?,
-	Instance: SupportedRemoteTypes,
-	Order: number,
-	Type: "Incoming" | "Outgoing",
-	OriginalInvokeArgs: { [number]: any, n: number }?,
-	IsActor: boolean?,
-}
-
-wax.shared.FunctionForClasses = {
-	Incoming = {
-		RemoteEvent = "OnClientEvent",
-		RemoteFunction = "OnClientInvoke",
-		UnreliableRemoteEvent = "OnClientEvent",
-		BindableEvent = "Event",
-		BindableFunction = "OnInvoke",
-	},
-
-	Outgoing = {
-		RemoteEvent = "FireServer",
-		RemoteFunction = "InvokeServer",
-		UnreliableRemoteEvent = "FireServer",
-		BindableEvent = "Fire",
-		BindableFunction = "Invoke",
-	},
-}
-
-local GetNilCode = [[local function GetNil(Name, DebugId)
-	for _, Object in getnilinstances() do
-		if Object.Name == Name and Object:GetDebugId() == DebugId then
-			return Object
-		end
-	end
-end]]
-
---// Pasted from Dex (maximum detection)
-for i = 0, 31 do
-	CodeGen.CleanTable[string.char(i)] = "\\" .. string.format("%03d", i)
-end
-for i = 127, 255 do
-	CodeGen.CleanTable[string.char(i)] = "\\" .. string.format("%03d", i)
-end
-
-function CodeGen.FormatLuaString(str)
-	return string.gsub(str, '["\\\0-\31\127-\255]', CodeGen.CleanTable)
-end
-
-local function IsEqualToInstance(Object, ToCompareTo)
-	if rawequal(Object, ToCompareTo) then
-		return true
-	end
-
-	if wax.shared.ExecutorSupport["compareinstances"].IsWorking then
-		return compareinstances(Object, ToCompareTo)
-	end
-
-	return false
-end
-
-function CodeGen.GetFullPath(Object, ExcludeCode, VariableName, IsInTable)
-	local ChildLookupMode = wax.shared.SaveManager:GetState("InstancePathLookupChain", "Index")
-
-	local function BuildDynamicAccessor(Expression: string): string
-		if ChildLookupMode == "WaitForChild" then
-			return ":WaitForChild(" .. Expression .. ")"
-		elseif ChildLookupMode == "FindFirstChild" then
-			return ":FindFirstChild(" .. Expression .. ")"
-		end
-
-		return "[" .. Expression .. "]"
-	end
-
-	local function BuildStaticAccessor(Name: string): string
-		local SanitizedName = CodeGen.FormatLuaString(Name)
-
-		if ChildLookupMode == "WaitForChild" then
-			return ':WaitForChild("' .. SanitizedName .. '")'
-		elseif ChildLookupMode == "FindFirstChild" then
-			return ':FindFirstChild("' .. SanitizedName .. '")'
-		elseif string.match(Name, "^[%a_][%w_]*$") then
-			return "." .. Name
-		end
-
-		return '["' .. SanitizedName .. '"]'
-	end
-
-	local CurrentObject = Object
-	local DidInsertNilFunction = false
-	local IsNil = false
-	local Path = ""
-
-	repeat
-		if typeof(CurrentObject) ~= "Instance" then
-			break
-		end
-
-		if IsEqualToInstance(CurrentObject, game) then
-			Path = "game" .. Path
-			break
-		end
-
-		local IndexName = ""
-
-		if IsEqualToInstance(CurrentObject, wax.shared.LocalPlayer) then
-			IndexName = ".LocalPlayer"
-		elseif
-			wax.shared.LocalPlayer.Character and IsEqualToInstance(CurrentObject, wax.shared.LocalPlayer.Character)
-		then
-			Path = 'game:GetService("Players").LocalPlayer.Character' .. Path
-			break
-		elseif CurrentObject.Name and CurrentObject.Name == wax.shared.LocalPlayer.Name then
-			IndexName = BuildDynamicAccessor('game:GetService("Players").LocalPlayer.Name')
-		elseif CurrentObject.Name and CurrentObject.Name == tostring(wax.shared.LocalPlayer.UserId) then
-			IndexName = BuildDynamicAccessor('game:GetService("Players").LocalPlayer.UserId')
-		elseif IsEqualToInstance(CurrentObject, workspace) then
-			Path = "workspace" .. Path
-			break
-		elseif CurrentObject.ClassName and CurrentObject.Name then
-			IndexName = BuildStaticAccessor(CurrentObject.Name)
-
-			local Parent = CurrentObject.Parent
-			if Parent then
-				local DirectChildPtr = Parent:FindFirstChild(CurrentObject.Name)
-
-				if
-					IsEqualToInstance(Parent, game)
-					and IsEqualToInstance(game:FindService(CurrentObject.ClassName), CurrentObject)
-				then
-					IndexName = ':GetService("' .. CurrentObject.ClassName .. '")'
-				elseif DirectChildPtr then
-					local Children = Parent:GetChildren()
-					local FoundIndex = nil
-
-					if
-						wax.shared.ExecutorSupport["compareinstances"].IsWorking
-						and not compareinstances(DirectChildPtr, CurrentObject)
-					then
-						for Index, Child in Children do
-							if not compareinstances(Child, CurrentObject) then
-								continue
-							end
-
-							FoundIndex = Index
-							break
-						end
-					elseif DirectChildPtr ~= CurrentObject then
-						FoundIndex = table.find(Children, CurrentObject)
-					end
-
-					if FoundIndex then
-						IndexName = ":GetChildren()[" .. tostring(FoundIndex) .. "]"
-					end
-				end
-			elseif Parent == nil then
-				IsNil = true
-
-				if ExcludeCode then
-					Path = Path .. " --[[Nil Parent]]"
-				else
-					local Base = `GetNil("{CodeGen.FormatLuaString(CurrentObject.Name)}", "{CodeGen.FormatLuaString(
-						CurrentObject:GetDebugId()
-					)}")`
-					DidInsertNilFunction = true
-					if IsInTable then
-						Path = Base
-						break
-					end
-
-					Path = GetNilCode .. `\n\n{VariableName and `local {VariableName} = ` or ""}` .. Base
-					break
-				end
-			end
-		end
-
-		Path = IndexName .. Path
-
-		CurrentObject = CurrentObject.Parent
-	until CurrentObject == nil
-
-	if IsNil then
-		return Path, DidInsertNilFunction
-	end
-
-	return `{VariableName and `local {VariableName} = ` or ""}{Path}`, DidInsertNilFunction
-end
-
-local function DoesUseCallbackValue(Instance: Instance)
-	return Instance.ClassName == "RemoteFunction" or Instance.ClassName == "BindableFunction"
-end
-
-local CodeGenHeaderTemplate = [[-- This code was generated by Cobalt
--- https://github.com/notpoiu/cobalt
-
-]]
-
-local ClientRemoteClassNames = {
-	BindableEvent = true,
-	BindableFunction = true,
-}
-
-local function IndentCode(Code: string, IndentLevel: number)
-	local Indent = CodeGen.IndentTemplate:rep(IndentLevel)
-	local IndentedCode = Code:gsub("\n", "\n" .. Indent)
-	return Indent .. IndentedCode
-end
-
-local function WrapCodeInActor(Code: string, ShouldWrap: boolean)
-	if not ShouldWrap then
-		return Code
-	end
-
-	return string.format(
-		"-- Event originated from an Actor environement\nrun_on_actor(getactors()[1], [[\n%s\n]])",
-		IndentCode(Code, 1)
-	)
-end
-
-function CodeGen:BuildHookCode(CallInfo: CallInfo)
-	local Type = CallInfo.Type
-	local Path = self.GetFullPath(CallInfo.Instance, false, "Event")
-	local IsFromActor = CallInfo.IsActor or false
-	local Method = wax.shared.FunctionForClasses[Type][CallInfo.Instance.ClassName]
-
-	local CodeGenHeader = CodeGenHeaderTemplate
-	if not wax.shared.SaveManager:GetState("ShowWatermark", true) then
-		CodeGenHeader = ""
-	end
-
-	if Type == "Incoming" then
-		if DoesUseCallbackValue(CallInfo.Instance) then
-			-- :InvokeServer -> Returned value
-			if CallInfo.OriginalInvokeArgs then
-				Method = wax.shared.FunctionForClasses.Outgoing[CallInfo.Instance.ClassName]
-
-				return CodeGenHeader
-					.. WrapCodeInActor(
-						string.format(
-							[[%s
-local mtHook; mtHook = hookmetamethod(game, "__namecall", function(...)
-	local self = ...
-
-	if rawequal(self, Event) and getnamecallmethod() == "%s" then
-		local Args = table.pack(...)
-
-		local Result = table.pack(
-			mtHook(table.unpack(Args, 1, Args.n))
-		)
-
-		return table.unpack(Result, 1, Result.n)
-	end
-
-	return mtHook(self, ...)
-end)
-
-local Old%s; Old%s = hookfunction(Event.%s, function(...)
-	local self = ...
-
-	if rawequal(self, Event) then
-		local Args = table.pack(...)
-
-		local Result = table.pack(
-			Old%s(table.unpack(Args, 1, Args.n))
-		)
-
-		return table.unpack(Result, 1, Result.n)
-	end
-
-	return Old%s(self, ...)
-end)]],
-							Path,
-							Method,
-							Method,
-							Method,
-							Method,
-							Method,
-							Method
-						),
-						IsFromActor
-					)
-			end
-
-			-- Callback value
-			return CodeGenHeader
-				.. WrapCodeInActor(
-					string.format(
-						[[%s
-local Callback = getcallbackvalue(Event, "%s")
-Event.%s = function(...)
-	print(`Intercepted (Callback) {Event.Name}.%s`, ...)
-	return Callback(...)
-end
-
-local mtHook; mtHook = hookmetamethod(game, "__newindex", function(...)
-	local self, key, value = ...
-	
-	if (
-		rawequal(self, Event) and
-		rawequal(key, "%s") and
-		typeof(value) == "function" and
-		not checkcaller()
-	) then
-		Callback = value
-	end
-
-	return mtHook(...)
-end)]],
-						Path,
-						Method,
-						Method,
-						Method,
-						Method
-					),
-					IsFromActor
-				)
-		end
-
-		return CodeGenHeader
-			.. WrapCodeInActor(
-				string.format(
-					[[%s
-for _, Connection in getconnections(Event.%s) do
-	local old; old = hookfunction(Connection.Function, function(...)
-		print(`Intercepted (Connection) {Event.Name}.%s`, ...)
-		return old(...)
-	end)
-end]],
-					Path,
-					Method,
-					Method
-				),
-				IsFromActor
-			)
-	end
-
-	return CodeGenHeader
-		.. WrapCodeInActor(
-			string.format(
-				[[%s
-local mtHook; mtHook = hookmetamethod(game, "__namecall", function(...)
-	local self = ...
-
-	if rawequal(self, Event) and getnamecallmethod() == "%s" then
-		local Args = table.pack(...)
-		
-		local Result = table.pack(
-			mtHook(self, table.unpack(Args, 1, Args.n))
-		)
-
-		print(`Intercepted (__namecall) {Event.Name}:%s()`, ...)
-
-		return table.unpack(Result, 1, Result.n)
-	end
-
-	return mtHook(...)
-end)
-
-local Old%s; Old%s = hookfunction(Event.%s, function(...)
-	local self = ...
-
-	if rawequal(self, Event) then
-		local Args = table.pack(...)
-
-		local Result = table.pack(
-			Old%s(table.unpack(Args, 1, Args.n))
-		)
-
-		print(`Intercepted (__index) {Event.Name}:%s()`, self, table.unpack(Result, 1, Result.n))
-
-		return table.unpack(Result, 1, Result.n)
-	end
-
-	return Old%s(self, ...)
-end)]],
-				Path,
-				Method,
-				Method,
-				Method,
-				Method,
-				Method,
-				Method,
-				Method,
-				Method
-			),
-			IsFromActor
-		)
-end
-
-function CreateArgsString(SerializedArgs: string, Args: { [number]: any, n: number }, Prefix: string?)
-	if Args.n == 0 then
-		return ""
-	end
-
-	return `{Prefix == nil and "" or Prefix}{string.sub(SerializedArgs, 2, #SerializedArgs - 1)}`
-end
-
-function CodeGen:BuildCallCode(CallInfo: CallInfo)
-	local Type = CallInfo.Type
-	local IsFromActor = CallInfo.IsActor or false
-	local Path = self.GetFullPath(CallInfo.Instance, false, "Event")
-	local Method = wax.shared.FunctionForClasses[Type][CallInfo.Instance.ClassName]
-	local SerializedArgs, DidInsertNilFunction = wax.shared.LuaEncode(
-		{ table.unpack(CallInfo.Arguments, 1, CallInfo.Arguments.n) },
-		{ Prettify = true, InsertCycles = true, GetNilFunctionInsert = true }
-	)
-
-	local CodeGenHeader = CodeGenHeaderTemplate
-	if not wax.shared.SaveManager:GetState("ShowWatermark", true) then
-		CodeGenHeader = ""
-	end
-
-	if Type == "Incoming" then
-		if DoesUseCallbackValue(CallInfo.Instance) then
-			local PrettifiedExpectedResult, DidInsertNilFunctionInExpectation = wax.shared.LuaEncode(
-				{ table.unpack(CallInfo.Arguments, 1, CallInfo.Arguments.n) },
-				{ Prettify = true, InsertCycles = true, GetNilFunctionInsert = true }
-			)
-
-			if CallInfo.OriginalInvokeArgs then
-				local PrettifiedOutput, InsertedNilFunction = wax.shared.LuaEncode(
-					{ table.unpack(CallInfo.OriginalInvokeArgs, 1, CallInfo.OriginalInvokeArgs.n) },
-					{ Prettify = true, InsertCycles = true }
-				)
-
-				Method = wax.shared.FunctionForClasses.Outgoing[CallInfo.Instance.ClassName]
-
-				return CodeGenHeader
-					.. string.format(
-						[[%s%s
-local Result = Event:%s(%s)
-
-local ExpectedResult = table.unpack(%s)
-
-]],
-						(
-							(InsertedNilFunction or DidInsertNilFunction or DidInsertNilFunctionInExpectation)
-								and GetNilCode .. "\n\n"
-							or ""
-						),
-						Path,
-						Method,
-						CreateArgsString(PrettifiedOutput, CallInfo.OriginalInvokeArgs),
-						PrettifiedExpectedResult
-					)
-			end
-
-			return CodeGenHeader
-				.. WrapCodeInActor(
-					string.format(
-						[[%s%s
-local Callback = getcallbackvalue(Event, "%s")
-Callback(%s)
-
-local ExpectedResult = table.unpack(%s)
-
-]],
-						(DidInsertNilFunction or DidInsertNilFunctionInExpectation and GetNilCode .. "\n\n" or ""),
-						Path,
-						Method,
-						CreateArgsString(SerializedArgs, CallInfo.Arguments),
-
-						PrettifiedExpectedResult
-					),
-					IsFromActor
-				)
-		end
-
-		return CodeGenHeader
-			.. WrapCodeInActor(
-				string.format(
-					[[%s%s
-firesignal(Event.%s%s)]],
-					(DidInsertNilFunction and GetNilCode .. "\n\n" or ""),
-					Path,
-					Method,
-					CreateArgsString(SerializedArgs, CallInfo.Arguments, ", ")
-				),
-				IsFromActor
-			)
-	end
-
-	return CodeGenHeader
-		.. WrapCodeInActor(
-			string.format(
-				[[%s%s
-Event:%s(%s)]],
-				(DidInsertNilFunction and GetNilCode .. "\n\n" or ""),
-				Path,
-				Method,
-				CreateArgsString(SerializedArgs, CallInfo.Arguments)
-			),
-			IsFromActor and ClientRemoteClassNames[CallInfo.Instance.ClassName]
-		)
-end
-
-function CodeGen:BuildFunctionInfo(CallInfo: CallInfo)
-	if CallInfo.IsActor and typeof(CallInfo.Function) == "table" then
-		return string.format(
-			[[<b>Function Address:</b> %s
-<b>Name:</b> %s
-<b>Source:</b> %s
-<b>Calling Line:</b> %s
-<b>From Actor:</b> true
-%s]],
-			CallInfo.Function.Address:match("0x%x+") or tostring(CallInfo.Function),
-			CallInfo.Function.Name ~= "" and CallInfo.Function.Name or "Anonymous",
-			CallInfo.Origin and self.GetFullPath(CallInfo.Origin, true) or wax.shared.ExecutorName,
-			tostring(CallInfo.Line),
-
-			CallInfo.Function.IsC and "<b>Closure Type</b>: C closure"
-				or string.format(
-					"<b>Closure Type</b>: Luau closure\n<b>Constants:</b> %s\n<b>Upvalues:</b> %s\n<b>Protos:</b> %s",
-					debug.getconstants and tostring(#CallInfo.Function.Constants) or "N/A",
-					debug.getupvalues and tostring(#CallInfo.Function.Upvalues) or "N/A",
-					debug.getprotos and tostring(#CallInfo.Function.Protos) or "N/A"
-				)
-		)
-	end
-
-	local FunctionName = debug.info(CallInfo.Function, "n")
-
-	return string.format(
-		[[<b>Function Address:</b> %s
-<b>Name:</b> %s
-<b>Source:</b> %s
-<b>Calling Line:</b> %s
-%s]],
-		tostring(CallInfo.Function):match("0x%x+") or tostring(CallInfo.Function),
-		FunctionName ~= "" and FunctionName or "Anonymous",
-		CallInfo.Origin and self.GetFullPath(CallInfo.Origin, true) or wax.shared.ExecutorName,
-		tostring(CallInfo.Line),
-
-		iscclosure(CallInfo.Function) and "<b>Closure Type</b>: C closure"
-			or string.format(
-				"<b>Closure Type</b>: Luau closure\n<b>Constants:</b> %s\n<b>Upvalues:</b> %s\n<b>Protos:</b> %s",
-				debug.getconstants and tostring(#debug.getconstants(CallInfo.Function)) or "N/A",
-				debug.getupvalues and tostring(#debug.getupvalues(CallInfo.Function)) or "N/A",
-				debug.getprotos and tostring(#debug.getprotos(CallInfo.Function)) or "N/A"
-			)
-	)
-end
-
-wax.shared.ReplayCallInfo = function(CallInfo: CallInfo)
-	local Type = CallInfo.Type
-	local Method = wax.shared.FunctionForClasses[Type][CallInfo.Instance.ClassName]
-
-	if Type == "Incoming" then
-		if DoesUseCallbackValue(CallInfo.Instance) then
-			if CallInfo.OriginalInvokeArgs then
-				Method = wax.shared.FunctionForClasses.Outgoing[CallInfo.Instance.ClassName]
-
-				CallInfo.Instance[Method](
-					CallInfo.Instance,
-					table.unpack(CallInfo.OriginalInvokeArgs, 1, CallInfo.OriginalInvokeArgs.n)
-				)
-				return
-			end
-
-			local Callback = getcallbackvalue(CallInfo.Instance, Method)
-
-			if not Callback then
-				return
-			end
-
-			Callback(table.unpack(CallInfo.Arguments))
-			return
-		end
-
-		assert(firesignal or getconnections, "No firesignal or getconnections found")
-
-		if firesignal then
-			firesignal(CallInfo.Instance[Method], table.unpack(CallInfo.Arguments, 1, CallInfo.Arguments.n))
-		elseif getconnections then
-			for _, conn in getconnections(CallInfo.Instance[Method]) do
-				conn:Fire(table.unpack(CallInfo.Arguments, 1, CallInfo.Arguments.n))
-			end
-		end
-
-		return
-	end
-
-	CallInfo.Instance[Method](CallInfo.Instance, table.unpack(CallInfo.Arguments, 1, CallInfo.Arguments.n))
-end
-
-return CodeGen
-
-end)() end,
-    [32] = function()local wax,script,require=ImportGlobals(32)local ImportGlobals return (function(...)local UIHelper = {}
-
-local CodeGen = require(script.Parent.Parent.CodeGen)
-
-function UIHelper.IsMouseOverFrame(Frame: GuiObject, Position: Vector3): boolean
-	local AbsPos, AbsSize = Frame.AbsolutePosition, Frame.AbsoluteSize
-	return Position.X >= AbsPos.X
-		and Position.X <= AbsPos.X + AbsSize.X
-		and Position.Y >= AbsPos.Y
-		and Position.Y <= AbsPos.Y + AbsSize.Y
-end
-
-function UIHelper.IsClickInput(Input: InputObject): boolean
-	return Input.UserInputState == Enum.UserInputState.Begin
-		and (Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch)
-end
-
-function UIHelper.IsMoveInput(Input: InputObject): boolean
-	return Input.UserInputState == Enum.UserInputState.Change
-		and (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch)
-end
-
-function UIHelper.QuickSerializeNumber(Number: number)
-	if Number % 1 ~= 0 then
-		return string.format("%.3f", Number)
-	elseif Number == 1 / 0 then
-		return "math.huge"
-	elseif Number == -1 / 0 then
-		return "-math.huge"
-	end
-
-	return Number
-end
-
-function UIHelper.QuickSerializeArgument(Argument)
-	if typeof(Argument) == "string" then
-		return string.format('"%s"', Argument)
-	elseif typeof(Argument) == "number" then
-		return UIHelper.QuickSerializeNumber(Argument)
-	elseif typeof(Argument) == "Vector2" then
-		return string.format(
-			"%s, %s",
-			UIHelper.QuickSerializeNumber(Argument.X),
-			UIHelper.QuickSerializeNumber(Argument.Y)
-		)
-	elseif typeof(Argument) == "Vector3" then
-		return string.format(
-			"%s, %s, %s",
-			UIHelper.QuickSerializeNumber(Argument.X),
-			UIHelper.QuickSerializeNumber(Argument.Y),
-			UIHelper.QuickSerializeNumber(Argument.Z)
-		)
-	elseif typeof(Argument) == "CFrame" then
-		local Components = { Argument:GetComponents() }
-		for Index, Value in pairs(Components) do
-			Components[Index] = UIHelper.QuickSerializeNumber(Value)
-		end
-		return table.concat(Components, ", ")
-	elseif typeof(Argument) == "table" then
-		return "{...}"
-	elseif typeof(Argument) == "Instance" then
-		return CodeGen.GetFullPath(Argument, true)
-	elseif typeof(Argument) == "userdata" then
-		return "newproxy(" .. getmetatable(Argument) and "true" or "false" .. ")"
-	end
-
-	return tostring(Argument)
-end
-
-return UIHelper
-
-end)() end,
-    [23] = function()local wax,script,require=ImportGlobals(23)local ImportGlobals return (function(...)local Hooking = {
-	IncludeInStackFunctions = {},
-}
-
-local AlternativeEnabled = wax.shared.SaveManager:GetState("UseAlternativeHooks", false)
-wax.shared.AlternativeEnabled = AlternativeEnabled
-wax.shared.CobaltLuaSetStackHidden = false
-
-Hooking.HookFunction = function(Original, Replacement)
-	if not wax.shared.ExecutorSupport["hookfunction"].IsWorking then
-		return Original
-	end
-
-	return hookfunction(Original, Replacement)
-end
-Hooking.HookMetaMethod = function(object, method, hook)
-	if
-		AlternativeEnabled
-		or (
-			not wax.shared.ExecutorSupport["hookmetamethod"].IsWorking
-			and wax.shared.ExecutorSupport["getrawmetatable"].IsWorking
-		)
-	then
-		local Metatable = wax.shared.getrawmetatable(object)
-		local originalMethod = rawget(Metatable, method)
-
-		setreadonly(Metatable, false)
-		rawset(Metatable, method, hook)
-		setreadonly(Metatable, true)
-
-		return originalMethod
-	end
-
-	if not wax.shared.ExecutorSupport["hookmetamethod"].IsWorking then
-		if method == "__index" then
-			local _, Metamethod = xpcall(function()
-				return object[tostring(math.random())]
-			end, function(err)
-				return debug.info(2, "f")
-			end)
-
-			return Metamethod
-		elseif method == "__newindex" then
-			local _, Metamethod = xpcall(function()
-				object[tostring(math.random())] = true
-			end, function(err)
-				return debug.info(2, "f")
-			end)
-
-			return Metamethod
-		elseif method == "__namecall" then
-			local _, Metamethod = xpcall(function()
-				object:Mustard()
-			end, function(err)
-				return debug.info(2, "f")
-			end)
-
-			return Metamethod
-		end
-
-		return nil
-	end
-
-	return hookmetamethod(object, method, hook)
-end
-
-return Hooking
-
-end)() end,
-    [25] = function()local wax,script,require=ImportGlobals(25)local ImportGlobals return (function(...)--[[
-
-Pagination Module
-made by deivid and turned into module by upio
-
-]]
-
-local Pagination = {}
-Pagination.__index = Pagination
-
-function Pagination.new(Options: {
-	TotalItems: number,
-	ItemsPerPage: number,
-	CurrentPage: number?,
-	SiblingCount: number?,
-})
-	return setmetatable({
-		TotalItems = Options.TotalItems,
-		ItemsPerPage = Options.ItemsPerPage,
-		CurrentPage = Options.CurrentPage or 1,
-		SiblingCount = Options.SiblingCount or 2,
-	}, Pagination)
-end
-
-function Pagination:GetInfo()
-	local TotalPages = math.ceil(self.TotalItems / self.ItemsPerPage)
-
-	return {
-		TotalItems = self.TotalItems,
-		ItemsPerPage = self.ItemsPerPage,
-		CurrentPage = self.CurrentPage,
-		TotalPages = TotalPages,
-	}
-end
-
-function Pagination:SetItemsPerPage(max: number)
-	self.ItemsPerPage = max
-end
-
-function Pagination:GetIndexRanges(Page: number?)
-	Page = Page or self.CurrentPage
-
-	local TotalPages = math.ceil(self.TotalItems / self.ItemsPerPage)
-	if TotalPages == 0 then
-		return 1, 0
-	end
-	assert(
-		Page <= TotalPages,
-		"Attempted to get invalid page out of range, got " .. Page .. " but max is " .. TotalPages
-	)
-
-	local Start = (((Page or self.CurrentPage) - 1) * self.ItemsPerPage) + 1
-	local End = Start + (self.ItemsPerPage - 1)
-
-	return Start, End
-end
-
-function Pagination:SetPage(Page: number)
-	local TotalPages = math.ceil(self.TotalItems / self.ItemsPerPage)
-	if TotalPages == 0 then
-		self.CurrentPage = 1
-		return
-	end
-	assert(Page <= TotalPages, "Attempted to set page out of range, got " .. Page .. " but max is " .. TotalPages)
-
-	self.CurrentPage = Page
-end
-
-function Pagination:Update(TotalItems: number?, ItemsPerPage: number?)
-	self.TotalItems = TotalItems or self.TotalItems
-	self.ItemsPerPage = ItemsPerPage or self.ItemsPerPage
-end
-
-function Pagination:GetVisualInfo(Page: number?)
-	Page = Page or self.CurrentPage
-
-	local TotalPages = math.ceil(self.TotalItems / self.ItemsPerPage)
-	if TotalPages == 0 then
-		return {}
-	end
-
-	assert(
-		Page <= TotalPages,
-		"Attempted to get invalid page out of range, got " .. Page .. " but max is " .. TotalPages
-	)
-
-	local MaxButtons = 5 + self.SiblingCount * 2
-	local Result = table.create(MaxButtons, "none")
-	if TotalPages <= MaxButtons then
-		for i = 1, TotalPages do
-			Result[i] = i
-		end
-		return Result
-	end
-
-	local LeftSibling = math.max(Page - self.SiblingCount, 1)
-	local RightSibling = math.min(Page + self.SiblingCount, TotalPages)
-
-	local FakeLeft = LeftSibling > 2
-	local FakeRight = RightSibling < TotalPages - 1
-
-	local TotalPageNumbers = math.min(2 * self.SiblingCount + 5, TotalPages)
-	local ItemCount = TotalPageNumbers - 2
-
-	if not FakeLeft and FakeRight then
-		for i = 1, ItemCount do
-			Result[i] = i
-		end
-		Result[ItemCount + 1] = "ellipsis"
-		Result[ItemCount + 2] = TotalPages
-		--return MergeTables(LeftRange, "ellipsis", TotalPages)
-		return Result
-	elseif FakeLeft and not FakeRight then
-		--local RightRange = CreateArray(TotalPages - ItemCount + 1, TotalPages)
-		Result[1] = 1
-		Result[2] = "ellipsis"
-
-		local Index = 3
-		for i = TotalPages - ItemCount + 1, TotalPages do
-			Result[Index] = i
-			Index += 1
-		end
-
-		return Result
-	elseif FakeLeft and FakeRight then
-		--local MiddleRange = CreateArray(LeftSibling, RightSibling)
-		Result[1] = 1
-		Result[2] = "ellipsis"
-		local Index = 3
-
-		for i = LeftSibling, RightSibling do
-			Result[Index] = i
-			Index += 1
-		end
-
-		Result[Index] = "ellipsis"
-		Result[Index + 1] = TotalPages
-
-		return Result
-		--return MergeTables(1, "ellipsis", MiddleRange, "ellipsis", TotalPages)
-	end
-
-	--return CreateArray(1, TotalPages)
-	for i = 1, TotalPages do
-		Result[i] = i
-	end
-	return Result
-end
-
-return Pagination
-
-end)() end,
-    [26] = function()local wax,script,require=ImportGlobals(26)local ImportGlobals return (function(...)if not isfolder("Cobalt") then
-	makefolder("Cobalt")
-end
-
-if not isfile("Cobalt/Settings.json") then
-	writefile("Cobalt/Settings.json", "{}")
-end
-
-local SaveManager = {
-	State = {},
-}
-
-local Success, Error = pcall(function()
-	SaveManager.State = wax.shared.HttpService:JSONDecode(readfile("Cobalt/Settings.json"))
-end)
-
-if not Success then
-	warn("Failed to load settings: " .. Error)
-end
-
-function SaveManager:SetState(Idx, Value)
-	SaveManager.State[Idx] = Value
-	pcall(writefile, "Cobalt/Settings.json", wax.shared.HttpService:JSONEncode(SaveManager.State))
-end
-
-function SaveManager:GetState(Idx, Default)
-	if SaveManager.State[Idx] ~= nil then
-		return SaveManager.State[Idx]
-	end
-
-	return Default
-end
-
-return SaveManager
-
-end)() end,
-    [33] = function()local wax,script,require=ImportGlobals(33)local ImportGlobals return (function(...)--[[
-
-Luau syntax highlighter with studio colors
-Based on: https://devforum.roblox.com/t/realtime-richtext-lua-syntax-highlighting/2500399
-
-]]
-
-local Highlighter = {
-	Colors = {
-		Keyword = "#f86d7c",
-		String = "#adf195",
-		Number = "#ffc600",
-		Nil = "#ffc600",
-		Boolean = "#ffc600",
-		Function = "#f86d7c",
-		Self = "#f86d7c",
-		Local = "#f86d7c",
-		Text = "#ffffff",
-		LocalMethod = "#fdfbac",
-		LocalProperty = "#61a1f1",
-		BuiltIn = "#84d6f7",
-		Comment = "#666666",
-	},
-
-	Keywords = {
-		Lua = {
-			"and",
-			"break",
-			"or",
-			"else",
-			"elseif",
-			"if",
-			"then",
-			"until",
-			"repeat",
-			"while",
-			"do",
-			"for",
-			"in",
-			"end",
-			"local",
-			"return",
-			"function",
-			"export",
-		},
-		Roblox = {
-			"game",
-			"workspace",
-			"script",
-			"math",
-			"string",
-			"table",
-			"task",
-			"wait",
-			"select",
-			"next",
-			"Enum",
-			"error",
-			"warn",
-			"tick",
-			"assert",
-			"shared",
-			"loadstring",
-			"tonumber",
-			"tostring",
-			"type",
-			"typeof",
-			"unpack",
-			"print",
-			"Instance",
-			"CFrame",
-			"Vector3",
-			"Vector2",
-			"Color3",
-			"UDim",
-			"UDim2",
-			"Ray",
-			"BrickColor",
-			"OverlapParams",
-			"RaycastParams",
-			"Axes",
-			"Random",
-			"Region3",
-			"Rect",
-			"TweenInfo",
-			"collectgarbage",
-			"not",
-			"utf8",
-			"pcall",
-			"xpcall",
-			"_G",
-			"setmetatable",
-			"getmetatable",
-			"os",
-			"pairs",
-			"ipairs",
-		},
-	},
-}
-
-local function CreateKeywordSet(keywords)
-	local keywordSet = {}
-	for _, keyword in ipairs(keywords) do
-		keywordSet[keyword] = true
-	end
-	return keywordSet
-end
-
-local LuaSet = CreateKeywordSet(Highlighter.Keywords.Lua)
-local RobloxSet = CreateKeywordSet(Highlighter.Keywords.Roblox)
-
-local function GetHighlightColor(tokens, index)
-	local token = tokens[index]
-
-	if tonumber(token) then
-		return Highlighter.Colors.Number
-	elseif token == "nil" then
-		return Highlighter.Colors.Nil
-	elseif token:sub(1, 2) == "--" then
-		return Highlighter.Colors.Comment
-	elseif LuaSet[token] then
-		return Highlighter.Colors.Keyword
-	elseif RobloxSet[token] or getgenv()[token] ~= nil then
-		return Highlighter.Colors.BuiltIn
-	elseif token:sub(1, 1) == '"' or token:sub(1, 1) == "'" then
-		return Highlighter.Colors.String
-	elseif token == "true" or token == "false" then
-		return Highlighter.Colors.Boolean
-	end
-
-	if tokens[index + 1] == "(" then
-		if tokens[index - 1] == ":" then
-			return Highlighter.Colors.LocalMethod
-		end
-		return Highlighter.Colors.LocalMethod
-	end
-
-	if tokens[index - 1] == "." then
-		if tokens[index - 2] == "Enum" then
-			return Highlighter.Colors.BuiltIn
-		end
-		return Highlighter.Colors.LocalProperty
-	end
-
-	return nil
-end
-
-local ArgumentColors = {
-	["boolean"] = Highlighter.Colors.Boolean,
-	["number"] = Highlighter.Colors.Number,
-	["Vector2"] = Highlighter.Colors.Number,
-	["Vector3"] = Highlighter.Colors.Number,
-	["CFrame"] = Highlighter.Colors.Number,
-	["string"] = Highlighter.Colors.String,
-	["EnumItem"] = Highlighter.Colors.BuiltIn,
-	["nil"] = Highlighter.Colors.Nil,
-}
-function Highlighter.GetArgumentColor(Argument)
-	return ArgumentColors[typeof(Argument)] or Highlighter.Colors.Text
-end
-
-function Highlighter.Run(source)
-	local tokens = {}
-	local currentToken = ""
-
-	local inString = false
-	local inComment = false
-	local commentPersist = false
-
-	for i = 1, #source do
-		local character = source:sub(i, i)
-
-		if inComment then
-			if character == "\n" and not commentPersist then
-				table.insert(tokens, currentToken)
-				table.insert(tokens, character)
-				currentToken = ""
-
-				inComment = false
-			elseif source:sub(i - 1, i) == "]]" and commentPersist then
-				currentToken = currentToken .. "]"
-
-				table.insert(tokens, currentToken)
-				currentToken = ""
-
-				inComment = false
-				commentPersist = false
-			else
-				currentToken = currentToken .. character
-			end
-		elseif inString then
-			if character == inString and source:sub(i - 1, i - 1) ~= "\\" or character == "\n" then
-				currentToken = currentToken .. character
-				table.insert(tokens, currentToken)
-				currentToken = ""
-				inString = false
-			else
-				currentToken = currentToken .. character
-			end
-		else
-			if source:sub(i, i + 1) == "--" then
-				table.insert(tokens, currentToken)
-				currentToken = "--"
-				inComment = true
-				commentPersist = source:sub(i + 2, i + 3) == "[["
-				i = i + 1
-			elseif character == '"' or character == "'" then
-				table.insert(tokens, currentToken)
-				currentToken = character
-				inString = character
-			elseif character:match("[%p]") and character ~= "_" then
-				table.insert(tokens, currentToken)
-				table.insert(tokens, character)
-				currentToken = ""
-			elseif character:match("[%w_]") then
-				currentToken = currentToken .. character
-			else
-				table.insert(tokens, currentToken)
-				table.insert(tokens, character)
-				currentToken = ""
-			end
-		end
-	end
-
-	if currentToken ~= "" then
-		table.insert(tokens, currentToken)
-	end
-
-	for i = #tokens, 1, -1 do
-		if tokens[i] == "" then
-			table.remove(tokens, i)
-		end
-	end
-
-	local highlighted = {}
-
-	for i, token in ipairs(tokens) do
-		local highlightColor = GetHighlightColor(tokens, i)
-
-		if highlightColor then
-			local syntax =
-				string.format('<font color="%s">%s</font>', highlightColor, token:gsub("<", "&lt;"):gsub(">", "&gt;"))
-
-			table.insert(highlighted, syntax)
-		else
-			table.insert(highlighted, token)
-		end
-	end
-
-	return table.concat(highlighted)
-end
-
-return Highlighter
-
-end)() end,
-    [31] = function()local wax,script,require=ImportGlobals(31)local ImportGlobals return (function(...)local Drag = {
-	Dragging = false,
-	Frame = nil,
-	FramePosition = nil,
-	FrameSize = nil, -- Added to store initial frame size
-	StartPosition = nil,
-	ChangedConnection = nil,
-	Callback = nil,
-}
-
-local Helper = require(script.Parent.Helper)
-
-local function DefaultCallback(_, Input: InputObject)
-	local Delta = Input.Position - Drag.StartPosition
-	local FramePosition: UDim2 = Drag.FramePosition
-
-	Drag.Frame.Position = UDim2.new(
-		FramePosition.X.Scale,
-		FramePosition.X.Offset + Delta.X,
-		FramePosition.Y.Scale,
-		FramePosition.Y.Offset + Delta.Y
-	)
-end
-
-function Drag.Setup(Frame: GuiObject, DragFrame: GuiObject, Callback: (Info: {}, Input: InputObject) -> () | nil)
-	Callback = Callback or DefaultCallback
-
-	DragFrame.InputBegan:Connect(function(Input: InputObject)
-		if not Helper.IsClickInput(Input) then
-			return
-		end
-
-		Drag.Dragging = true
-		Drag.Frame = Frame
-		Drag.FramePosition = Frame.Position
-		Drag.StartPosition = Input.Position
-		Drag.FrameSize = Frame.Size
-		Drag.Callback = Callback
-
-		Drag.ChangedConnection = Input.Changed:Connect(function()
-			if Input.UserInputState ~= Enum.UserInputState.End then
-				return
-			end
-
-			Drag.Dragging = false
-			Drag.Frame = nil
-			Drag.Callback = nil
-
-			if Drag.ChangedConnection and Drag.ChangedConnection.Connected then
-				Drag.ChangedConnection:Disconnect()
-				Drag.ChangedConnection = nil
-			end
-		end)
-	end)
-end
-
-wax.shared.Connect(wax.shared.UserInputService.InputChanged:Connect(function(Input: InputObject)
-	if Drag.Dragging and Drag.Callback and Helper.IsMoveInput(Input) then
-		Drag.Callback(Drag, Input)
-	end
-end))
-
-return Drag
-
-end)() end,
-    [30] = function()local wax,script,require=ImportGlobals(30)local ImportGlobals return (function(...)local Animations = {
-	TweenInfo = TweenInfo.new(0.25, Enum.EasingStyle.Exponential),
-	Exclusions = {},
-	Expectations = { In = {}, Out = {} },
-}
-
-local function GetTransparencyProperty(object)
-	if table.find(Animations.Exclusions, object) then
-		return nil
-	end
-
-	if object:IsA("TextButton") or object:IsA("TextLabel") or object:IsA("TextBox") then
-		return { "TextTransparency" }
-	elseif object:IsA("Frame") then
-		return { "BackgroundTransparency" }
-	elseif object:IsA("ScrollingFrame") then
-		return { "ScrollBarImageTransparency" }
-	elseif object:IsA("ImageLabel") or object:IsA("ImageButton") then
-		return { "ImageTransparency", "BackgroundTransparency" }
-	elseif object:IsA("UIStroke") then
-		return { "Transparency" }
-	end
-
-	return nil
-end
-
-local function BuildPropertyTable(properties, type, object)
-	if Animations.Expectations[type][object] then
-		return Animations.Expectations[type][object]
-	end
-
-	local propTable = {}
-	for _, prop in properties do
-		propTable[prop] = type == "In" and 0 or 1
-	end
-	return propTable
-end
-
-function Animations.FadeOut(object, time)
-	local tweenInfo = time and TweenInfo.new(time, Enum.EasingStyle.Exponential) or Animations.TweenInfo
-	local properties = GetTransparencyProperty(object)
-	if properties then
-		wax.shared.TweenService:Create(object, tweenInfo, BuildPropertyTable(properties, "Out", object)):Play()
-	end
-
-	for _, child in object:GetDescendants() do
-		local prop = GetTransparencyProperty(child)
-		if not prop then
-			continue
-		end
-
-		wax.shared.TweenService:Create(child, tweenInfo, BuildPropertyTable(prop, "Out", child)):Play()
-	end
-end
-
-function Animations.FadeIn(object, time)
-	local tweenInfo = time and TweenInfo.new(time, Enum.EasingStyle.Exponential) or Animations.TweenInfo
-	local property = GetTransparencyProperty(object)
-	if property then
-		wax.shared.TweenService:Create(object, tweenInfo, BuildPropertyTable(property, "In", object)):Play()
-	end
-
-	for _, child in object:GetDescendants() do
-		local prop = GetTransparencyProperty(child)
-		if not prop then
-			continue
-		end
-
-		wax.shared.TweenService:Create(child, tweenInfo, BuildPropertyTable(prop, "In", child)):Play()
-	end
-end
-
-function Animations.AddFadeExclusion(object)
-	local prop = GetTransparencyProperty(object)
-	if not prop then
-		return
-	end
-
-	table.insert(Animations.Exclusions, object)
-end
-
-function Animations.AddFadeExclusions(objects)
-	for _, object in objects do
-		local prop = GetTransparencyProperty(object)
-		if not prop then
-			continue
-		end
-
-		table.insert(Animations.Exclusions, object)
-	end
-end
-
-function Animations.SetFadeExpectation(type: "In" | "Out", object: GuiBase2d, properties: { [string]: any })
-	if not Animations.Expectations[type] then
-		return
-	end
-
-	Animations.Expectations[type][object] = properties
-end
-
-return Animations
-
 end)() end
 } -- [RefId] = Closure
 
@@ -8942,10 +9313,17 @@ local ObjectTree = {
                 },
                 {
                     {
-                        26,
+                        25,
                         2,
                         {
-                            "SaveManager"
+                            "Pagination"
+                        }
+                    },
+                    {
+                        24,
+                        2,
+                        {
+                            "Log"
                         }
                     },
                     {
@@ -8956,17 +9334,42 @@ local ObjectTree = {
                         }
                     },
                     {
-                        23,
+                        26,
                         2,
                         {
-                            "Hooking"
+                            "SaveManager"
                         }
                     },
                     {
-                        25,
-                        2,
+                        16,
+                        1,
                         {
-                            "Pagination"
+                            "Anticheats"
+                        },
+                        {
+                            {
+                                17,
+                                2,
+                                {
+                                    "Main"
+                                }
+                            },
+                            {
+                                18,
+                                1,
+                                {
+                                    "impl"
+                                },
+                                {
+                                    {
+                                        19,
+                                        2,
+                                        {
+                                            "Adonis"
+                                        }
+                                    }
+                                }
+                            }
                         }
                     },
                     {
@@ -8976,6 +9379,27 @@ local ObjectTree = {
                             "UI"
                         },
                         {
+                            {
+                                37,
+                                2,
+                                {
+                                    "Resize"
+                                }
+                            },
+                            {
+                                31,
+                                2,
+                                {
+                                    "Drag"
+                                }
+                            },
+                            {
+                                36,
+                                2,
+                                {
+                                    "Interface"
+                                }
+                            },
                             {
                                 30,
                                 2,
@@ -8998,10 +9422,10 @@ local ObjectTree = {
                                 }
                             },
                             {
-                                31,
+                                38,
                                 2,
                                 {
-                                    "Drag"
+                                    "Sonner"
                                 }
                             },
                             {
@@ -9012,40 +9436,19 @@ local ObjectTree = {
                                 }
                             },
                             {
-                                36,
-                                2,
-                                {
-                                    "Interface"
-                                }
-                            },
-                            {
-                                37,
-                                2,
-                                {
-                                    "Resize"
-                                }
-                            },
-                            {
                                 34,
                                 2,
                                 {
                                     "Icons"
                                 }
-                            },
-                            {
-                                38,
-                                2,
-                                {
-                                    "Sonner"
-                                }
                             }
                         }
                     },
                     {
-                        24,
+                        20,
                         2,
                         {
-                            "Log"
+                            "CodeGen"
                         }
                     },
                     {
@@ -9065,42 +9468,10 @@ local ObjectTree = {
                         }
                     },
                     {
-                        16,
-                        1,
-                        {
-                            "Anticheats"
-                        },
-                        {
-                            {
-                                18,
-                                1,
-                                {
-                                    "impl"
-                                },
-                                {
-                                    {
-                                        19,
-                                        2,
-                                        {
-                                            "Adonis"
-                                        }
-                                    }
-                                }
-                            },
-                            {
-                                17,
-                                2,
-                                {
-                                    "Main"
-                                }
-                            }
-                        }
-                    },
-                    {
-                        20,
+                        23,
                         2,
                         {
-                            "CodeGen"
+                            "Hooking"
                         }
                     },
                     {
@@ -9110,20 +9481,6 @@ local ObjectTree = {
                             "FileLog"
                         }
                     }
-                }
-            },
-            {
-                39,
-                2,
-                {
-                    "Window"
-                }
-            },
-            {
-                2,
-                2,
-                {
-                    "ExecutorSupport"
                 }
             },
             {
@@ -9144,8 +9501,8 @@ local ObjectTree = {
                                 5,
                                 5,
                                 {
-                                    "Environement",
-                                    Value = "--[[\n\n    Wax environement replicated for actor env\n\n]]\n\ntype ActorData = {\n\tToken: string,\n\n\tIgnorePlayerModule: boolean,\n\tUseAlternativeHooks: boolean,\n\tIgnoredRemotesDropdown: { [string]: boolean },\n\n\tExecutorSupport: { [string]: { IsWorking: boolean } },\n}\n\nlocal Data: ActorData = COBALT_ACTOR_DATA\n\nlocal RelayChannel = get_comm_channel(...)\n\nlocal wax = { shared = {} }\n\nwax.shared.ExecutorSupport = Data.ExecutorSupport\n\nfor _, Service in pairs({\n\t\"Players\",\n\t\"HttpService\",\n}) do\n\twax.shared[Service] = cloneref(game:GetService(Service))\nend\n\nwax.shared.LocalPlayer = wax.shared.Players.LocalPlayer\nwax.shared.PlayerScripts = cloneref(wax.shared.LocalPlayer:WaitForChild(\"PlayerScripts\"))\nwax.shared.ExecutorName = string.split(identifyexecutor(), \" \")[1]\n\nwax.shared.newcclosure = wax.shared.ExecutorName == \"AWP\"\n\t\tand function(f)\n\t\t\tlocal env = getfenv(f)\n\t\t\tlocal x = setmetatable({\n\t\t\t\t__F = f,\n\t\t\t}, {\n\t\t\t\t__index = env,\n\t\t\t\t__newindex = env,\n\t\t\t})\n\n\t\t\tlocal nf = function(...)\n\t\t\t\treturn __F(...)\n\t\t\tend\n\t\t\tsetfenv(nf, x) -- set func env (env of nf gets deoptimized)\n\t\t\treturn newcclosure(nf)\n\t\tend\n\tor newcclosure\n\nwax.shared.getrawmetatable = wax.shared.ExecutorSupport[\"getrawmetatable\"].IsWorking\n\t\tand (getrawmetatable or debug.getmetatable)\n\tor function()\n\t\treturn setmetatable({}, {\n\t\t\t__index = function()\n\t\t\t\treturn function() end\n\t\t\tend,\n\t\t})\n\tend\n\nwax.shared.restorefunction = function(Function: (...any) -> ...any, Silent: boolean?)\n\tlocal Original = wax.shared.Hooks[Function]\n\n\tif Silent and not Original then\n\t\treturn\n\tend\n\n\tassert(Original, \"Function not hooked\")\n\n\tif restorefunction and isfunctionhooked(Function) then\n\t\trestorefunction(Function)\n\telse\n\t\twax.shared.Hooking.HookFunction(Function, Original)\n\tend\n\n\twax.shared.Hooks[Function] = nil\nend\n\nlocal Hooking = {}\n\nHooking.HookFunction = function(Original, Replacement)\n\tif not wax.shared.ExecutorSupport[\"hookfunction\"].IsWorking then\n\t\treturn Original\n\tend\n\n\treturn hookfunction(Original, Replacement)\nend\n\nwax.shared.AlternativeEnabled = Data.UseAlternativeHooks\n\nHooking.HookMetaMethod = function(object, method, hook)\n\tif\n\t\tData.UseAlternativeHooks\n\t\tor (\n\t\t\tnot wax.shared.ExecutorSupport[\"hookmetamethod\"].IsWorking\n\t\t\tand wax.shared.ExecutorSupport[\"getrawmetatable\"].IsWorking\n\t\t)\n\tthen\n\t\tlocal Metatable = wax.shared.getrawmetatable(object)\n\t\tlocal originalMethod = rawget(Metatable, method)\n\n\t\tsetreadonly(Metatable, false)\n\t\trawset(Metatable, method, hook)\n\t\tsetreadonly(Metatable, true)\n\n\t\treturn originalMethod\n\tend\n\n\tif not wax.shared.ExecutorSupport[\"hookmetamethod\"].IsWorking then\n\t\tif method == \"__index\" then\n\t\t\tlocal _, Metamethod = xpcall(function()\n\t\t\t\treturn object[tostring(math.random())]\n\t\t\tend, function(err)\n\t\t\t\treturn debug.info(2, \"f\")\n\t\t\tend)\n\n\t\t\treturn Metamethod\n\t\telseif method == \"__newindex\" then\n\t\t\tlocal _, Metamethod = xpcall(function()\n\t\t\t\tobject[tostring(math.random())] = true\n\t\t\tend, function(err)\n\t\t\t\treturn debug.info(2, \"f\")\n\t\t\tend)\n\n\t\t\treturn Metamethod\n\t\telseif method == \"__namecall\" then\n\t\t\tlocal _, Metamethod = xpcall(function()\n\t\t\t\tobject:Mustard()\n\t\t\tend, function(err)\n\t\t\t\treturn debug.info(2, \"f\")\n\t\t\tend)\n\n\t\t\treturn Metamethod\n\t\tend\n\n\t\treturn nil\n\tend\n\n\treturn hookmetamethod(object, method, hook)\nend\n\nwax.shared.Hooking = Hooking\n\nwax.shared.Hooks = {}\nwax.shared.Settings = {\n\tIgnorePlayerModule = { Value = Data.IgnorePlayerModule },\n\tIgnoredRemotesDropdown = { Value = Data.IgnoredRemotesDropdown },\n}\n\nwax.shared.IsPlayerModule = function(Origin: LocalScript | ModuleScript, Instance: Instance): boolean\n\tif Instance and Instance.ClassName ~= \"BindableEvent\" then\n\t\treturn false\n\tend\n\n\tlocal PlayerModule = Origin and Origin.FindFirstAncestor(Origin, \"PlayerModule\") or nil\n\tif not PlayerModule then\n\t\treturn false\n\tend\n\n\tif PlayerModule.Parent == nil then\n\t\treturn true\n\tend\n\n\treturn compareinstances(PlayerModule.Parent, wax.shared.PlayerScripts)\nend\nwax.shared.ShouldIgnore = function(Instance, Origin)\n\treturn wax.shared.Settings.IgnoredRemotesDropdown.Value[Instance.ClassName] == true\n\t\tor (wax.shared.Settings.IgnorePlayerModule.Value and wax.shared.IsPlayerModule(Origin, Instance))\nend\n\nwax.shared.Connections = {}\n\nwax.shared.Connect = function(Connection)\n\ttable.insert(wax.shared.Connections, Connection)\n\treturn Connection\nend\n\nwax.shared.Disconnect = function(Connection)\n\tConnection:Disconnect()\n\n\tlocal Index = table.find(wax.shared.Connections, Connection)\n\tif Index then\n\t\ttable.remove(wax.shared.Connections, Index)\n\tend\n\n\treturn true\nend\n\nlocal OnUnload\n\nlocal RelayConnection\nRelayConnection = RelayChannel.Event:Connect(function(Type, ...)\n\tif Type == \"Unload\" then\n\t\tRelayConnection:Disconnect()\n\t\twax.shared.Unloaded = true\n\t\tfor _, Connection in pairs(wax.shared.Connections) do\n\t\t\twax.shared.Disconnect(Connection)\n\t\tend\n\n\t\tif OnUnload then\n\t\t\tOnUnload()\n\t\tend\n\telseif Type == \"MainBlock\" then\n\t\tlocal Instance, EventType = ...\n\t\tlocal Log = wax.shared.Logs[EventType][Instance]\n\t\tif Log then\n\t\t\tLog:Block()\n\t\tend\n\telseif Type == \"MainIgnore\" then\n\t\tlocal Instance, EventType = ...\n\t\tlocal Log = wax.shared.Logs[EventType][Instance]\n\t\tif Log then\n\t\t\tLog:Ignore()\n\t\tend\n\telseif Type == \"MainSettingsSync\" then\n\t\tlocal Setting, Value = ...\n\t\tif wax.shared.Settings[Setting] then\n\t\t\twax.shared.Settings[Setting].Value = Value\n\t\tend\n\tend\nend)\n\nwax.shared.Unloaded = false\nwax.shared.Communicator = RelayChannel\n\nwax.shared.Log = {}\ndo\n\tlocal Log = wax.shared.Log\n\tLog.__index = Log\n\n\tfunction Log.new(Instance, Type, Method, Index, CallingScript)\n\t\tlocal NewLog = setmetatable({\n\t\t\tInstance = Instance,\n\t\t\tType = Type,\n\t\t\tMethod = Method,\n\t\t\tIndex = Index,\n\t\t\tCalls = {},\n\t\t\tIgnored = false,\n\t\t\tBlocked = false,\n\t\t}, Log)\n\n\t\treturn NewLog\n\tend\n\n\tlocal FunctionToMetatadata\n\n\tlocal GenerateUUID = wax.shared.HttpService.GenerateGUID\n\tlocal function GenerateId()\n\t\treturn GenerateUUID(wax.shared.HttpService, false)\n\tend\n\n\tlocal function FixTable(Table, Refs)\n\t\tif not Table then\n\t\t\treturn nil\n\t\tend\n\n\t\tlocal CyclicRefs = Refs or {}\n\t\tlocal Visited = {}\n\t\tlocal OutputTable = {}\n\t\tlocal ContainsCyclicRef = false\n\n\t\tfor Key, Value in Table do\n\t\t\tif type(Value) == \"table\" then\n\t\t\t\tif Visited[Value] then\n\t\t\t\t\tContainsCyclicRef = true\n\n\t\t\t\t\tOutputTable[Key] = {\n\t\t\t\t\t\t__CyclicRef = true,\n\t\t\t\t\t\t__Id = CyclicRefs[Value],\n\t\t\t\t\t}\n\t\t\t\t\tcontinue\n\t\t\t\tend\n\n\t\t\t\tif getmetatable(Value) then\n\t\t\t\t\tOutputTable[Key] =\n\t\t\t\t\t\t\"Cobalt: Impossible to bridge table with metatable from actor environement to main environement\"\n\t\t\t\tend\n\n\t\t\t\tlocal Result, CycleMetadata, ContainsCyclic = FixTable(Value, CyclicRefs)\n\t\t\t\tif not Result then\n\t\t\t\t\tcontinue\n\t\t\t\tend\n\n\t\t\t\tif not ContainsCyclic then\n\t\t\t\t\tOutputTable[Key] = Result\n\t\t\t\t\tcontinue\n\t\t\t\tend\n\n\t\t\t\t-- Merge the cycle metadata\n\t\t\t\tfor k, v in pairs(CycleMetadata) do\n\t\t\t\t\tOutputTable[k] = v\n\t\t\t\tend\n\n\t\t\t\t-- Create a new cyclic reference\n\t\t\t\tlocal CycleId = GenerateId()\n\n\t\t\t\tOutputTable[Key] = {\n\t\t\t\t\t__CyclicRef = true,\n\t\t\t\t\t__Id = CycleId,\n\t\t\t\t}\n\n\t\t\t\tCyclicRefs[CycleId] = Value\n\n\t\t\t\tVisited[Value] = true\n\t\t\telseif type(Value) == \"function\" then\n\t\t\t\tOutputTable[Key] = FunctionToMetatadata(Value)\n\t\t\telse\n\t\t\t\tOutputTable[Key] = Value\n\t\t\tend\n\t\tend\n\n\t\treturn OutputTable, CyclicRefs, ContainsCyclicRef\n\tend\n\n\tFunctionToMetatadata = function(Function)\n\t\tif not Function then\n\t\t\treturn nil\n\t\tend\n\n\t\tlocal Metadata = {\n\t\t\tAddress = tostring(Function),\n\t\t\tName = debug.info(Function, \"n\"),\n\t\t\tIsC = iscclosure(Function),\n\t\t}\n\n\t\tif not iscclosure(Function) then\n\t\t\tMetadata[\"Upvalues\"] = debug.getupvalues(Function)\n\t\t\tMetadata[\"Constants\"] = debug.getconstants(Function)\n\t\t\tMetadata[\"Protos\"] = debug.getprotos(Function)\n\t\tend\n\n\t\t-- to validate that this function was generated by FunctionToMetatadata\n\t\tMetadata[\"Validation\"] = Data.Token\n\t\tMetadata[\"__Function\"] = true\n\n\t\treturn Metadata\n\tend\n\n\tfunction DeepClone(orig, copies)\n\t\tcopies = copies or {}\n\t\tif type(orig) ~= \"table\" then\n\t\t\treturn orig\n\t\telseif copies[orig] then\n\t\t\treturn copies[orig]\n\t\tend\n\n\t\tlocal copy = {}\n\t\tcopies[orig] = copy\n\t\tfor k, v in pairs(orig) do\n\t\t\tcopy[DeepClone(k, copies)] = DeepClone(v, copies)\n\t\tend\n\t\treturn copy\n\tend\n\n\tlocal ClassesConnectionsToggle = {\n\t\tRemoteEvent = \"OnClientEvent\",\n\t\tUnreliableRemoteEvent = \"OnClientEvent\",\n\t\tBindableEvent = \"Event\",\n\t}\n\n\tfunction Log:SetConnectionsEnabled(enabled: boolean)\n\t\tif not self.Instance or not ClassesConnectionsToggle[self.Instance.ClassName] then\n\t\t\treturn\n\t\tend\n\n\t\tlocal ConnectionName = ClassesConnectionsToggle[self.Instance.ClassName]\n\t\tif self.Type ~= \"Incoming\" or not ConnectionName then\n\t\t\treturn\n\t\tend\n\n\t\tfor _, Connection in pairs(getconnections(self.Instance[ConnectionName])) do\n\t\t\tif enabled then\n\t\t\t\tConnection:Enable()\n\t\t\telse\n\t\t\t\tConnection:Disable()\n\t\t\tend\n\t\tend\n\tend\n\n\tfunction Log:Call(RawInfo)\n\t\tRawInfo[\"IsActor\"] = true\n\t\tlocal Info = DeepClone(RawInfo)\n\n\t\t-- Seliware puts their actor BindableEvents in CoreGui\n\t\tlocal identity = getthreadidentity()\n\t\tsetthreadidentity(8)\n\t\twax.shared.Communicator.Fire(wax.shared.Communicator, \"ActorCall\", self.Instance, self.Type, FixTable(Info))\n\t\tsetthreadidentity(identity)\n\tend\n\n\tfunction Log:Ignore()\n\t\tself.Ignored = not self.Ignored\n\tend\n\n\tfunction Log:Block()\n\t\tself.Blocked = not self.Blocked\n\t\tself:SetConnectionsEnabled(not self.Blocked)\n\tend\nend\n\nwax.shared.Logs = {\n\tOutgoing = {},\n\tIncoming = {},\n}\n\nwax.shared.NewLog = function(Instance, Type, Method, Index, CallingScript)\n\tlocal NewLog = wax.shared.Log.new(Instance, Type, Method, Index, CallingScript)\n\twax.shared.Logs[Type][Instance] = NewLog\n\treturn NewLog\nend\n"
+                                    "Environment",
+                                    Value = "--[[\n\n    Wax Environment replicated for actor env\n\n]]\n\nif getgenv().CobaltInitialized == true then\n\treturn\nend\n\ngetgenv().CobaltInitialized = true\n\ntype ActorData = {\n\tToken: string,\n\n\tIgnorePlayerModule: boolean,\n\tUseAlternativeHooks: boolean,\n\tIgnoredRemotesDropdown: { [string]: boolean },\n\n\tExecutorSupport: { [string]: { IsWorking: boolean } },\n}\n\nlocal Data: ActorData = COBALT_ACTOR_DATA\n\nlocal RelayChannel = get_comm_channel(...)\n\nlocal wax = { shared = {} }\n\nwax.shared.ExecutorSupport = Data.ExecutorSupport\n\nfor _, Service in pairs({\n\t\"Players\",\n\t\"HttpService\",\n}) do\n\twax.shared[Service] = cloneref(game:GetService(Service))\nend\n\nwax.shared.LocalPlayer = wax.shared.Players.LocalPlayer\nwax.shared.PlayerScripts = cloneref(wax.shared.LocalPlayer:WaitForChild(\"PlayerScripts\"))\nwax.shared.ExecutorName = string.split(identifyexecutor(), \" \")[1]\n\nwax.shared.newcclosure = wax.shared.ExecutorName == \"AWP\"\n\t\tand function(f)\n\t\t\tlocal env = getfenv(f)\n\t\t\tlocal x = setmetatable({\n\t\t\t\t__F = f,\n\t\t\t}, {\n\t\t\t\t__index = env,\n\t\t\t\t__newindex = env,\n\t\t\t})\n\n\t\t\tlocal nf = function(...)\n\t\t\t\treturn __F(...)\n\t\t\tend\n\t\t\tsetfenv(nf, x) -- set func env (env of nf gets deoptimized)\n\t\t\treturn newcclosure(nf)\n\t\tend\n\tor newcclosure\n\nwax.shared.getrawmetatable = wax.shared.ExecutorSupport[\"getrawmetatable\"].IsWorking\n\t\tand (getrawmetatable or debug.getmetatable)\n\tor function()\n\t\treturn setmetatable({}, {\n\t\t\t__index = function()\n\t\t\t\treturn function() end\n\t\t\tend,\n\t\t})\n\tend\n\nwax.shared.restorefunction = function(Function: (...any) -> ...any, Silent: boolean?)\n\tlocal Original = wax.shared.Hooks[Function]\n\n\tif Silent and not Original then\n\t\treturn\n\tend\n\n\tassert(Original, \"Function not hooked\")\n\n\tif restorefunction and isfunctionhooked(Function) then\n\t\trestorefunction(Function)\n\telse\n\t\twax.shared.Hooking.HookFunction(Function, Original)\n\tend\n\n\twax.shared.Hooks[Function] = nil\nend\n\nlocal Hooking = {}\n\nwax.shared.AlternativeEnabled = Data.UseAlternativeHooks\n\nHooking.HookFunction = function(Original, Replacement)\n\tif wax.shared.ExecutorSupport[\"oth\"].IsWorking and iscclosure(Original) and islclosure(Replacement) then\n\t\treturn oth.hook(Original, Replacement)\n\tend\n\n\tif islclosure(Replacement) then\n\t\tReplacement = wax.shared.newcclosure(Replacement)\n\tend\n\n\tif not wax.shared.ExecutorSupport[\"hookfunction\"].IsWorking then\n\t\treturn Original\n\tend\n\n\treturn hookfunction(Original, Replacement)\nend\n\nHooking.HookMetaMethod = function(object, method, hook)\n\tlocal Metatable = wax.shared.getrawmetatable(object)\n\tlocal originalMethod = rawget(Metatable, method)\n\n\tif wax.shared.ExecutorSupport[\"oth\"].IsWorking then\n\t\treturn oth.hook(originalMethod, hook)\n\tend\n\n\tif islclosure(hook) then\n\t\thook = wax.shared.newcclosure(hook)\n\tend\n\n\tif\n\t\tData.UseAlternativeHooks\n\t\tor (\n\t\t\tnot wax.shared.ExecutorSupport[\"hookmetamethod\"].IsWorking\n\t\t\tand wax.shared.ExecutorSupport[\"getrawmetatable\"].IsWorking\n\t\t)\n\tthen\n\t\tsetreadonly(Metatable, false)\n\t\trawset(Metatable, method, hook)\n\t\tsetreadonly(Metatable, true)\n\n\t\treturn originalMethod\n\tend\n\n\tif not wax.shared.ExecutorSupport[\"hookmetamethod\"].IsWorking then\n\t\tif method == \"__index\" then\n\t\t\tlocal _, Metamethod = xpcall(function()\n\t\t\t\treturn object[tostring(math.random())]\n\t\t\tend, function(err)\n\t\t\t\treturn debug.info(2, \"f\")\n\t\t\tend)\n\n\t\t\treturn Metamethod\n\t\telseif method == \"__newindex\" then\n\t\t\tlocal _, Metamethod = xpcall(function()\n\t\t\t\tobject[tostring(math.random())] = true\n\t\t\tend, function(err)\n\t\t\t\treturn debug.info(2, \"f\")\n\t\t\tend)\n\n\t\t\treturn Metamethod\n\t\telseif method == \"__namecall\" then\n\t\t\tlocal _, Metamethod = xpcall(function()\n\t\t\t\tobject:Mustard()\n\t\t\tend, function(err)\n\t\t\t\treturn debug.info(2, \"f\")\n\t\t\tend)\n\n\t\t\treturn Metamethod\n\t\tend\n\n\t\treturn nil\n\tend\n\n\treturn hookmetamethod(object, method, hook)\nend\n\nwax.shared.Hooking = Hooking\n\nwax.shared.Hooks = {}\nwax.shared.Settings = {\n\tIgnorePlayerModule = { Value = Data.IgnorePlayerModule },\n\tIgnoredRemotesDropdown = { Value = Data.IgnoredRemotesDropdown },\n}\n\nwax.shared.IsPlayerModule = function(Origin: LocalScript | ModuleScript, Instance: Instance): boolean\n\tif Instance and Instance.ClassName ~= \"BindableEvent\" then\n\t\treturn false\n\tend\n\n\tlocal PlayerModule = Origin and Origin.FindFirstAncestor(Origin, \"PlayerModule\") or nil\n\tif not PlayerModule then\n\t\treturn false\n\tend\n\n\tif PlayerModule.Parent == nil then\n\t\treturn true\n\tend\n\n\treturn compareinstances(PlayerModule.Parent, wax.shared.PlayerScripts)\nend\nwax.shared.ShouldIgnore = function(Instance, Origin)\n\treturn wax.shared.Settings.IgnoredRemotesDropdown.Value[Instance.ClassName] == true\n\t\tor (wax.shared.Settings.IgnorePlayerModule.Value and wax.shared.IsPlayerModule(Origin, Instance))\nend\n\nwax.shared.Connections = {}\n\nwax.shared.Connect = function(Connection)\n\ttable.insert(wax.shared.Connections, Connection)\n\treturn Connection\nend\n\nwax.shared.Disconnect = function(Connection)\n\tConnection:Disconnect()\n\n\tlocal Index = table.find(wax.shared.Connections, Connection)\n\tif Index then\n\t\ttable.remove(wax.shared.Connections, Index)\n\tend\n\n\treturn true\nend\n\nlocal OnUnload\n\nlocal RelayConnection\nRelayConnection = RelayChannel.Event:Connect(function(Type, ...)\n\tif Type == \"Unload\" then\n\t\tRelayConnection:Disconnect()\n\t\twax.shared.Unloaded = true\n\t\tfor _, Connection in pairs(wax.shared.Connections) do\n\t\t\twax.shared.Disconnect(Connection)\n\t\tend\n\n\t\tif OnUnload then\n\t\t\tOnUnload()\n\t\tend\n\telseif Type == \"MainBlock\" then\n\t\tlocal Instance, EventType = ...\n\t\tlocal Log = wax.shared.Logs[EventType][Instance]\n\t\tif Log then\n\t\t\tLog:Block()\n\t\tend\n\telseif Type == \"MainIgnore\" then\n\t\tlocal Instance, EventType = ...\n\t\tlocal Log = wax.shared.Logs[EventType][Instance]\n\t\tif Log then\n\t\t\tLog:Ignore()\n\t\tend\n\telseif Type == \"MainSettingsSync\" then\n\t\tlocal Setting, Value = ...\n\t\tif wax.shared.Settings[Setting] then\n\t\t\twax.shared.Settings[Setting].Value = Value\n\t\tend\n\tend\nend)\n\nwax.shared.Unloaded = false\nwax.shared.Communicator = RelayChannel\n\nwax.shared.Log = {}\ndo\n\tlocal Log = wax.shared.Log\n\tLog.__index = Log\n\n\tfunction Log.new(Instance, Type, Method, Index, CallingScript)\n\t\tlocal NewLog = setmetatable({\n\t\t\tInstance = Instance,\n\t\t\tType = Type,\n\t\t\tMethod = Method,\n\t\t\tIndex = Index,\n\t\t\tCalls = {},\n\t\t\tIgnored = false,\n\t\t\tBlocked = false,\n\t\t}, Log)\n\n\t\treturn NewLog\n\tend\n\n\tlocal FunctionToMetatadata\n\n\tlocal GenerateUUID = wax.shared.HttpService.GenerateGUID\n\tlocal function GenerateId()\n\t\treturn GenerateUUID(wax.shared.HttpService, false)\n\tend\n\n\tlocal function FixTable(Table, Refs)\n\t\tif not Table then\n\t\t\treturn nil\n\t\tend\n\n\t\tlocal CyclicRefs = Refs or {}\n\t\tlocal Visited = {}\n\t\tlocal OutputTable = {}\n\t\tlocal ContainsCyclicRef = false\n\n\t\tfor Key, Value in Table do\n\t\t\tif type(Value) == \"table\" then\n\t\t\t\tif Visited[Value] then\n\t\t\t\t\tContainsCyclicRef = true\n\n\t\t\t\t\tOutputTable[Key] = {\n\t\t\t\t\t\t__CyclicRef = true,\n\t\t\t\t\t\t__Id = CyclicRefs[Value],\n\t\t\t\t\t}\n\t\t\t\t\tcontinue\n\t\t\t\tend\n\n\t\t\t\tif getmetatable(Value) then\n\t\t\t\t\tOutputTable[Key] =\n\t\t\t\t\t\t\"Cobalt: Impossible to bridge table with metatable from actor Environment to main Environment\"\n\t\t\t\tend\n\n\t\t\t\tlocal Result, CycleMetadata, ContainsCyclic = FixTable(Value, CyclicRefs)\n\t\t\t\tif not Result then\n\t\t\t\t\tcontinue\n\t\t\t\tend\n\n\t\t\t\tif not ContainsCyclic then\n\t\t\t\t\tOutputTable[Key] = Result\n\t\t\t\t\tcontinue\n\t\t\t\tend\n\n\t\t\t\t-- Merge the cycle metadata\n\t\t\t\tfor k, v in pairs(CycleMetadata) do\n\t\t\t\t\tOutputTable[k] = v\n\t\t\t\tend\n\n\t\t\t\t-- Create a new cyclic reference\n\t\t\t\tlocal CycleId = GenerateId()\n\n\t\t\t\tOutputTable[Key] = {\n\t\t\t\t\t__CyclicRef = true,\n\t\t\t\t\t__Id = CycleId,\n\t\t\t\t}\n\n\t\t\t\tCyclicRefs[CycleId] = Value\n\n\t\t\t\tVisited[Value] = true\n\t\t\telseif type(Value) == \"function\" then\n\t\t\t\tOutputTable[Key] = FunctionToMetatadata(Value)\n\t\t\telse\n\t\t\t\tOutputTable[Key] = Value\n\t\t\tend\n\t\tend\n\n\t\treturn OutputTable, CyclicRefs, ContainsCyclicRef\n\tend\n\n\tFunctionToMetatadata = function(Function)\n\t\tif not Function then\n\t\t\treturn nil\n\t\tend\n\n\t\tlocal Metadata = {\n\t\t\tAddress = tostring(Function),\n\t\t\tName = debug.info(Function, \"n\"),\n\t\t\tSource = debug.info(Function, \"s\"),\n\t\t\tIsC = iscclosure(Function),\n\t\t}\n\n\t\tif not iscclosure(Function) then\n\t\t\tMetadata[\"Upvalues\"] = debug.getupvalues(Function)\n\t\t\tMetadata[\"Constants\"] = debug.getconstants(Function)\n\t\t\tMetadata[\"Protos\"] = debug.getprotos(Function)\n\t\tend\n\n\t\t-- to validate that this function was generated by FunctionToMetatadata\n\t\tMetadata[\"Validation\"] = Data.Token\n\t\tMetadata[\"__Function\"] = true\n\n\t\treturn Metadata\n\tend\n\n\tfunction DeepClone(orig, copies)\n\t\tcopies = copies or {}\n\t\tif typeof(orig) == \"Instance\" then\n\t\t\treturn cloneref(orig)\n\t\telseif typeof(orig) == \"userdata\" then\n\t\t\tif getmetatable(orig) then\n\t\t\t\treturn newproxy(true)\n\t\t\telse\n\t\t\t\treturn newproxy()\n\t\t\tend\n\t\telseif typeof(orig) == \"function\" then\n\t\t\tif clonefunction then\n\t\t\t\treturn clonefunction(orig)\n\t\t\tend\n\n\t\t\treturn orig\n\t\telseif type(orig) ~= \"table\" then\n\t\t\treturn orig\n\t\telseif copies[orig] then\n\t\t\treturn copies[orig]\n\t\tend\n\n\t\tlocal copy = {}\n\t\tcopies[orig] = copy\n\t\tfor k, v in pairs(orig) do\n\t\t\tcopy[DeepClone(k, copies)] = DeepClone(v, copies)\n\t\tend\n\t\treturn copy\n\tend\n\n\tlocal ClassesConnectionsToggle = {\n\t\tRemoteEvent = \"OnClientEvent\",\n\t\tUnreliableRemoteEvent = \"OnClientEvent\",\n\t\tBindableEvent = \"Event\",\n\t}\n\n\tfunction Log:SetConnectionsEnabled(enabled: boolean)\n\t\tif not self.Instance or not ClassesConnectionsToggle[self.Instance.ClassName] then\n\t\t\treturn\n\t\tend\n\n\t\tlocal ConnectionName = ClassesConnectionsToggle[self.Instance.ClassName]\n\t\tif self.Type ~= \"Incoming\" or not ConnectionName then\n\t\t\treturn\n\t\tend\n\n\t\tfor _, Connection in pairs(getconnections(self.Instance[ConnectionName])) do\n\t\t\tif enabled then\n\t\t\t\tConnection:Enable()\n\t\t\telse\n\t\t\t\tConnection:Disable()\n\t\t\tend\n\t\tend\n\tend\n\n\tfunction Log:Call(RawInfo)\n\t\tif self.Instance == wax.shared.Communicator then\n\t\t\treturn\n\t\tend\n\n\t\tRawInfo[\"IsActor\"] = true\n\t\tlocal Info = DeepClone(RawInfo)\n\n\t\t-- Seliware puts their actor BindableEvents in CoreGui\n\t\tlocal identity = getthreadidentity()\n\t\tsetthreadidentity(8)\n\t\twax.shared.Communicator.Fire(wax.shared.Communicator, \"ActorCall\", self.Instance, self.Type, FixTable(Info))\n\t\tsetthreadidentity(identity)\n\tend\n\n\tfunction Log:Ignore()\n\t\tself.Ignored = not self.Ignored\n\tend\n\n\tfunction Log:Block()\n\t\tself.Blocked = not self.Blocked\n\t\tself:SetConnectionsEnabled(not self.Blocked)\n\tend\nend\n\nwax.shared.Logs = {\n\tOutgoing = {},\n\tIncoming = {},\n}\n\nwax.shared.NewLog = function(Instance, Type, Method, Index, CallingScript)\n\tlocal NewLog = wax.shared.Log.new(Instance, Type, Method, Index, CallingScript)\n\twax.shared.Logs[Type][Instance] = NewLog\n\treturn NewLog\nend\n"
                                 }
                             },
                             {
@@ -9153,7 +9510,7 @@ local ObjectTree = {
                                 5,
                                 {
                                     "Unload",
-                                    Value = "local RelayChannel = get_comm_channel(...)\n\nlocal getrawmetatable = getrawmetatable or debug.getmetatable\n\nRelayChannel.Event:Connect(function(Type, ...)\n\tif Type ~= \"Unload\" then\n\t\treturn\n\tend\n\n\tlocal gameMetatable = getrawmetatable(game)\n\n\tif restorefunction then\n\t\tpcall(restorefunction, gameMetatable.__namecall)\n\t\tpcall(restorefunction, gameMetatable.__newindex)\n\tend\nend)\n"
+                                    Value = "local getrawmetatable = getrawmetatable or debug.getmetatable\n\nwax.shared.Communicator.Event:Connect(function(Type, ...)\n\tif Type ~= \"Unload\" then\n\t\treturn\n\tend\n\n\tlocal gameMetatable = getrawmetatable(game)\n\n\tif wax.shared.ExecutorSupport[\"oth\"].IsWorking then\n\t\tpcall(oth.unhook, gameMetatable.__namecall, wax.shared.NamecallHook)\n\t\tpcall(oth.unhook, gameMetatable.__newindex, wax.shared.NewIndexHook)\n\telseif restorefunction then\n\t\tpcall(restorefunction, gameMetatable.__namecall)\n\t\tpcall(restorefunction, gameMetatable.__newindex)\n\tend\n\n\ttask.defer(function()\n\t\tgetgenv().CobaltInitialized = false\n\tend)\nend)\n"
                                 }
                             }
                         }
@@ -9166,6 +9523,29 @@ local ObjectTree = {
                         },
                         {
                             {
+                                11,
+                                1,
+                                {
+                                    "Default"
+                                },
+                                {
+                                    {
+                                        12,
+                                        2,
+                                        {
+                                            "Incoming"
+                                        }
+                                    },
+                                    {
+                                        13,
+                                        2,
+                                        {
+                                            "Outgoing"
+                                        }
+                                    }
+                                }
+                            },
+                            {
                                 8,
                                 1,
                                 {
@@ -9177,7 +9557,7 @@ local ObjectTree = {
                                         5,
                                         {
                                             "Outgoing",
-                                            Value = "local NamecallMethods = {\n\t\"FireServer\",\n\t\"InvokeServer\",\n\t\"Fire\",\n\t\"Invoke\",\n\t\"fireServer\",\n\t\"invokeServer\",\n\t\"fire\",\n\t\"invoke\",\n}\nlocal AllowedClassNames =\n\t{ \"RemoteEvent\", \"RemoteFunction\", \"UnreliableRemoteEvent\", \"BindableEvent\", \"BindableFunction\" }\n\n--[[\n\tReturns the calling function via `debug.info`\n\n\t@return `function | nil` The calling function or nil if not found.\n]]\nlocal function getcallingfunction()\n\tfor i = 4, 10 do\n\t\tlocal Function, Source = debug.info(i, \"fs\")\n\t\tif not Function or not Source then\n\t\t\tbreak\n\t\tend\n\n\t\tif Source == \"[C]\" then\n\t\t\tcontinue\n\t\tend\n\n\t\treturn Function\n\tend\n\n\treturn debug.info(4, \"f\")\nend\n\n--[[\n\tReturns the calling line of the script that called the function via `debug.info`\n\n\t@return number Returns the line number of the calling script.\n]]\nlocal function getcallingline()\n\tfor i = 4, 10 do\n\t\tlocal Source, Line = debug.info(i, \"sl\")\n\t\tif not Source then\n\t\t\tbreak\n\t\tend\n\n\t\tif Source == \"[C]\" then\n\t\t\tcontinue\n\t\tend\n\n\t\treturn Line\n\tend\n\n\treturn debug.info(4, \"l\")\nend\n\n-- metamethod hooks\nwax.shared.NamecallHook = wax.shared.Hooking.HookMetaMethod(\n\tgame,\n\t\"__namecall\",\n\twax.shared.newcclosure(function(...)\n\t\tlocal self = ...\n\t\tlocal Method = getnamecallmethod()\n\n\t\tif\n\t\t\ttypeof(self) == \"Instance\"\n\t\t\tand table.find(AllowedClassNames, self.ClassName)\n\t\t\tand not rawequal(self, wax.shared.Communicator)\n\t\t\tand not rawequal(self, wax.shared.ActorCommunicator)\n\t\t\tand table.find(NamecallMethods, Method)\n\t\t\tand not wax.shared.ShouldIgnore(self, getcallingscript())\n\t\tthen\n\t\t\tlocal Log = wax.shared.Logs.Outgoing[self]\n\t\t\tif not Log then\n\t\t\t\tLog = wax.shared.NewLog(self, \"Outgoing\", Method, getcallingscript())\n\t\t\tend\n\n\t\t\tif Log.Blocked then\n\t\t\t\treturn\n\t\t\telseif not Log.Ignored then\n\t\t\t\tlocal Info = {\n\t\t\t\t\tArguments = table.pack(select(2, ...)),\n\t\t\t\t\tTime = os.date(\"%X\"),\n\t\t\t\t\tOrigin = getcallingscript(),\n\t\t\t\t\tFunction = getcallingfunction(),\n\t\t\t\t\tLine = getcallingline(),\n\t\t\t\t\tIsExecutor = checkcaller(),\n\t\t\t\t}\n\t\t\t\tLog:Call(Info)\n\n\t\t\t\t-- For RemoteFunction return value (ex: local result = RemoteFunction:InvokeServer())\n\t\t\t\tif self.ClassName == \"RemoteFunction\" and (Method == \"InvokeServer\" or Method == \"invokeServer\") then\n\t\t\t\t\tLog = wax.shared.Logs.Incoming[self]\n\t\t\t\t\tif not Log then\n\t\t\t\t\t\tLog = wax.shared.NewLog(self, \"Incoming\", Method, getcallingscript())\n\t\t\t\t\tend\n\n\t\t\t\t\tif Log.Blocked then\n\t\t\t\t\t\treturn\n\t\t\t\t\tend\n\n\t\t\t\t\tlocal Result = table.pack(wax.shared.NamecallHook(...))\n\t\t\t\t\tif not Log.Ignored then\n\t\t\t\t\t\tlocal RFResultInfo = {\n\t\t\t\t\t\t\tArguments = Result,\n\t\t\t\t\t\t\tTime = os.date(\"%X\"),\n\t\t\t\t\t\t\tOrigin = getcallingscript(),\n\t\t\t\t\t\t\tFunction = getcallingfunction(),\n\t\t\t\t\t\t\tLine = getcallingline(),\n\t\t\t\t\t\t\tIsExecutor = checkcaller(),\n\t\t\t\t\t\t\tOriginalInvokeArgs = table.pack(select(2, ...)),\n\t\t\t\t\t\t}\n\t\t\t\t\t\tLog:Call(RFResultInfo)\n\t\t\t\t\tend\n\n\t\t\t\t\treturn table.unpack(Result, 1, Result.n)\n\t\t\t\tend\n\t\t\tend\n\t\tend\n\n\t\treturn wax.shared.NamecallHook(...)\n\tend)\n)\n\n-- function hooks\nlocal FunctionsToHook = {\n\tInstance.new(\"BindableFunction\").Invoke,\n\tInstance.new(\"RemoteFunction\").InvokeServer,\n\tInstance.new(\"BindableEvent\").Fire,\n\tInstance.new(\"RemoteEvent\").FireServer,\n\tInstance.new(\"UnreliableRemoteEvent\").FireServer,\n}\n\nfor _, Function in pairs(FunctionsToHook) do\n\tlocal Method = debug.info(Function, \"n\")\n\n\twax.shared.Hooks[Function] = wax.shared.Hooking.HookFunction(\n\t\tFunction,\n\t\twax.shared.newcclosure(function(...)\n\t\t\tlocal self = ...\n\n\t\t\tif\n\t\t\t\ttypeof(self) == \"Instance\"\n\t\t\t\tand table.find(AllowedClassNames, self.ClassName)\n\t\t\t\tand not rawequal(self, wax.shared.Communicator)\n\t\t\t\tand not wax.shared.ShouldIgnore(self, getcallingscript())\n\t\t\tthen\n\t\t\t\tlocal Log = wax.shared.Logs.Outgoing[self]\n\t\t\t\tif not Log then\n\t\t\t\t\tLog = wax.shared.NewLog(self, \"Outgoing\", Method, getcallingscript())\n\t\t\t\tend\n\n\t\t\t\tif Log.Blocked then\n\t\t\t\t\treturn\n\t\t\t\telseif not Log.Ignored then\n\t\t\t\t\tlocal Info = {\n\t\t\t\t\t\tArguments = table.pack(select(2, ...)),\n\t\t\t\t\t\tTime = os.date(\"%X\"),\n\t\t\t\t\t\tOrigin = getcallingscript(),\n\t\t\t\t\t\tFunction = getcallingfunction(),\n\t\t\t\t\t\tLine = getcallingline(),\n\t\t\t\t\t\tIsExecutor = checkcaller(),\n\t\t\t\t\t}\n\t\t\t\t\tLog:Call(Info)\n\n\t\t\t\t\t-- For RemoteFunction return value (ex: local result = RemoteFunction:InvokeServer())\n\t\t\t\t\tif\n\t\t\t\t\t\tself.ClassName == \"RemoteFunction\"\n\t\t\t\t\t\tand (Method == \"InvokeServer\" or Method == \"invokeServer\")\n\t\t\t\t\tthen\n\t\t\t\t\t\tLog = wax.shared.Logs.Incoming[self]\n\t\t\t\t\t\tif not Log then\n\t\t\t\t\t\t\tLog = wax.shared.NewLog(self, \"Incoming\", Method, getcallingscript())\n\t\t\t\t\t\tend\n\n\t\t\t\t\t\tif Log.Blocked then\n\t\t\t\t\t\t\treturn\n\t\t\t\t\t\tend\n\n\t\t\t\t\t\tlocal Result = table.pack(wax.shared.Hooks[Function](...))\n\t\t\t\t\t\tif not Log.Ignored then\n\t\t\t\t\t\t\tlocal RFResultInfo = {\n\t\t\t\t\t\t\t\tArguments = Result,\n\t\t\t\t\t\t\t\tTime = os.date(\"%X\"),\n\t\t\t\t\t\t\t\tOrigin = getcallingscript(),\n\t\t\t\t\t\t\t\tFunction = getcallingfunction(),\n\t\t\t\t\t\t\t\tLine = getcallingline(),\n\t\t\t\t\t\t\t\tIsExecutor = checkcaller(),\n\t\t\t\t\t\t\t\tOriginalInvokeArgs = table.pack(select(2, ...)),\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tLog:Call(RFResultInfo)\n\t\t\t\t\t\tend\n\n\t\t\t\t\t\treturn table.unpack(Result, 1, Result.n)\n\t\t\t\t\tend\n\t\t\t\tend\n\t\t\tend\n\n\t\t\treturn wax.shared.Hooks[Function](...)\n\t\tend)\n\t)\nend\n"
+                                            Value = "local NamecallMethods = {\n\t\"FireServer\",\n\t\"InvokeServer\",\n\t\"Fire\",\n\t\"Invoke\",\n\t\"fireServer\",\n\t\"invokeServer\",\n\t\"fire\",\n\t\"invoke\",\n}\nlocal AllowedClassNames =\n\t{ \"RemoteEvent\", \"RemoteFunction\", \"UnreliableRemoteEvent\", \"BindableEvent\", \"BindableFunction\" }\n\n--[[\n\tReturns the calling function via `debug.info`\n\n\t@return `function | nil` The calling function or nil if not found.\n]]\nlocal function getcallingfunction()\n\tlocal BaseLevel = if wax.shared.ExecutorSupport[\"oth\"].IsWorking then 2 else 4\n\n\tfor i = BaseLevel, 10 do\n\t\tlocal Function, Source = debug.info(i, \"fs\")\n\t\tif not Function or not Source then\n\t\t\tbreak\n\t\tend\n\n\t\tif Source == \"[C]\" then\n\t\t\tcontinue\n\t\tend\n\n\t\treturn Function\n\tend\n\n\treturn debug.info(BaseLevel, \"f\")\nend\n\n--[[\n\tReturns the calling line of the script that called the function via `debug.info`\n\n\t@return number Returns the line number of the calling script.\n]]\nlocal function getcallingline()\n\tlocal BaseLevel = if wax.shared.ExecutorSupport[\"oth\"].IsWorking then 2 else 4\n\n\tfor i = BaseLevel, 10 do\n\t\tlocal Source, Line = debug.info(i, \"sl\")\n\t\tif not Source then\n\t\t\tbreak\n\t\tend\n\n\t\tif Source == \"[C]\" then\n\t\t\tcontinue\n\t\tend\n\n\t\treturn Line\n\tend\n\n\treturn debug.info(BaseLevel, \"l\")\nend\n\n--[[\n\tReturns the calling source of the script that called the function via `debug.info`\n\n\t@return string Returns the source of the calling script.\n]]\nlocal function getcallingsource()\n\tlocal BaseLevel = if wax.shared.ExecutorSupport[\"oth\"].IsWorking then 2 else 4\n\n\tfor i = BaseLevel, 10 do\n\t\tlocal Source = debug.info(i, \"s\")\n\t\tif not Source then\n\t\t\tbreak\n\t\tend\n\n\t\tif Source == \"[C]\" then\n\t\t\tcontinue\n\t\tend\n\n\t\treturn Source\n\tend\n\n\treturn debug.info(BaseLevel, \"s\")\nend\n\n-- metamethod hooks\nwax.shared.NamecallHook = wax.shared.Hooking.HookMetaMethod(game, \"__namecall\", function(...)\n\tlocal self = ...\n\tlocal Method = getnamecallmethod()\n\n\tif\n\t\ttypeof(self) == \"Instance\"\n\t\tand table.find(AllowedClassNames, self.ClassName)\n\t\tand not rawequal(self, wax.shared.Communicator)\n\t\tand not rawequal(self, wax.shared.ActorCommunicator)\n\t\tand table.find(NamecallMethods, Method)\n\t\tand not wax.shared.ShouldIgnore(self, getcallingscript())\n\tthen\n\t\tlocal Log = wax.shared.Logs.Outgoing[self]\n\t\tif not Log then\n\t\t\tLog = wax.shared.NewLog(self, \"Outgoing\", Method, getcallingscript())\n\t\tend\n\n\t\tif Log.Blocked then\n\t\t\treturn\n\t\telseif not Log.Ignored then\n\t\t\tlocal Info = {\n\t\t\t\tArguments = table.pack(select(2, ...)),\n\t\t\t\tTime = os.date(\"%X\"),\n\t\t\t\tOrigin = getcallingscript(),\n\t\t\t\tFunction = getcallingfunction(),\n\t\t\t\tLine = getcallingline(),\n\t\t\t\tSource = getcallingsource(),\n\t\t\t\tIsExecutor = checkcaller(),\n\t\t\t}\n\t\t\tLog:Call(Info)\n\t\t\t-- For RemoteFunction return value (ex: local result = RemoteFunction:InvokeServer())\n\t\t\tif self.ClassName == \"RemoteFunction\" and (Method == \"InvokeServer\" or Method == \"invokeServer\") then\n\t\t\t\tLog = wax.shared.Logs.Incoming[self]\n\t\t\t\tif not Log then\n\t\t\t\t\tLog = wax.shared.NewLog(self, \"Incoming\", Method, getcallingscript())\n\t\t\t\tend\n\n\t\t\t\tif Log.Blocked then\n\t\t\t\t\treturn\n\t\t\t\tend\n\n\t\t\t\tlocal Result = table.pack(wax.shared.NamecallHook(...))\n\t\t\t\tif not Log.Ignored then\n\t\t\t\t\tlocal RFResultInfo = {\n\t\t\t\t\t\tArguments = Result,\n\t\t\t\t\t\tTime = os.date(\"%X\"),\n\t\t\t\t\t\tOrigin = getcallingscript(),\n\t\t\t\t\t\tFunction = getcallingfunction(),\n\t\t\t\t\t\tLine = getcallingline(),\n\t\t\t\t\t\tSource = getcallingsource(),\n\t\t\t\t\t\tIsExecutor = checkcaller(),\n\t\t\t\t\t\tOriginalInvokeArgs = table.pack(select(2, ...)),\n\t\t\t\t\t}\n\t\t\t\t\tLog:Call(RFResultInfo)\n\t\t\t\tend\n\n\t\t\t\treturn table.unpack(Result, 1, Result.n)\n\t\t\tend\n\t\tend\n\tend\n\n\treturn wax.shared.NamecallHook(...)\nend)\n\n-- function hooks\nlocal FunctionsToHook\ndo\n\tlocal BindableFunction = Instance.new(\"BindableFunction\")\n\tlocal BindableEvent = Instance.new(\"BindableEvent\")\n\n\tlocal RemoteFunction = Instance.new(\"RemoteFunction\")\n\tlocal RemoteEvent = Instance.new(\"RemoteEvent\")\n\tlocal UnreliableRemoteEvent = Instance.new(\"UnreliableRemoteEvent\")\n\n\tFunctionsToHook = {\n\t\tBindableFunction.Invoke,\n\t\tBindableEvent.Fire,\n\n\t\tRemoteFunction.InvokeServer,\n\t\tRemoteEvent.FireServer,\n\t\tUnreliableRemoteEvent.FireServer,\n\t}\n\n\tBindableFunction:Destroy()\n\tBindableEvent:Destroy()\n\n\tRemoteFunction:Destroy()\n\tRemoteEvent:Destroy()\n\tUnreliableRemoteEvent:Destroy()\nend\n\nfor _, Function in pairs(FunctionsToHook) do\n\tlocal Method = debug.info(Function, \"n\")\n\n\twax.shared.Hooks[Function] = wax.shared.Hooking.HookFunction(Function, function(...)\n\t\tlocal self = ...\n\n\t\tif\n\t\t\ttypeof(self) == \"Instance\"\n\t\t\tand table.find(AllowedClassNames, self.ClassName)\n\t\t\tand not rawequal(self, wax.shared.Communicator)\n\t\t\tand not wax.shared.ShouldIgnore(self, getcallingscript())\n\t\tthen\n\t\t\tlocal Log = wax.shared.Logs.Outgoing[self]\n\t\t\tif not Log then\n\t\t\t\tLog = wax.shared.NewLog(self, \"Outgoing\", Method, getcallingscript())\n\t\t\tend\n\n\t\t\tif Log.Blocked then\n\t\t\t\treturn\n\t\t\telseif not Log.Ignored then\n\t\t\t\tlocal Info = {\n\t\t\t\t\tArguments = table.pack(select(2, ...)),\n\t\t\t\t\tTime = os.date(\"%X\"),\n\t\t\t\t\tOrigin = getcallingscript(),\n\t\t\t\t\tFunction = getcallingfunction(),\n\t\t\t\t\tLine = getcallingline(),\n\t\t\t\t\tSource = getcallingsource(),\n\t\t\t\t\tIsExecutor = checkcaller(),\n\t\t\t\t}\n\t\t\t\tLog:Call(Info)\n\t\t\t\t-- For RemoteFunction return value (ex: local result = RemoteFunction:InvokeServer())\n\t\t\t\tif self.ClassName == \"RemoteFunction\" and (Method == \"InvokeServer\" or Method == \"invokeServer\") then\n\t\t\t\t\tLog = wax.shared.Logs.Incoming[self]\n\t\t\t\t\tif not Log then\n\t\t\t\t\t\tLog = wax.shared.NewLog(self, \"Incoming\", Method, getcallingscript())\n\t\t\t\t\tend\n\n\t\t\t\t\tif Log.Blocked then\n\t\t\t\t\t\treturn\n\t\t\t\t\tend\n\n\t\t\t\t\tlocal Result = table.pack(wax.shared.Hooks[Function](...))\n\t\t\t\t\tif not Log.Ignored then\n\t\t\t\t\t\tlocal RFResultInfo = {\n\t\t\t\t\t\t\tArguments = Result,\n\t\t\t\t\t\t\tTime = os.date(\"%X\"),\n\t\t\t\t\t\t\tOrigin = getcallingscript(),\n\t\t\t\t\t\t\tFunction = getcallingfunction(),\n\t\t\t\t\t\t\tLine = getcallingline(),\n\t\t\t\t\t\t\tSource = getcallingsource(),\n\t\t\t\t\t\t\tIsExecutor = checkcaller(),\n\t\t\t\t\t\t\tOriginalInvokeArgs = table.pack(select(2, ...)),\n\t\t\t\t\t\t}\n\t\t\t\t\t\tLog:Call(RFResultInfo)\n\t\t\t\t\tend\n\n\t\t\t\t\treturn table.unpack(Result, 1, Result.n)\n\t\t\t\tend\n\t\t\tend\n\t\tend\n\n\t\treturn wax.shared.Hooks[Function](...)\n\tend)\nend\n"
                                         }
                                     },
                                     {
@@ -9185,30 +9565,7 @@ local ObjectTree = {
                                         5,
                                         {
                                             "Incoming",
-                                            Value = "local ClassesToHook = {\n\tRemoteEvent = \"OnClientEvent\",\n\tRemoteFunction = \"OnClientInvoke\",\n\tUnreliableRemoteEvent = \"OnClientEvent\",\n\tBindableEvent = \"Event\",\n\tBindableFunction = \"OnInvoke\",\n}\n\ntype InstancesToHook = RemoteEvent | UnreliableRemoteEvent | RemoteFunction | BindableEvent | BindableFunction\ntype MethodsToHook = \"OnClientEvent\" | \"OnClientInvoke\" | \"Event\" | \"OnInvoke\"\n\nlocal LogConnectionFunctions = {}\nlocal SignalMapping = setmetatable({}, { __mode = \"kv\" })\n\n--[[\n\tIndividually logs an incoming remote call.\n\n\t@param Instance The instance that was called.\n\t@param Method The method that was called (e.g., \"OnClientEvent\").\n\t@param Function The function that was called, if applicable.\n\t@param Info The information about the call, including arguments and origin. Can be nil.\n\t@param ... The arguments passed from the server to the client.\n\t@return boolean Returns true if the call was blocked, false otherwise.\n]]\nlocal function LogRemote(\n\tInstance: InstancesToHook,\n\tMethod: MethodsToHook,\n\tFunction: (...any) -> ...any,\n\tInfo: {\n\t\tArguments: { [number]: any, n: number },\n\t\tTime: string,\n\t\tOrigin: Instance,\n\t\tFunction: (...any) -> ...any,\n\t\tLine: number,\n\t\tIsExecutor: boolean,\n\t}\n)\n\tif not wax.shared.ShouldIgnore(Instance, getcallingscript()) and not LogConnectionFunctions[Function] then\n\t\tlocal Log = wax.shared.Logs.Incoming[Instance]\n\t\tif not Log then\n\t\t\tLog = wax.shared.NewLog(Instance, \"Incoming\", Method, getcallingscript())\n\t\tend\n\n\t\tif Log.Blocked then\n\t\t\treturn true\n\t\telseif not Log.Ignored then\n\t\t\tLog:Call(Info)\n\t\tend\n\tend\n\n\treturn false\nend\n\n--[[\n\tCreates a function that can be used to pass to `Connect` which will log all the incoming calls. It will additonally add the function to a ignore list (`LogConnectionFunctions`) to prevent unneccessary logging.\n\t\n\t@param Instance The instance to log.\n\t@param Method The method to log (e.g., \"OnClientEvent\").\n\t@return function Returns a function that logs all calls to the given instance and method.\n]]\nlocal function CreateConnectionFunction(Instance: InstancesToHook, Method: MethodsToHook)\n\tlocal ConnectionFunction = function(...)\n\t\tfor _, Connection in pairs(getconnections((Instance :: any)[Method])) do\n\t\t\tif Connection.ForeignState then\n\t\t\t\tcontinue\n\t\t\tend\n\n\t\t\tlocal Function = typeof(Connection.Function) == \"function\" and Connection.Function or nil\n\t\t\tlocal Thread = Connection.Thread\n\n\t\t\tlocal Origin = nil\n\n\t\t\tif Thread and getscriptfromthread then\n\t\t\t\tOrigin = getscriptfromthread(Thread)\n\t\t\tend\n\n\t\t\tif not Origin and Function then\n\t\t\t\t-- ts is unreliable because people could js set the script global to nil\n\t\t\t\t-- if only debug.getinfo(Function).source or debug.info(Function, \"s\") returned an Instance...\n\n\t\t\t\tlocal Script = rawget(getfenv(Function), \"script\")\n\t\t\t\tif typeof(Script) == \"Instance\" then\n\t\t\t\t\tOrigin = Script\n\t\t\t\tend\n\t\t\tend\n\n\t\t\tLogRemote(Instance, Method, Function, {\n\t\t\t\tArguments = table.pack(...),\n\t\t\t\tTime = os.date(\"%X\"),\n\t\t\t\tOrigin = Origin,\n\t\t\t\tFunction = Function,\n\t\t\t\tLine = nil,\n\t\t\t\tIsExecutor = Function and isexecutorclosure(Function) or false,\n\t\t\t})\n\t\tend\n\tend\n\n\tLogConnectionFunctions[ConnectionFunction] = true\n\treturn ConnectionFunction\nend\n\n--[[\n\tCreates a function that can be used to pass to callbacks (.OnInvoke & .OnClientInvoke) which will log all the incoming calls.\n\t\n\t@param Instance The instance to log.\n\t@param Method The method to log (e.g., \"OnClientEvent\").\n\t@param Function The original callback of the RemoteFunction\n\t@return function Returns a function that logs all function calls to the given instance and method.\n]]\nlocal function CreateCallbackDetour(Instance: InstancesToHook, Method: MethodsToHook, Callback: (...any) -> ...any)\n\treturn function(...)\n\t\tlocal Origin = nil\n\n\t\t-- May not exist in all executors\n\t\tif getscriptfromthread then\n\t\t\tOrigin = getscriptfromthread(coroutine.running())\n\t\tend\n\n\t\t-- Unreliable method to get script.\n\t\tif not Origin then\n\t\t\tlocal Script = rawget(getfenv(Callback), \"script\")\n\t\t\tif typeof(Script) == \"Instance\" then\n\t\t\t\tOrigin = Script\n\t\t\tend\n\t\tend\n\n\t\tlocal FunctionCaller = debug.info(2, \"f\")\n\t\tlocal IsExecutor = if typeof(FunctionCaller) == \"function\"\n\t\t\tthen isexecutorclosure(FunctionCaller)\n\t\t\telse isexecutorclosure(Callback)\n\n\t\tif\n\t\t\tLogRemote(Instance, Method, Callback, {\n\t\t\t\tArguments = table.pack(...),\n\t\t\t\tTime = os.date(\"%X\"),\n\t\t\t\tOrigin = Origin,\n\t\t\t\tFunction = Callback,\n\t\t\t\tLine = nil,\n\t\t\t\tIsExecutor = IsExecutor,\n\t\t\t})\n\t\tthen\n\t\t\treturn\n\t\tend\n\n\t\treturn Callback(...)\n\tend\nend\n\n--[[\n\tHandles setting up logging for the appropriate instances.\n\n\t@param Instance The instance to handle.\n]]\nlocal function HandleInstance(Instance: any)\n\tif\n\t\tnot ClassesToHook[Instance.ClassName]\n\t\tor Instance == wax.shared.Communicator\n\t\tor Instance == wax.shared.ActorCommunicator\n\tthen\n\t\treturn\n\tend\n\n\tlocal Method = ClassesToHook[Instance.ClassName]\n\n\tif Instance.ClassName == \"RemoteEvent\" or Instance.ClassName == \"UnreliableRemoteEvent\" then\n\t\twax.shared.Connect(Instance.OnClientEvent:Connect(CreateConnectionFunction(Instance, Method)))\n\n\t\tSignalMapping[Instance.OnClientEvent] = Instance\n\telseif Instance.ClassName == \"BindableEvent\" then\n\t\twax.shared.Connect(Instance.Event:Connect(CreateConnectionFunction(Instance, Method)))\n\n\t\tSignalMapping[Instance.Event] = Instance\n\telseif Instance.ClassName == \"RemoteFunction\" or Instance.ClassName == \"BindableFunction\" then\n\t\tlocal Success, Callback = pcall(getcallbackvalue, Instance, Method)\n\t\tlocal IsCallable = (\n\t\t\ttypeof(Callback) == \"function\"\n\t\t\tor wax.shared.getrawmetatable(Callback) ~= nil and typeof(wax.shared.getrawmetatable(Callback)[\"__call\"]) == \"function\"\n\t\t\tor false\n\t\t)\n\n\t\tif not Success or not IsCallable then\n\t\t\treturn\n\t\tend\n\n\t\tInstance[Method] = CreateCallbackDetour(Instance, Method, Callback)\n\tend\nend\n\nwax.shared.Connect(game.DescendantAdded:Connect(HandleInstance))\n\n-- getinstances() was unreliable and failed to find some instances... ts pmo bro..\nlocal CategoryToSearch = { game:GetDescendants() }\nif wax.shared.ExecutorSupport[\"getnilinstances\"].IsWorking then\n\ttable.insert(CategoryToSearch, getnilinstances())\nend\n\nfor _, Category in CategoryToSearch do\n\tfor _, Instance in pairs(Category) do\n\t\tHandleInstance(Instance)\n\tend\nend\n\nwax.shared.NewIndexHook = wax.shared.Hooking.HookMetaMethod(\n\tgame,\n\t\"__newindex\",\n\twax.shared.newcclosure(function(...)\n\t\tlocal self, key, value = ...\n\n\t\tif typeof(self) ~= \"Instance\" or not ClassesToHook[self.ClassName] then\n\t\t\treturn wax.shared.NewIndexHook(...)\n\t\tend\n\n\t\tif self.ClassName == \"RemoteFunction\" or self.ClassName == \"BindableFunction\" then\n\t\t\tlocal Method = ClassesToHook[self.ClassName]\n\n\t\t\tlocal IsCallable = (\n\t\t\t\ttypeof(value) == \"function\"\n\t\t\t\tor wax.shared.getrawmetatable(value) ~= nil and typeof(wax.shared.getrawmetatable(value)[\"__call\"]) == \"function\"\n\t\t\t\tor false\n\t\t\t)\n\n\t\t\tif key == Method and IsCallable then\n\t\t\t\treturn wax.shared.NewIndexHook(self, key, CreateCallbackDetour(self :: InstancesToHook, Method, value))\n\t\t\tend\n\t\tend\n\n\t\treturn wax.shared.NewIndexHook(...)\n\tend)\n)\n\nlocal ConnectionKeys = {\n\t\"Connect\",\n\t\"ConnectParallel\",\n\t\"connect\",\n\t\"connectParallel\",\n\t\"once\",\n\t\"Once\",\n}\n\nlocal SignalMetatable = wax.shared.getrawmetatable(Instance.new(\"Part\").Touched)\nwax.shared.Hooks[SignalMetatable.__index] = wax.shared.Hooking.HookFunction(SignalMetatable.__index, function(...)\n\tlocal self, key = ...\n\n\tif table.find(ConnectionKeys, key) then\n\t\tlocal Instance = SignalMapping[self]\n\t\tlocal Connect = wax.shared.Hooks[SignalMetatable.__index](...)\n\n\t\tif not Instance then\n\t\t\treturn Connect\n\t\tend\n\n\t\tlocal Method = ClassesToHook[Instance.ClassName]\n\t\twax.shared.Hooks[Connect] = wax.shared.Hooking.HookFunction(\n\t\t\tConnect,\n\t\t\twax.shared.newcclosure(function(...)\n\t\t\t\tlocal _self, callback = ...\n\n\t\t\t\tlocal Result = table.pack(wax.shared.Hooks[Connect](...))\n\t\t\t\tlocal Log = wax.shared.Logs.Incoming[Instance]\n\n\t\t\t\tif Log and Log.Blocked then\n\t\t\t\t\tfor _, Connection in pairs(getconnections(Instance[Method])) do\n\t\t\t\t\t\tif not Connection.ForeignState and Connection.Function ~= callback then\n\t\t\t\t\t\t\tcontinue\n\t\t\t\t\t\tend\n\n\t\t\t\t\t\tConnection:Disable()\n\t\t\t\t\tend\n\t\t\t\tend\n\n\t\t\t\treturn table.unpack(Result, 1, Result.n)\n\t\t\tend)\n\t\t)\n\n\t\treturn Connect\n\tend\n\n\treturn wax.shared.Hooks[SignalMetatable.__index](...)\nend)\n"
-                                        }
-                                    }
-                                }
-                            },
-                            {
-                                11,
-                                1,
-                                {
-                                    "Default"
-                                },
-                                {
-                                    {
-                                        13,
-                                        2,
-                                        {
-                                            "Outgoing"
-                                        }
-                                    },
-                                    {
-                                        12,
-                                        2,
-                                        {
-                                            "Incoming"
+                                            Value = "local ClassesToHook = {\n\tRemoteEvent = \"OnClientEvent\",\n\tRemoteFunction = \"OnClientInvoke\",\n\tUnreliableRemoteEvent = \"OnClientEvent\",\n\tBindableEvent = \"Event\",\n\tBindableFunction = \"OnInvoke\",\n}\n\ntype InstancesToHook = RemoteEvent | UnreliableRemoteEvent | RemoteFunction | BindableEvent | BindableFunction\ntype MethodsToHook = \"OnClientEvent\" | \"OnClientInvoke\" | \"Event\" | \"OnInvoke\"\n\nlocal LogConnectionFunctions = {}\nlocal SignalMapping = setmetatable({}, { __mode = \"kv\" })\n\n--[[\n\tIndividually logs an incoming remote call.\n\n\t@param Instance The instance that was called.\n\t@param Method The method that was called (e.g., \"OnClientEvent\").\n\t@param Function The function that was called, if applicable.\n\t@param Info The information about the call, including arguments and origin. Can be nil.\n\t@param ... The arguments passed from the server to the client.\n\t@return boolean Returns true if the call was blocked, false otherwise.\n]]\nlocal function LogRemote(\n\tInstance: InstancesToHook,\n\tMethod: MethodsToHook,\n\tFunction: (...any) -> ...any,\n\tInfo: {\n\t\tArguments: { [number]: any, n: number },\n\t\tTime: string,\n\t\tOrigin: Instance,\n\t\tFunction: (...any) -> ...any,\n\t\tLine: number,\n\t\tIsExecutor: boolean,\n\t}\n)\n\tif not wax.shared.ShouldIgnore(Instance, getcallingscript()) and not LogConnectionFunctions[Function] then\n\t\tlocal Log = wax.shared.Logs.Incoming[Instance]\n\t\tif not Log then\n\t\t\tLog = wax.shared.NewLog(Instance, \"Incoming\", Method, getcallingscript())\n\t\tend\n\n\t\tif Log.Blocked then\n\t\t\treturn true\n\t\telseif not Log.Ignored then\n\t\t\tLog:Call(Info)\n\t\tend\n\tend\n\n\treturn false\nend\n\n--[[\n\tCreates a function that can be used to pass to `Connect` which will log all the incoming calls. It will additonally add the function to a ignore list (`LogConnectionFunctions`) to prevent unneccessary logging.\n\t\n\t@param Instance The instance to log.\n\t@param Method The method to log (e.g., \"OnClientEvent\").\n\t@return function Returns a function that logs all calls to the given instance and method.\n]]\nlocal function CreateConnectionFunction(Instance: InstancesToHook, Method: MethodsToHook)\n\tlocal ConnectionFunction = function(...)\n\t\tfor _, Connection in pairs(getconnections((Instance :: any)[Method])) do\n\t\t\tif Connection.ForeignState then\n\t\t\t\tcontinue\n\t\t\tend\n\n\t\t\tlocal Function = typeof(Connection.Function) == \"function\" and Connection.Function or nil\n\t\t\tlocal Thread = Connection.Thread\n\n\t\t\tlocal Origin = nil\n\n\t\t\tif Thread and getscriptfromthread then\n\t\t\t\tOrigin = getscriptfromthread(Thread)\n\t\t\tend\n\n\t\t\tif not Origin and Function then\n\t\t\t\t-- ts is unreliable because people could js set the script global to nil\n\t\t\t\t-- if only debug.getinfo(Function).source or debug.info(Function, \"s\") returned an Instance...\n\n\t\t\t\tlocal Script = rawget(getfenv(Function), \"script\")\n\t\t\t\tif typeof(Script) == \"Instance\" then\n\t\t\t\t\tOrigin = Script\n\t\t\t\tend\n\t\t\tend\n\n\t\t\tLogRemote(Instance, Method, Function, {\n\t\t\t\tArguments = table.pack(...),\n\t\t\t\tTime = os.date(\"%X\"),\n\t\t\t\tOrigin = Origin,\n\t\t\t\tFunction = Function,\n\t\t\t\tLine = nil,\n\t\t\t\tIsExecutor = Function and isexecutorclosure(Function) or false,\n\t\t\t})\n\t\tend\n\tend\n\n\tLogConnectionFunctions[ConnectionFunction] = true\n\treturn ConnectionFunction\nend\n\n--[[\n\tCreates a function that can be used to pass to callbacks (.OnInvoke & .OnClientInvoke) which will log all the incoming calls.\n\t\n\t@param Instance The instance to log.\n\t@param Method The method to log (e.g., \"OnClientEvent\").\n\t@param Function The original callback of the RemoteFunction\n\t@return function Returns a function that logs all function calls to the given instance and method.\n]]\nlocal function CreateCallbackDetour(Instance: InstancesToHook, Method: MethodsToHook, Callback: (...any) -> ...any)\n\tlocal Detour = function(...)\n\t\tlocal Origin = nil\n\n\t\t-- May not exist in all executors\n\t\tif getscriptfromthread then\n\t\t\tOrigin = getscriptfromthread(coroutine.running())\n\t\tend\n\n\t\t-- Unreliable method to get script.\n\t\tif not Origin then\n\t\t\tlocal Script = rawget(getfenv(Callback), \"script\")\n\t\t\tif typeof(Script) == \"Instance\" then\n\t\t\t\tOrigin = Script\n\t\t\tend\n\t\tend\n\n\t\tlocal FunctionCaller = debug.info(2, \"f\")\n\t\tlocal IsExecutor = if typeof(FunctionCaller) == \"function\"\n\t\t\tthen isexecutorclosure(FunctionCaller)\n\t\t\telse isexecutorclosure(Callback)\n\n\t\tif\n\t\t\tLogRemote(Instance, Method, Callback, {\n\t\t\t\tArguments = table.pack(...),\n\t\t\t\tTime = os.date(\"%X\"),\n\t\t\t\tOrigin = Origin,\n\t\t\t\tFunction = Callback,\n\t\t\t\tLine = nil,\n\t\t\t\tIsExecutor = IsExecutor,\n\t\t\t})\n\t\tthen\n\t\t\treturn\n\t\tend\n\n\t\treturn Callback(...)\n\tend\n\n\tif wax.shared.ExecutorSupport[\"setstackhidden\"].IsWorking then\n\t\tsetstackhidden(Detour, true)\n\tend\n\n\treturn Detour\nend\n\n--[[\n\tHandles setting up logging for the appropriate instances.\n\n\t@param Instance The instance to handle.\n]]\nlocal function HandleInstance(Instance: any)\n\tif\n\t\tnot ClassesToHook[Instance.ClassName]\n\t\tor Instance == wax.shared.Communicator\n\t\tor Instance == wax.shared.ActorCommunicator\n\tthen\n\t\treturn\n\tend\n\n\tlocal Method = ClassesToHook[Instance.ClassName]\n\n\tif Instance.ClassName == \"RemoteEvent\" or Instance.ClassName == \"UnreliableRemoteEvent\" then\n\t\twax.shared.Connect(Instance.OnClientEvent:Connect(CreateConnectionFunction(Instance, Method)))\n\n\t\tSignalMapping[Instance.OnClientEvent] = Instance\n\telseif Instance.ClassName == \"BindableEvent\" then\n\t\twax.shared.Connect(Instance.Event:Connect(CreateConnectionFunction(Instance, Method)))\n\n\t\tSignalMapping[Instance.Event] = Instance\n\telseif Instance.ClassName == \"RemoteFunction\" or Instance.ClassName == \"BindableFunction\" then\n\t\tlocal Success, Callback = pcall(getcallbackvalue, Instance, Method)\n\t\tlocal IsCallable = (\n\t\t\ttypeof(Callback) == \"function\"\n\t\t\tor wax.shared.getrawmetatable(Callback) ~= nil and typeof(wax.shared.getrawmetatable(Callback)[\"__call\"]) == \"function\"\n\t\t\tor false\n\t\t)\n\n\t\tif not Success or not IsCallable then\n\t\t\treturn\n\t\tend\n\n\t\tInstance[Method] = CreateCallbackDetour(Instance, Method, Callback)\n\tend\nend\n\nwax.shared.Connect(game.DescendantAdded:Connect(HandleInstance))\n\n-- getinstances() was unreliable and failed to find some instances... ts pmo bro..\nlocal CategoryToSearch = { game:QueryDescendants(\"RemoteEvent, RemoteFunction, UnreliableRemoteEvent, BindableEvent, BindableFunction\") }\nif wax.shared.ExecutorSupport[\"getnilinstances\"].IsWorking then\n\ttable.insert(CategoryToSearch, getnilinstances())\nend\n\nfor _, Category in CategoryToSearch do\n\tfor _, Instance in pairs(Category) do\n\t\tHandleInstance(Instance)\n\tend\nend\n\nwax.shared.NewIndexHook = wax.shared.Hooking.HookMetaMethod(game, \"__newindex\", function(...)\n\tlocal self, key, value = ...\n\n\tif typeof(self) ~= \"Instance\" or not ClassesToHook[self.ClassName] then\n\t\treturn wax.shared.NewIndexHook(...)\n\tend\n\n\tif self.ClassName == \"RemoteFunction\" or self.ClassName == \"BindableFunction\" then\n\t\tlocal Method = ClassesToHook[self.ClassName]\n\n\t\tlocal IsCallable = (\n\t\t\ttypeof(value) == \"function\"\n\t\t\tor wax.shared.getrawmetatable(value) ~= nil and typeof(wax.shared.getrawmetatable(value)[\"__call\"]) == \"function\"\n\t\t\tor false\n\t\t)\n\n\t\tif key == Method and IsCallable then\n\t\t\treturn wax.shared.NewIndexHook(self, key, CreateCallbackDetour(self :: InstancesToHook, Method, value))\n\t\tend\n\tend\n\n\treturn wax.shared.NewIndexHook(...)\nend)\n\nlocal ConnectionKeys = {\n\t\"Connect\",\n\t\"ConnectParallel\",\n\t\"connect\",\n\t\"connectParallel\",\n\t\"once\",\n\t\"Once\",\n}\n\nlocal SignalMetatable = wax.shared.getrawmetatable(Instance.new(\"Part\").Touched)\nwax.shared.Hooks[SignalMetatable.__index] = wax.shared.Hooking.HookFunction(SignalMetatable.__index, function(...)\n\tlocal self, key = ...\n\n\tif table.find(ConnectionKeys, key) then\n\t\tlocal Instance = SignalMapping[self]\n\t\tlocal Connect = wax.shared.Hooks[SignalMetatable.__index](...)\n\n\t\tif not Instance then\n\t\t\treturn Connect\n\t\tend\n\n\t\tlocal Method = ClassesToHook[Instance.ClassName]\n\t\twax.shared.Hooks[Connect] = wax.shared.Hooking.HookFunction(Connect, function(...)\n\t\t\tlocal _self, callback = ...\n\n\t\t\tlocal Result = table.pack(wax.shared.Hooks[Connect](...))\n\t\t\tlocal Log = wax.shared.Logs.Incoming[Instance]\n\n\t\t\tif Log and Log.Blocked then\n\t\t\t\tfor _, Connection in pairs(getconnections(Instance[Method])) do\n\t\t\t\t\tif not Connection.ForeignState and Connection.Function ~= callback then\n\t\t\t\t\t\tcontinue\n\t\t\t\t\tend\n\n\t\t\t\t\tConnection:Disable()\n\t\t\t\tend\n\t\t\tend\n\n\t\t\treturn table.unpack(Result, 1, Result.n)\n\t\tend)\n\n\t\treturn Connect\n\tend\n\n\treturn wax.shared.Hooks[SignalMetatable.__index](...)\nend)\n"
                                         }
                                     }
                                 }
@@ -9223,6 +9580,20 @@ local ObjectTree = {
                         }
                     }
                 }
+            },
+            {
+                39,
+                2,
+                {
+                    "Window"
+                }
+            },
+            {
+                2,
+                2,
+                {
+                    "ExecutorSupport"
+                }
             }
         }
     }
@@ -9231,30 +9602,30 @@ local ObjectTree = {
 -- Line offsets for debugging (only included when minifyTables is false)
 local LineOffsets = {
     8,
-    321,
-    [17] = 649,
-    [34] = 718,
-    [38] = 7214,
-    [39] = 781,
-    [36] = 4762,
-    [28] = 4879,
-    [35] = 5925,
-    [19] = 5991,
-    [22] = 6054,
-    [12] = 6208,
-    [24] = 6489,
-    [30] = 8778,
-    [31] = 8713,
-    [37] = 6920,
-    [33] = 8458,
-    [32] = 8129,
-    [23] = 8201,
-    [13] = 6715,
-    [25] = 8270,
-    [26] = 8422,
-    [20] = 7524,
-    [14] = 6593,
-    [21] = 761
+    340,
+    [12] = 790,
+    [13] = 1070,
+    [14] = 1313,
+    [17] = 1479,
+    [19] = 1548,
+    [20] = 1627,
+    [21] = 2231,
+    [22] = 2251,
+    [23] = 2405,
+    [24] = 2487,
+    [25] = 2607,
+    [26] = 2759,
+    [28] = 2795,
+    [30] = 3845,
+    [31] = 3962,
+    [32] = 4027,
+    [33] = 4099,
+    [34] = 4354,
+    [35] = 4404,
+    [36] = 4486,
+    [37] = 4607,
+    [38] = 4901,
+    [39] = 5201
 }
 
 -- Misc AOT variable imports
