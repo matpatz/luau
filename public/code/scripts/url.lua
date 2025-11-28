@@ -1,12 +1,12 @@
-local url = getgenv().url or ""
+local url = getgenv().url
 
-if url ~= "" then
+if type(url) == "string" and url ~= "" then
     local res = request({
         Url = url,
         Method = "GET"
     })
 
-    if res and res.Body and writefile then
+    if res and type(res.Body) == "string" then
         writefile("result.txt", res.Body)
     end
 end
