@@ -6,10 +6,7 @@ if url ~= "" then
         Method = "GET"
     })
 
-    if res and res.Body and not isfile("result.txt") then
-        writefile("result.txt", res.Body)
-    elseif isfile("result.txt") then
-        delfile("result.txt")
+    if res and res.Body and writefile then
         writefile("result.txt", res.Body)
     end
 end
