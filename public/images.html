@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Image Showcase</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f0f0;
+      margin: 0;
+      padding: 40px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .box {
+      width: 350px;
+      background: #fff;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .title {
+      text-align: left;
+      font-size: 20px;
+      font-weight: bold;
+      margin-bottom: 12px;
+    }
+
+    .image {
+      width: 100%;
+      border-radius: 12px;
+      display: block;
+      margin: 0 auto;
+    }
+
+    .bottom-row {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+    .rating-stats { text-align: right; }
+    .category { text-align: left; }
+
+    .rating-stars {
+      margin-top: 6px;
+      text-align: left;
+      font-size: 16px;
+      letter-spacing: 2px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="box">
+    <div class="title">Title Here</div>
+    <img class="image" src="image.png" alt="Image" />
+
+    <div class="bottom-row">
+      <div class="rating-stats">Rating: 4.5/5</div>
+      <div class="category">Category: Example</div>
+    </div>
+      <div class="category">Category: Example</div>
+    </div>
+
+    <div class="rating-stars" style="text-align:right;">★★★★★</div>
+  </div>
+
+  <header style="position:fixed; top:0; left:0; width:100%; background:#ffffffee; padding:15px; display:flex; gap:20px; align-items:center; box-shadow:0 2px 8px rgba(0,0,0,0.1); z-index:10;">
+    <input type="file" id="uploadInput" accept="image/*" />
+    <input type="text" id="searchInput" placeholder="Search..." style="flex:1; padding:8px; border-radius:8px; border:1px solid #ccc;" />
+  </header>
+
+  <script>
+    const uploadInput = document.getElementById('uploadInput');
+    const container = document.createElement('div');
+    container.style.display = 'grid';
+    container.style.gridTemplateColumns = 'repeat(6, 1fr)';
+    container.style.gap = '20px';
+    container.style.marginTop = '100px';
+    document.body.appendChild(container);
+
+    function createBox(src, title='User Upload', category='PFP', rating='5/5') {
+      const box = document.createElement('div');
+      box.className = 'box';
+
+      const html = `
+        <div class="title">${title}</div>
+        <img class="image" src="${src}" />
+        <div class="bottom-row">
+          <div class="rating-stats">Rating: ${rating}</div>
+          <div class="category">${category}</div>
+        </div>
+        <div class="rating-stars">★★★★★</div>
+      `;
+
+      box.innerHTML = html;
+      container.appendChild(box);
+    }
+
+    uploadInput.addEventListener('change', function() {
+      const file = this.files[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      createBox(url);
+    });
+  </script>
+
+</body>
+</html>
