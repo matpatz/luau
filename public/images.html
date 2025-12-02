@@ -188,6 +188,18 @@ const keywordsInput = document.getElementById('keywordsInput');
 const serviceSelect = document.getElementById('serviceSelect');
 const submitVerifyBtn = document.getElementById('submitVerifyBtn');
 
+fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    tempImage = file; // <-- store File object
+    const reader = new FileReader();
+    reader.onload = () => {
+        verifyImg.src = reader.result; // preview
+        verifyBoxContainer.style.display = 'flex';
+    };
+    reader.readAsDataURL(file); // preview only
+});
+
 uploadBtn.onclick = () => fileInput.click();
 fileInput.onchange = (e) => {
     const file = e.target.files[0];
@@ -236,21 +248,53 @@ formatBtn.onclick = () => {
     };
 };
 
-submitVerifyBtn.onclick = () => {
+submitVerifyBtn.addEventListener('click', async () => {
     if (!tempImage) return alert("No image to submit.");
     if (!serviceSelect.value) return alert("Select a service.");
     const keywords = keywordsInput.value.trim();
     if (!keywords) return alert("Enter keywords.");
 
-    // Send tempImage, serviceSelect.value, and keywords somewhere for human verification
-    pendingUploads.push({ src: tempImage, rating: 0, service: serviceSelect.value, keywords });
-    alert("Upload request submitted for human verification.");
-    tempImage = null;
-    verifyBoxContainer.style.display = 'none';
-    keywordsInput.value = '';
-    serviceSelect.value = '';
-    renderImages();
-};
+    try {
+        // Make a unique filename
+        const fileName = `${Date.now()}_${tempImage.name}`;
+
+        // Upload to Supabase Storage
+        const { data: uploadData, error: uploadError } = await supabase
+            .storage
+            .from('pfps')
+            .upload(fileName, tempImage, { upsert: true });
+        if (uploadError) throw uploadError;
+
+        // Get public URL of the uploaded image
+        const { data: { publicUrl }, error: urlError } = supabase
+            .storage
+            .from('pfps')
+            .getPublicUrl(fileName);
+        if (urlError) throw urlError;
+
+        // Insert metadata into DB
+        const { error: dbError } = await supabase
+            .from('images')
+            .insert([{
+                url: publicUrl,
+                service: serviceSelect.value,
+                keywords,
+                rating: 0,
+                verified: false
+            }]);
+        if (dbError) throw dbError;
+
+        alert("Upload request submitted for human verification!");
+        tempImage = null;
+        verifyBoxContainer.style.display = 'none';
+        keywordsInput.value = '';
+        serviceSelect.value = '';
+        loadImages();
+    } catch (err) {
+        console.error(err);
+        alert('Error: ' + err.message);
+    }
+});
 
 function renderImages() {
     const grid = document.getElementById('imageGrid');
