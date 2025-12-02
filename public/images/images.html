@@ -163,7 +163,7 @@
         margin-top: 8px;
     }
 
-    #verifyBoxContainer {
+    #verifyContainer {
         position: fixed;
         top: 50%;
         left: 50%;
@@ -179,7 +179,7 @@
         border: 1px solid #333;
     }
 
-    #verifyBoxContainer img {
+    #verifyContainer img {
         max-width: 400px;
         max-height: 400px;
         border-radius: 12px;
@@ -244,7 +244,7 @@
     <input type="file" id="fileInput" accept="image/*" style="display:none;" />
 </header>
 
-<div id="verifyBoxContainer">
+<div id="verifyContainer">
     <button class="close-btn" id="closeVerifyBtn">×</button>
     <img id="verifyImg" src="" />
     <div id="verifyActions">
@@ -263,21 +263,19 @@
 <div id="imageGrid"></div>
 
 <script>
-// Supabase setup
+
+// tuff ik
 const supabaseUrl = 'https://erctbeaqvqxjsrdjzonw.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVyY3RiZWFxdnF4anNyZGp6b253Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MzE2OTgsImV4cCI6MjA4MDIwNzY5OH0.Yal4o1NDY7p5W822mX7kaigTpPakTyygKLlp67ic6Kg';
 const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-// Cache images and last fetch time
 let verifiedImages = [];
 let lastFetchTime = 0;
-const CACHE_DURATION = 30000; // 30 seconds cache
+const CACHE_DURATION = 30000; // 30s
 
-// Load images with caching
 async function loadImagesFromSupabase() {
     const now = Date.now();
     
-    // Return cached data if within cache duration
     if (verifiedImages.length > 0 && (now - lastFetchTime) < CACHE_DURATION) {
         console.log('Using cached images');
         renderImages();
@@ -308,7 +306,6 @@ async function loadImagesFromSupabase() {
         lastFetchTime = Date.now();
         renderImages();
         
-        // Store in localStorage as backup
         localStorage.setItem('cachedImages', JSON.stringify({
             images: verifiedImages,
             timestamp: lastFetchTime
@@ -316,7 +313,6 @@ async function loadImagesFromSupabase() {
         
     } catch (error) {
         console.error('Error loading images:', error);
-        // Try to load from localStorage cache
         const cached = localStorage.getItem('cachedImages');
         if (cached) {
             const cacheData = JSON.parse(cached);
@@ -326,7 +322,6 @@ async function loadImagesFromSupabase() {
     }
 }
 
-// Save image (optimized - single API call)
 async function saveImageToSupabase(imageData) {
     try {
         const { data, error } = await supabase
@@ -355,7 +350,6 @@ async function saveImageToSupabase(imageData) {
     }
 }
 
-// Update rating (debounced)
 let ratingTimeout;
 async function updateRatingInSupabase(imageId, rating) {
     clearTimeout(ratingTimeout);
@@ -373,13 +367,11 @@ async function updateRatingInSupabase(imageId, rating) {
         } catch (error) {
             console.error('Error updating rating:', error);
         }
-    }, 1000); // 1 second debounce
+    }, 1000); // 1s
 }
 
-// Initial load
 window.onload = loadImagesFromSupabase;
 
-// Search functionality
 const searchBox = document.getElementById('search');
 let searchTimeout;
 searchBox.addEventListener('input', () => {
@@ -387,25 +379,22 @@ searchBox.addEventListener('input', () => {
     searchTimeout = setTimeout(renderImages, 300);
 });
 
-// UI Elements
 const fileInput = document.getElementById('fileInput');
 const formatBtn = document.getElementById('formatBtn');
 const uploadBtn = document.getElementById('uploadBtn');
-const verifyBoxContainer = document.getElementById('verifyBoxContainer');
+const verifyContainer = document.getElementById('verifyContainer');
 const verifyImg = document.getElementById('verifyImg');
 const keywordsInput = document.getElementById('keywordsInput');
 const serviceSelect = document.getElementById('serviceSelect');
 const submitVerifyBtn = document.getElementById('submitVerifyBtn');
 const closeVerifyBtn = document.getElementById('closeVerifyBtn');
 
-// Event Listeners
 uploadBtn.onclick = () => fileInput.click();
 
 fileInput.onchange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     
-    // Size check
     if (file.size > 2 * 1024 * 1024) {
         alert("Max size: 2MB");
         return;
@@ -414,17 +403,17 @@ fileInput.onchange = (e) => {
     const reader = new FileReader();
     reader.onload = () => {
         verifyImg.src = reader.result;
-        verifyBoxContainer.style.display = 'flex';
+        verifyContainer.style.display = 'flex';
     };
     reader.readAsDataURL(file);
 };
 
 closeVerifyBtn.onclick = () => {
-    verifyBoxContainer.style.display = 'none';
+    verifyContainer.style.display = 'none';
     keywordsInput.value = '';
     serviceSelect.value = '';
     fileInput.value = '';
-    verifyImg.src = ''; // Clear the image preview
+    verifyImg.src = '';
 };
 
 submitVerifyBtn.onclick = async () => {
@@ -444,7 +433,6 @@ submitVerifyBtn.onclick = async () => {
         return;
     }
 
-    // Disable button during upload
     const originalText = submitVerifyBtn.textContent;
     submitVerifyBtn.textContent = 'Uploading...';
     submitVerifyBtn.disabled = true;
@@ -468,8 +456,8 @@ submitVerifyBtn.onclick = async () => {
         console.error('Upload error:', error);
         alert("Upload failed.");
     } finally {
-        // Reset UI
-        verifyBoxContainer.style.display = 'none';
+
+        verifyContainer.style.display = 'none';
         keywordsInput.value = '';
         serviceSelect.value = '';
         fileInput.value = '';
@@ -478,7 +466,6 @@ submitVerifyBtn.onclick = async () => {
     }
 };
 
-// Format image
 formatBtn.onclick = () => {
     fileInput.click();
     fileInput.onchange = (e) => {
@@ -513,12 +500,10 @@ formatBtn.onclick = () => {
     };
 };
 
-// Render images with new layout
 function renderImages() {
     const grid = document.getElementById('imageGrid');
     const query = searchBox.value.toLowerCase();
     
-    // Filter images
     const filteredImages = verifiedImages.filter(img => {
         if (!img) return false;
         const serviceMatch = img.service && img.service.toLowerCase().includes(query);
@@ -535,7 +520,6 @@ function renderImages() {
         return;
     }
     
-    // Create image grid
     grid.innerHTML = filteredImages.map(img => `
         <div class="imgBox">
             <div class="keywords-row">
@@ -573,7 +557,6 @@ function renderImages() {
     `).join('');
 }
 
-// Rate image function
 async function rateImage(imageId, rating) {
     const image = verifiedImages.find(img => img.id === imageId);
     if (!image) return;
@@ -583,7 +566,6 @@ async function rateImage(imageId, rating) {
     await updateRatingInSupabase(imageId, rating);
 }
 
-// Download image function
 function downloadImage(src, service) {
     const a = document.createElement('a');
     a.href = src;
@@ -591,7 +573,7 @@ function downloadImage(src, service) {
     a.click();
 }
 
-// Auto-refresh every 2 minutes
+// refresh images every 2 minutes if tab is active ykyk
 setInterval(() => {
     if (document.visibilityState === 'visible') {
         loadImagesFromSupabase();
