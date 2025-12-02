@@ -34,7 +34,7 @@
         width: 160px;
     }
 
-    #uploadBtn, #verifyBtn {
+    button {
         padding: 7px 14px;
         background: #222;
         border: 1px solid #444;
@@ -43,7 +43,7 @@
         color: #fff;
     }
 
-    #uploadBtn:hover, #verifyBtn:hover {
+    button:hover {
         background: #333;
     }
 
@@ -63,7 +63,6 @@
         padding: 12px;
         border-radius: 14px;
         width: 220px;
-        position: relative;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -96,55 +95,69 @@
         cursor: pointer;
         color: #fff;
     }
+
+    #categoryInput {
+        padding: 6px 10px;
+        background: #1a1a1a;
+        border: 1px solid #333;
+        border-radius: 6px;
+        color: #fff;
+        display: none;
+        margin-left: 10px;
+    }
 </style>
 </head>
 
 <body>
-
 <header>
     <input id="search" placeholder="Search..." />
-
     <button id="formatBtn">Format Image</button>
-
     <button id="requestUploadBtn">Request Upload</button>
     <input type="file" id="fileInput" accept="image/*" style="display:none;" />
-
-    <select id="categorySelect" style="padding:7px 10px;background:#222;color:white;border:1px solid #444;border-radius:6px;">
-        <option value="">Category</option>
-        <option value="Discord">Discord</option>
-        <option value="YouTube">YouTube</option>
-        <option value="TikTok">TikTok</option>
-        <option value="Other">Other</option>
-    </select>
+    <input type="text" id="categoryInput" placeholder="Category" />
 </header>
 
 <div id="imageGrid"></div>
 
 <script>
-let pendingUploads = []; // waiting for verification
-let publicImages = [];   // stored for everyone
-let formatImageTemp = null; // holds last uploaded image for formatting = [];   // shown to all visitors (stored in localStorage)
+let pendingUploads = [];
+let publicImages = [];
+let formatImageTemp = null;
 
-// Load saved images
+// Load saved public images (max 1000) from localStorage
 window.onload = () => {
     const saved = localStorage.getItem("publicImages");
-    if (saved) publicImages = JSON.parse(saved);
-    // REQUEST UPLOAD (requires category)
-requestUploadBtn.addEventListener('click', () => {
-    if (!formatImageTemp) return alert("Upload an image first.");
-    if (!categorySelect.value) return alert("You must select a category.");
-
-    pendingUploads.push({ src: formatImageTemp, rating: 0, category: categorySelect.value });
-    alert("Upload request submitted. Pending human verification.");
-    formatImageTemp = null;
+    if (saved) publicImages = JSON.parse(saved).slice(0,1000);
     renderImages();
-});
+};
 
-// FORMAT (does not upload)
+// Search filter
+const searchBox = document.getElementById('search');
+searchBox.addEventListener('input', renderImages);
+
+const fileInput = document.getElementById('fileInput');
+const formatBtn = document.getElementById('formatBtn');
+const requestUploadBtn = document.getElementById('requestUploadBtn');
+const categoryInput = document.getElementById('categoryInput');
+
+// Load image for formatting or upload
+formatBtn.onclick = () => fileInput.click();
+requestUploadBtn.onclick = () => fileInput.click();
+fileInput.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        formatImageTemp = reader.result;
+        categoryInput.style.display = 'inline-block';
+        alert("Image loaded. Enter category and choose action.");
+    };
+    reader.readAsDataURL(file);
+};
+
+// Format image (does not upload)
 formatBtn.addEventListener('click', () => {
     if (!formatImageTemp) return alert("Upload an image first.");
-
-    // auto crop to square for Discord
     const img = new Image();
     img.src = formatImageTemp;
     img.onload = () => {
@@ -154,107 +167,68 @@ formatBtn.addEventListener('click', () => {
         canvas.height = 512;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, (img.width-size)/2, (img.height-size)/2, size, size, 0, 0, 512, 512);
-        const finalUrl = canvas.toDataURL("image/png");
-
         const a = document.createElement('a');
-        a.href = finalUrl;
+        a.href = canvas.toDataURL("image/png");
         a.download = "formatted_discord_pfp.png";
         a.click();
     };
 });
 
-renderImages();
-};
-
-// Search filter
-const searchBox = document.getElementById('search');
-searchBox.addEventListener('input', renderImages);
-
-// Upload handler
-const formatBtn = document.getElementById('formatBtn');
-const requestUploadBtn = document.getElementById('requestUploadBtn');
-const categorySelect = document.getElementById('categorySelect');
-
-formatBtn.onclick = () => fileInput.click();
-requestUploadBtn.onclick = () => fileInput.click();
-
-fileInput.onchange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-        formatImageTemp = reader.result;
-        alert("Image loaded. Choose Format Image or Request Upload.");
-    };
-    reader.readAsDataURL(file);
-};(file);
-};
-
-// Human verification simulation
-const verifyBtn = document.getElementById('verifyBtn');
-verifyBtn.onclick = () => {
-    publicImages.push(...pendingUploads);
-    pendingUploads = [];
-    localStorage.setItem("publicImages", JSON.stringify(publicImages));
+// Request upload (requires category)
+requestUploadBtn.addEventListener('click', () => {
+    if (!formatImageTemp) return alert("Upload an image first.");
+    if (!categoryInput.value) return alert("Enter a category before requesting upload.");
+    pendingUploads.push({ src: formatImageTemp, rating: 0, category: categoryInput.value });
+    alert("Upload request submitted. Pending human verification.");
+    formatImageTemp = null;
+    categoryInput.value = '';
+    categoryInput.style.display = 'none';
     renderImages();
-};
+});
 
-// Render
+// Render images
 function renderImages() {
     const grid = document.getElementById('imageGrid');
-    grid.innerHTML = "";
-
+    grid.innerHTML = '';
     const query = searchBox.value.toLowerCase();
-
     const allImages = [...publicImages, ...pendingUploads];
 
-    allImages
-        .filter(img => img.src.toLowerCase().includes(query))
-        .forEach((img, index) => {
-            const box = document.createElement('div');
-            box.className = 'imgBox';
+    allImages.filter(img => img.category?.toLowerCase().includes(query)).forEach((img) => {
+        const box = document.createElement('div');
+        box.className = 'imgBox';
 
-            const image = document.createElement('img');
-            image.src = img.src;
+        const image = document.createElement('img');
+        image.src = img.src;
 
-            // Rating
-            const rating = document.createElement('div');
-            rating.className = 'rating';
+        const rating = document.createElement('div');
+        rating.className = 'rating';
+        for (let i = 1; i <= 5; i++) {
+            const star = document.createElement('span');
+            star.textContent = i <= img.rating ? '★' : '☆';
+            star.onclick = () => {
+                img.rating = i;
+                localStorage.setItem("publicImages", JSON.stringify(publicImages));
+                renderImages();
+            };
+            rating.appendChild(star);
+        }
 
-            for (let i = 1; i <= 5; i++) {
-                const star = document.createElement('span');
-                star.textContent = i <= img.rating ? '★' : '☆';
-                star.onclick = () => {
-                    img.rating = i;
-                    localStorage.setItem("publicImages", JSON.stringify(publicImages));
-                    renderImages();
-                };
-                rating.appendChild(star);
-            }
+        const dl = document.createElement('button');
+        dl.className = 'downloadBtn';
+        dl.textContent = "Download";
+        dl.onclick = () => {
+            const a = document.createElement('a');
+            a.href = img.src;
+            a.download = "profile.png";
+            a.click();
+        };
 
-            // Download button
-            const dl = document.createElement('button');
-            dl.className = 'downloadBtn';
-            dl.textContent = "Download";
-            dl.onclick = () => downloadImage(img.src);
-
-            box.appendChild(image);
-            box.appendChild(rating);
-            box.appendChild(dl);
-
-            grid.appendChild(box);
-        });
-}
-
-// Download with formatting support
-function downloadImage(dataUrl) {
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = "profile.png"; // Discord-compatible PNG
-    a.click();
+        box.appendChild(image);
+        box.appendChild(rating);
+        box.appendChild(dl);
+        grid.appendChild(box);
+    });
 }
 </script>
-
 </body>
 </html>
