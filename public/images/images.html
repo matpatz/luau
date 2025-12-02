@@ -503,58 +503,92 @@ formatBtn.onclick = () => {
 function renderImages() {
     const grid = document.getElementById('imageGrid');
     const query = searchBox.value.toLowerCase();
-    
+
     const filteredImages = verifiedImages.filter(img => {
         if (!img) return false;
         const serviceMatch = img.service && img.service.toLowerCase().includes(query);
         const keywordMatch = img.keywords && img.keywords.toLowerCase().includes(query);
         return serviceMatch || keywordMatch;
     });
-    
+
+    grid.innerHTML = '';
+
     if (filteredImages.length === 0) {
-        grid.innerHTML = `
-            <div style="text-align:center; width:100%; padding:60px; color:#666;">
-                ${query ? 'No images found.' : 'No images yet.'}
-            </div>
-        `;
+        const empty = document.createElement('div');
+        empty.style.textAlign = 'center';
+        empty.style.width = '100%';
+        empty.style.padding = '60px';
+        empty.style.color = '#666';
+        empty.textContent = query ? 'No images found.' : 'No images yet.';
+        grid.appendChild(empty);
         return;
     }
-    
-    grid.innerHTML = filteredImages.map(img => `
-        <div class="imgBox">
-            <div class="keywords-row">
-                <span class="keywords-label">Keywords:</span>
-                <span class="keywords-text" title="${img.keywords || ''}">
-                    ${img.keywords || 'None'}
-                </span>
-            </div>
-            
-            <img src="${img.src}" 
-                 alt="${img.service || 'Profile'}" 
-                 onerror="this.src='data:image/svg+xml,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"220\" height=\"180\"><rect width=\"100%\" height=\"100%\" fill=\"%231a1a1a\"/><text x=\"50%\" y=\"50%\" fill=\"%23666\" font-size=\"14\" text-anchor=\"middle\" dy=\".3em\">Image</text></svg>';">
-            
-            <div class="service-tag">${img.service || 'Unknown'}</div>
-            
-            <div class="bottom-row">
-                <div class="rating">
-                    ${[1,2,3,4,5].map(i => `
-                        <span style="color:${i <= img.rating ? '#ffd700' : '#666'}" 
-                              onclick="rateImage('${img.id}', ${i})">
-                            ${i <= img.rating ? '★' : '☆'}
-                        </span>
-                    `).join('')}
-                </div>
-                
-                <div class="status-badge ${img.verified ? 'verified-badge' : 'pending-badge'}">
-                    ${img.verified ? '✓' : '⏳'}
-                </div>
-            </div>
-            
-            <button class="downloadBtn" onclick="downloadImage('${img.src}', '${img.service || 'profile'}')">
-                Download
-            </button>
-        </div>
-    `).join('');
+
+    filteredImages.forEach(img => {
+
+        const box = document.createElement('div');
+        box.className = 'imgBox';
+
+        const kwRow = document.createElement('div');
+        kwRow.className = 'keywords-row';
+
+        const kwLabel = document.createElement('span');
+        kwLabel.className = 'keywords-label';
+        kwLabel.textContent = 'Keywords:';
+
+        const kwText = document.createElement('span');
+        kwText.className = 'keywords-text';
+        kwText.title = img.keywords || '';
+        kwText.textContent = img.keywords || 'None';
+
+        kwRow.appendChild(kwLabel);
+        kwRow.appendChild(kwText);
+
+        const image = document.createElement('img');
+        image.src = img.src;
+        image.alt = img.service || 'Profile';
+        image.onerror = () => {
+            image.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="180"><rect width="100%" height="100%" fill="%231a1a1a"/><text x="50%" y="50%" fill="%23666" font-size="14" text-anchor="middle" dy=".3em">Image</text></svg>';
+        };
+
+        const serviceTag = document.createElement('div');
+        serviceTag.className = 'service-tag';
+        serviceTag.textContent = img.service || 'Unknown';
+
+        const bottom = document.createElement('div');
+        bottom.className = 'bottom-row';
+
+        const ratingDiv = document.createElement('div');
+        ratingDiv.className = 'rating';
+
+        [1,2,3,4,5].forEach(i => {
+            const star = document.createElement('span');
+            star.style.color = (i <= img.rating ? '#ffd700' : '#666');
+            star.textContent = (i <= img.rating ? '★' : '☆');
+            star.onclick = () => rateImage(img.id, i);
+            ratingDiv.appendChild(star);
+        });
+
+        const status = document.createElement('div');
+        status.className = `status-badge ${img.verified ? 'verified-badge' : 'pending-badge'}`;
+        status.textContent = img.verified ? '✓' : '⏳';
+
+        bottom.appendChild(ratingDiv);
+        bottom.appendChild(status);
+
+        const dl = document.createElement('button');
+        dl.className = 'downloadBtn';
+        dl.textContent = 'Download';
+        dl.onclick = () => downloadImage(img.src, img.service || 'profile');
+
+        box.appendChild(kwRow);
+        box.appendChild(image);
+        box.appendChild(serviceTag);
+        box.appendChild(bottom);
+        box.appendChild(dl);
+
+        grid.appendChild(box);
+    });
 }
 
 async function rateImage(imageId, rating) {
