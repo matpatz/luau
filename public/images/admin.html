@@ -344,7 +344,7 @@
         <button class="login-btn" onclick="login()">Login</button>
         <div id="loginError" class="error-message"></div>
         <div style="margin-top: 20px; color: #888; font-size: 12px; text-align: center;">
-            Default: admin / admin123
+
         </div>
     </div>
 </div>
@@ -445,7 +445,7 @@ async function login() {
         // NEVER do this in production - use proper authentication
         
         // For demo purposes only:
-        if (username === 'admin' && password === 'admin123') {
+        if (username === 'admin' && password === 'thisisapassword52') {
             // Success - store token (insecure for demo only)
             localStorage.setItem('adminToken', 'admin_logged_in');
             adminLoggedIn = true;
@@ -463,10 +463,6 @@ async function login() {
                 errorDiv.textContent = 'Invalid username or password';
                 return;
             }
-
-            // Note: In production, use proper password hashing comparison
-            // For now, we'll accept the default admin only
-            errorDiv.textContent = 'Invalid credentials. Use admin/admin123 for demo.';
         }
     } catch (error) {
         console.error('Login error:', error);

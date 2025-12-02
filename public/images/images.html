@@ -4,7 +4,6 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Profile Pictures</title>
-<!-- Add Supabase client library -->
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
     body {
@@ -16,15 +15,32 @@
 
     header {
         width: 100%;
-        padding: 20px 40px 20px 20px; /* top/right/bottom/left: slightly move left */
+        padding: 20px;
         display: flex;
-        justify-content: flex-end;
+        justify-content: space-between;
         align-items: center;
-        gap: 15px;
         background: #111;
         position: sticky;
         top: 0;
         z-index: 10;
+        padding-right: 40px;
+    }
+
+    .header-left {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+    }
+
+    .admin-link {
+        color: #4CAF50;
+        text-decoration: none;
+        font-size: 14px;
+        margin-left: 20px;
+    }
+
+    .admin-link:hover {
+        text-decoration: underline;
     }
 
     #search {
@@ -67,26 +83,72 @@
         width: 220px;
         display: flex;
         flex-direction: column;
-        align-items: center;
         gap: 10px;
+        position: relative;
     }
 
     .imgBox img {
         width: 100%;
-        height: 200px;
+        height: 180px;
         object-fit: cover;
-        border-radius: 12px;
+        border-radius: 10px;
+    }
+
+    .keywords-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 5px;
+    }
+
+    .keywords-label {
+        color: #888;
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    .keywords-text {
+        color: #ccc;
+        font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex-grow: 1;
+    }
+
+    .bottom-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 5px;
     }
 
     .rating {
         display: flex;
-        gap: 6px;
-        align-self: flex-end;
+        gap: 4px;
+        align-items: center;
     }
 
     .rating span {
         cursor: pointer;
-        font-size: 20px;
+        font-size: 18px;
+    }
+
+    .status-badge {
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 500;
+    }
+
+    .pending-badge {
+        background: #ff9800;
+        color: #000;
+    }
+
+    .verified-badge {
+        background: #4CAF50;
+        color: #000;
     }
 
     .downloadBtn {
@@ -98,6 +160,7 @@
         border-radius: 6px;
         cursor: pointer;
         color: #fff;
+        margin-top: 8px;
     }
 
     #verifyBoxContainer {
@@ -144,24 +207,6 @@
         width: 120px;
     }
 
-    .pending-badge {
-        background: #ff9800;
-        color: #000;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 12px;
-        margin-top: 5px;
-    }
-
-    .verified-badge {
-        background: #4CAF50;
-        color: #000;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 12px;
-        margin-top: 5px;
-    }
-
     .close-btn {
         position: absolute;
         top: 10px;
@@ -175,14 +220,27 @@
         color: white;
         font-weight: bold;
     }
+
+    .service-tag {
+        display: inline-block;
+        background: #333;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        color: #ccc;
+        margin-top: 5px;
+    }
 </style>
 </head>
 
 <body>
 <header>
-    <input id="search" placeholder="Search..." />
-    <button id="formatBtn">Format Image</button>
-    <button id="uploadBtn">Request Upload</button>
+    <div class="header-left">
+        <input id="search" placeholder="Search..." />
+        <button id="formatBtn">Format Image</button>
+        <button id="uploadBtn">Request Upload</button>
+        <a href="admin.html" class="admin-link">Admin</a>
+    </div>
     <input type="file" id="fileInput" accept="image/*" style="display:none;" />
 </header>
 
@@ -198,100 +256,84 @@
             <option value="TikTok">TikTok</option>
             <option value="Other">Other</option>
         </select>
-        <button id="submitVerifyBtn">Submit for Review</button>
+        <button id="submitVerifyBtn">Submit</button>
     </div>
 </div>
 
 <div id="imageGrid"></div>
 
 <script>
-// Initialize Supabase client
+// Supabase setup
 const supabaseUrl = 'https://erctbeaqvqxjsrdjzonw.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVyY3RiZWFxdnF4anNyZGp6b253Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MzE2OTgsImV4cCI6MjA4MDIwNzY5OH0.Yal4o1NDY7p5W822mX7kaigTpPakTyygKLlp67ic6Kg';
 const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-let pendingUploads = [];
+// Cache images and last fetch time
 let verifiedImages = [];
-let tempImage = null;
+let lastFetchTime = 0;
+const CACHE_DURATION = 30000; // 30 seconds cache
 
-// Check if Supabase connection works
-async function testSupabase() {
-    try {
-        console.log("Testing Supabase connection...");
-        const { data, error } = await supabase.from('profile_pictures').select('count');
-        if (error) {
-            console.error("Supabase connection error:", error);
-            return false;
-        }
-        console.log("Supabase connection successful");
-        return true;
-    } catch (err) {
-        console.error("Supabase test failed:", err);
-        return false;
-    }
-}
-
-window.onload = async () => {
-    console.log("Page loading...");
-    const connected = await testSupabase();
-    if (!connected) {
-        console.warn("Supabase not connected, using local storage only");
-        // Load from local storage as fallback
-        const saved = localStorage.getItem("verifiedImages");
-        if (saved) verifiedImages = JSON.parse(saved);
-    } else {
-        await loadImagesFromSupabase();
-    }
-    renderImages();
-};
-
-// Function to load images from Supabase
+// Load images with caching
 async function loadImagesFromSupabase() {
+    const now = Date.now();
+    
+    // Return cached data if within cache duration
+    if (verifiedImages.length > 0 && (now - lastFetchTime) < CACHE_DURATION) {
+        console.log('Using cached images');
+        renderImages();
+        return;
+    }
+
     try {
-        console.log("Loading images from Supabase...");
+        console.log('Fetching images from Supabase...');
         const { data, error } = await supabase
             .from('profile_pictures')
             .select('*')
             .eq('verified', true)
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: false })
+            .limit(100); // Limit to prevent overfetching
 
-        if (error) {
-            console.error("Error loading from Supabase:", error);
-            throw error;
-        }
+        if (error) throw error;
 
-        console.log("Loaded", data.length, "images from Supabase");
         verifiedImages = data.map(item => ({
             id: item.id,
             src: item.url,
             service: item.service,
             keywords: item.keywords,
             rating: item.rating || 0,
-            verified: true
+            verified: true,
+            created_at: item.created_at
         }));
 
-        // Save to local storage as backup
-        localStorage.setItem("verifiedImages", JSON.stringify(verifiedImages));
-
+        lastFetchTime = Date.now();
+        renderImages();
+        
+        // Store in localStorage as backup
+        localStorage.setItem('cachedImages', JSON.stringify({
+            images: verifiedImages,
+            timestamp: lastFetchTime
+        }));
+        
     } catch (error) {
         console.error('Error loading images:', error);
-        // Fallback to local storage
-        const saved = localStorage.getItem("verifiedImages");
-        if (saved) verifiedImages = JSON.parse(saved);
+        // Try to load from localStorage cache
+        const cached = localStorage.getItem('cachedImages');
+        if (cached) {
+            const cacheData = JSON.parse(cached);
+            verifiedImages = cacheData.images || [];
+            renderImages();
+        }
     }
 }
 
-// Function to save image to Supabase (as Base64 for now)
+// Save image (optimized - single API call)
 async function saveImageToSupabase(imageData) {
     try {
-        console.log("Saving image to Supabase...");
-        
-        // For now, save as Base64 directly
         const { data, error } = await supabase
             .from('profile_pictures')
             .insert([
                 {
-                    url: imageData.src, // This is Base64
+                    url: imageData.src,
                     service: imageData.service,
                     keywords: imageData.keywords,
                     rating: 0,
@@ -299,54 +341,53 @@ async function saveImageToSupabase(imageData) {
                     created_at: new Date().toISOString()
                 }
             ])
-            .select();
-
-        if (error) {
-            console.error("Supabase insert error:", error);
-            throw error;
-        }
-        
-        console.log('Image saved to Supabase:', data[0].id);
-        return data[0].id;
-
-    } catch (error) {
-        console.error('Error saving image:', error);
-        // Fallback: save to local storage
-        const id = 'local_' + Date.now();
-        pendingUploads.push({
-            id: id,
-            src: imageData.src,
-            rating: 0,
-            service: imageData.service,
-            keywords: imageData.keywords,
-            verified: false,
-            local: true
-        });
-        return id;
-    }
-}
-
-// Function to update rating in Supabase
-async function updateRatingInSupabase(imageId, rating) {
-    try {
-        // Skip if it's a local image
-        if (imageId.startsWith('local_')) return;
-        
-        const { error } = await supabase
-            .from('profile_pictures')
-            .update({ rating: rating })
-            .eq('id', imageId);
+            .select()
+            .single();
 
         if (error) throw error;
         
+        console.log('Image saved with ID:', data.id);
+        return data.id;
+        
     } catch (error) {
-        console.error('Error updating rating:', error);
+        console.error('Error saving image:', error);
+        return null;
     }
 }
 
-const searchBox = document.getElementById('search');
-searchBox.addEventListener('input', renderImages);
+// Update rating (debounced)
+let ratingTimeout;
+async function updateRatingInSupabase(imageId, rating) {
+    clearTimeout(ratingTimeout);
+    
+    ratingTimeout = setTimeout(async () => {
+        try {
+            const { error } = await supabase
+                .from('profile_pictures')
+                .update({ rating: rating })
+                .eq('id', imageId);
 
+            if (error) throw error;
+            console.log('Rating updated for:', imageId);
+            
+        } catch (error) {
+            console.error('Error updating rating:', error);
+        }
+    }, 1000); // 1 second debounce
+}
+
+// Initial load
+window.onload = loadImagesFromSupabase;
+
+// Search functionality
+const searchBox = document.getElementById('search');
+let searchTimeout;
+searchBox.addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(renderImages, 300);
+});
+
+// UI Elements
 const fileInput = document.getElementById('fileInput');
 const formatBtn = document.getElementById('formatBtn');
 const uploadBtn = document.getElementById('uploadBtn');
@@ -357,22 +398,22 @@ const serviceSelect = document.getElementById('serviceSelect');
 const submitVerifyBtn = document.getElementById('submitVerifyBtn');
 const closeVerifyBtn = document.getElementById('closeVerifyBtn');
 
+// Event Listeners
 uploadBtn.onclick = () => fileInput.click();
 
 fileInput.onchange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     
-    // Check file size (limit to 2MB for Base64)
+    // Size check
     if (file.size > 2 * 1024 * 1024) {
-        alert("File size too large. Please upload images under 2MB.");
+        alert("Max size: 2MB");
         return;
     }
     
     const reader = new FileReader();
     reader.onload = () => {
-        tempImage = reader.result;
-        verifyImg.src = tempImage;
+        verifyImg.src = reader.result;
         verifyBoxContainer.style.display = 'flex';
     };
     reader.readAsDataURL(file);
@@ -380,37 +421,36 @@ fileInput.onchange = (e) => {
 
 closeVerifyBtn.onclick = () => {
     verifyBoxContainer.style.display = 'none';
-    tempImage = null;
     keywordsInput.value = '';
     serviceSelect.value = '';
     fileInput.value = '';
 };
 
 submitVerifyBtn.onclick = async () => {
-    if (!tempImage) {
+    if (!verifyImg.src) {
         alert("No image to submit.");
         return;
     }
     
     if (!serviceSelect.value) {
-        alert("Please select a service.");
+        alert("Select a service.");
         return;
     }
     
     const keywords = keywordsInput.value.trim();
     if (!keywords) {
-        alert("Please enter keywords.");
+        alert("Enter keywords.");
         return;
     }
 
-    // Show loading state
+    // Disable button during upload
     const originalText = submitVerifyBtn.textContent;
     submitVerifyBtn.textContent = 'Uploading...';
     submitVerifyBtn.disabled = true;
 
     try {
         const imageData = {
-            src: tempImage,
+            src: verifyImg.src,
             service: serviceSelect.value,
             keywords: keywords
         };
@@ -418,117 +458,26 @@ submitVerifyBtn.onclick = async () => {
         const imageId = await saveImageToSupabase(imageData);
         
         if (imageId) {
-            alert("✅ Upload submitted! The image will appear in the gallery.");
+            alert("✅ Submitted for review!");
+        } else {
+            alert("⚠️ Saved locally only.");
         }
         
     } catch (error) {
         console.error('Upload error:', error);
-        alert("⚠️ Upload saved locally. May not sync to server.");
+        alert("❌ Upload failed.");
     } finally {
         // Reset UI
         verifyBoxContainer.style.display = 'none';
-        tempImage = null;
         keywordsInput.value = '';
         serviceSelect.value = '';
         fileInput.value = '';
-        
         submitVerifyBtn.textContent = originalText;
         submitVerifyBtn.disabled = false;
-        
-        // Refresh display
-        renderImages();
     }
 };
 
-function renderImages() {
-    const grid = document.getElementById('imageGrid');
-    grid.innerHTML = '';
-    const query = searchBox.value.toLowerCase();
-    
-    // Combine verified and pending images
-    const allImages = [...verifiedImages, ...pendingUploads];
-    
-    // Filter images based on search query
-    const filteredImages = allImages.filter(img => {
-        if (!img) return false;
-        const serviceMatch = img.service && img.service.toLowerCase().includes(query);
-        const keywordMatch = img.keywords && img.keywords.toLowerCase().includes(query);
-        return serviceMatch || keywordMatch;
-    });
-    
-    if (filteredImages.length === 0) {
-        const message = document.createElement('div');
-        message.style.textAlign = 'center';
-        message.style.width = '100%';
-        message.style.padding = '40px';
-        message.style.color = '#666';
-        message.textContent = query ? 'No images found for your search.' : 'No images yet. Upload one!';
-        grid.appendChild(message);
-        return;
-    }
-    
-    // Display filtered images
-    filteredImages.forEach(img => {
-        const box = document.createElement('div');
-        box.className = 'imgBox';
-
-        const image = document.createElement('img');
-        image.src = img.src;
-        image.alt = `${img.service || 'Unknown'} profile picture`;
-        image.onerror = function() {
-            this.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="200" viewBox="0 0 220 200"><rect width="100%" height="100%" fill="%231a1a1a"/><text x="50%" y="50%" fill="%23666" font-family="Arial" font-size="14" text-anchor="middle" dy=".3em">Image</text></svg>';
-        };
-
-        const rating = document.createElement('div');
-        rating.className = 'rating';
-        for (let i = 1; i <= 5; i++) {
-            const star = document.createElement('span');
-            star.textContent = i <= img.rating ? '★' : '☆';
-            star.style.color = i <= img.rating ? '#ffd700' : '#666';
-            star.onclick = async () => {
-                if (img.verified) {
-                    img.rating = i;
-                    await updateRatingInSupabase(img.id, i);
-                    renderImages();
-                } else {
-                    alert("Only verified images can be rated.");
-                }
-            };
-            rating.appendChild(star);
-        }
-
-        const dl = document.createElement('button');
-        dl.className = 'downloadBtn';
-        dl.textContent = "Download";
-        dl.onclick = () => {
-            const a = document.createElement('a');
-            a.href = img.src;
-            a.download = `profile_${(img.service || 'unknown').toLowerCase()}.png`;
-            a.click();
-        };
-
-        // Add verification status badge
-        const statusBadge = document.createElement('div');
-        statusBadge.className = img.verified ? 'verified-badge' : 'pending-badge';
-        statusBadge.textContent = img.verified ? '✓ Verified' : '⏳ Pending';
-
-        // Add keywords display
-        const keywordsDisplay = document.createElement('div');
-        keywordsDisplay.style.color = '#888';
-        keywordsDisplay.style.fontSize = '12px';
-        keywordsDisplay.style.textAlign = 'center';
-        keywordsDisplay.textContent = `Keywords: ${img.keywords || 'None'}`;
-
-        box.appendChild(image);
-        box.appendChild(rating);
-        box.appendChild(keywordsDisplay);
-        box.appendChild(statusBadge);
-        box.appendChild(dl);
-        grid.appendChild(box);
-    });
-}
-
-// Format button functionality
+// Format image
 formatBtn.onclick = () => {
     fileInput.click();
     fileInput.onchange = (e) => {
@@ -537,8 +486,8 @@ formatBtn.onclick = () => {
         const reader = new FileReader();
         reader.onload = () => {
             const tempImg = reader.result;
-            const service = prompt("Enter service to format for (Discord, YouTube, TikTok, Other):");
-            if (!service) return alert("Service required.");
+            const service = prompt("Service to format for (Discord, YouTube, TikTok, Other):");
+            if (!service) return;
 
             const img = new Image();
             img.src = tempImg;
@@ -546,7 +495,6 @@ formatBtn.onclick = () => {
                 let width = 512, height = 512;
                 if(service.toLowerCase() === 'youtube') { width = 1280; height = 720; }
                 else if(service.toLowerCase() === 'tiktok') { width = 1080; height = 1920; }
-                // Discord default already set 512x512
 
                 const canvas = document.createElement('canvas');
                 canvas.width = width;
@@ -556,13 +504,98 @@ formatBtn.onclick = () => {
 
                 const a = document.createElement('a');
                 a.href = canvas.toDataURL("image/png");
-                a.download = `formatted_${service.toLowerCase()}_image.png`;
+                a.download = `formatted_${service.toLowerCase()}.png`;
                 a.click();
             };
         };
         reader.readAsDataURL(file);
     };
 };
+
+// Render images with new layout
+function renderImages() {
+    const grid = document.getElementById('imageGrid');
+    const query = searchBox.value.toLowerCase();
+    
+    // Filter images
+    const filteredImages = verifiedImages.filter(img => {
+        if (!img) return false;
+        const serviceMatch = img.service && img.service.toLowerCase().includes(query);
+        const keywordMatch = img.keywords && img.keywords.toLowerCase().includes(query);
+        return serviceMatch || keywordMatch;
+    });
+    
+    if (filteredImages.length === 0) {
+        grid.innerHTML = `
+            <div style="text-align:center; width:100%; padding:60px; color:#666;">
+                ${query ? 'No images found.' : 'No images yet.'}
+            </div>
+        `;
+        return;
+    }
+    
+    // Create image grid
+    grid.innerHTML = filteredImages.map(img => `
+        <div class="imgBox">
+            <div class="keywords-row">
+                <span class="keywords-label">Keywords:</span>
+                <span class="keywords-text" title="${img.keywords || ''}">
+                    ${img.keywords || 'None'}
+                </span>
+            </div>
+            
+            <img src="${img.src}" 
+                 alt="${img.service || 'Profile'}" 
+                 onerror="this.src='data:image/svg+xml,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"220\" height=\"180\"><rect width=\"100%\" height=\"100%\" fill=\"%231a1a1a\"/><text x=\"50%\" y=\"50%\" fill=\"%23666\" font-size=\"14\" text-anchor=\"middle\" dy=\".3em\">Image</text></svg>';">
+            
+            <div class="service-tag">${img.service || 'Unknown'}</div>
+            
+            <div class="bottom-row">
+                <div class="rating">
+                    ${[1,2,3,4,5].map(i => `
+                        <span style="color:${i <= img.rating ? '#ffd700' : '#666'}" 
+                              onclick="rateImage('${img.id}', ${i})">
+                            ${i <= img.rating ? '★' : '☆'}
+                        </span>
+                    `).join('')}
+                </div>
+                
+                <div class="status-badge ${img.verified ? 'verified-badge' : 'pending-badge'}">
+                    ${img.verified ? '✓' : '⏳'}
+                </div>
+            </div>
+            
+            <button class="downloadBtn" onclick="downloadImage('${img.src}', '${img.service || 'profile'}')">
+                Download
+            </button>
+        </div>
+    `).join('');
+}
+
+// Rate image function
+async function rateImage(imageId, rating) {
+    const image = verifiedImages.find(img => img.id === imageId);
+    if (!image) return;
+    
+    image.rating = rating;
+    renderImages();
+    await updateRatingInSupabase(imageId, rating);
+}
+
+// Download image function
+function downloadImage(src, service) {
+    const a = document.createElement('a');
+    a.href = src;
+    a.download = `profile_${service.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}.png`;
+    a.click();
+}
+
+// Auto-refresh every 2 minutes
+setInterval(() => {
+    if (document.visibilityState === 'visible') {
+        loadImagesFromSupabase();
+    }
+}, 120000);
 </script>
 </body>
 </html>
