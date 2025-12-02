@@ -1,195 +1,259 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Discord PFP Grid</title>
-  <style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Profile Pictures</title>
+<style>
     body {
-      font-family: Arial, sans-serif;
-      background: #0d0d0d;
-      margin: 0;
-      padding: 0;
-      color: white;
+        margin: 0;
+        background: #0f0f0f;
+        color: #fff;
+        font-family: Arial, sans-serif;
     }
 
     header {
-      position: fixed;
-      top: 0;
-      right: 0;
-      width: 100%;
-      background: #1a1a1a;
-      padding: 12px 20px;
-      display: flex;
-      justify-content: flex-end;
-      gap: 12px;
-      align-items: center;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-      z-index: 10;
+        width: 100%;
+        padding: 20px;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 10px;
+        background: #111;
+        position: sticky;
+        top: 0;
+        z-index: 10;
     }
 
-    #searchInput {
-      width: 160px;
-      padding: 6px;
-      border-radius: 6px;
-      border: none;
-      background: #2a2a2a;
-      color: white;
+    #search {
+        padding: 6px 10px;
+        background: #1a1a1a;
+        border: 1px solid #333;
+        border-radius: 6px;
+        color: #fff;
+        width: 160px;
     }
 
-    #uploadInput {
-      padding: 6px;
-      background: #333;
-      border: none;
-      border-radius: 6px;
-      color: white;
+    #uploadBtn, #verifyBtn {
+        padding: 7px 14px;
+        background: #222;
+        border: 1px solid #444;
+        border-radius: 6px;
+        cursor: pointer;
+        color: #fff;
     }
 
-    #container {
-      display: grid;
-      grid-template-columns: repeat(6, 1fr);
-      gap: 18px;
-      padding: 120px 20px 40px;
+    #uploadBtn:hover, #verifyBtn:hover {
+        background: #333;
     }
 
-    .box {
-      background: #1c1c1c;
-      padding: 14px;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    #imageGrid {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 25px;
+        padding: 20px;
+        max-width: 100vw;
+        overflow-x: hidden;
+        box-sizing: border-box;
     }
 
-    .title {
-      text-align: left;
-      font-size: 16px;
-      margin-bottom: 8px;
+    .imgBox {
+        background: #1b1b1b;
+        padding: 12px;
+        border-radius: 14px;
+        width: 220px;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
     }
 
-    .image {
-      width: 100%;
-      aspect-ratio: 1/1;
-      border-radius: 50%;
-      object-fit: cover;
-      margin: 0 auto;
-      display: block;
+    .imgBox img {
+        width: 100%;
+        border-radius: 12px;
     }
 
-    .bottom-row {
-      margin-top: 10px;
-      display: flex;
-      justify-content: space-between;
-      font-size: 12px;
+    .rating {
+        display: flex;
+        gap: 6px;
+        align-self: flex-end;
     }
 
-    .rating-stars span {
-      cursor: pointer;
-      font-size: 18px;
+    .rating span {
+        cursor: pointer;
+        font-size: 20px;
     }
 
-    .download {
-      margin-top: 6px;
-      text-align: right;
+    .downloadBtn {
+        width: 100%;
+        padding: 6px 0;
+        text-align: center;
+        background: #222;
+        border: 1px solid #444;
+        border-radius: 6px;
+        cursor: pointer;
+        color: #fff;
     }
-
-    .download button {
-      background: #333;
-      border: none;
-      padding: 6px 10px;
-      border-radius: 6px;
-      color: white;
-      cursor: pointer;
-    }
-  </style>
+</style>
 </head>
+
 <body>
 
 <header>
-  <input type="file" id="uploadInput" accept="image/*" />
-  <input type="text" id="searchInput" placeholder="Search..." />
+    <input id="search" placeholder="Search..." />
+
+    <button id="formatBtn">Format Image</button>
+
+    <button id="requestUploadBtn">Request Upload</button>
+    <input type="file" id="fileInput" accept="image/*" style="display:none;" />
+
+    <select id="categorySelect" style="padding:7px 10px;background:#222;color:white;border:1px solid #444;border-radius:6px;">
+        <option value="">Category</option>
+        <option value="Discord">Discord</option>
+        <option value="YouTube">YouTube</option>
+        <option value="TikTok">TikTok</option>
+        <option value="Other">Other</option>
+    </select>
 </header>
 
-<div id="container"></div>
+<div id="imageGrid"></div>
 
 <script>
-  const container = document.getElementById('container');
-  const uploadInput = document.getElementById('uploadInput');
-  const searchInput = document.getElementById('searchInput');
+let pendingUploads = []; // waiting for verification
+let publicImages = [];   // stored for everyone
+let formatImageTemp = null; // holds last uploaded image for formatting = [];   // shown to all visitors (stored in localStorage)
 
-  function createBox(src, name = 'Discord PFP') {
-    const box = document.createElement('div');
-    box.className = 'box';
+// Load saved images
+window.onload = () => {
+    const saved = localStorage.getItem("publicImages");
+    if (saved) publicImages = JSON.parse(saved);
+    // REQUEST UPLOAD (requires category)
+requestUploadBtn.addEventListener('click', () => {
+    if (!formatImageTemp) return alert("Upload an image first.");
+    if (!categorySelect.value) return alert("You must select a category.");
 
-    const title = document.createElement('div');
-    title.className = 'title';
-    title.textContent = name;
+    pendingUploads.push({ src: formatImageTemp, rating: 0, category: categorySelect.value });
+    alert("Upload request submitted. Pending human verification.");
+    formatImageTemp = null;
+    renderImages();
+});
 
-    const img = document.createElement('img');
-    img.className = 'image';
-    img.src = src;
+// FORMAT (does not upload)
+formatBtn.addEventListener('click', () => {
+    if (!formatImageTemp) return alert("Upload an image first.");
 
-    const ratingRow = document.createElement('div');
-    ratingRow.className = 'rating-stars';
+    // auto crop to square for Discord
+    const img = new Image();
+    img.src = formatImageTemp;
+    img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const size = Math.min(img.width, img.height);
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, (img.width-size)/2, (img.height-size)/2, size, size, 0, 0, 512, 512);
+        const finalUrl = canvas.toDataURL("image/png");
 
-    let rating = 0;
-
-    for (let i = 1; i <= 5; i++) {
-      const star = document.createElement('span');
-      star.textContent = '★';
-      star.style.color = '#555';
-      star.dataset.value = i;
-
-      star.onclick = () => {
-        rating = i;
-        updateStars();
-      };
-
-      ratingRow.appendChild(star);
-    }
-
-    function updateStars() {
-      [...ratingRow.children].forEach(star => {
-        star.style.color = star.dataset.value <= rating ? '#f5b301' : '#555';
-      });
-    }
-
-    const downloadDiv = document.createElement('div');
-    downloadDiv.className = 'download';
-
-    const downloadBtn = document.createElement('button');
-    downloadBtn.textContent = 'Download';
-    downloadBtn.onclick = () => {
-      const a = document.createElement('a');
-      a.href = src;
-      a.download = 'pfp.png';
-      a.click();
+        const a = document.createElement('a');
+        a.href = finalUrl;
+        a.download = "formatted_discord_pfp.png";
+        a.click();
     };
+});
 
-    downloadDiv.appendChild(downloadBtn);
+renderImages();
+};
 
-    box.appendChild(title);
-    box.appendChild(img);
-    box.appendChild(ratingRow);
-    box.appendChild(downloadDiv);
+// Search filter
+const searchBox = document.getElementById('search');
+searchBox.addEventListener('input', renderImages);
 
-    container.appendChild(box);
-  }
+// Upload handler
+const formatBtn = document.getElementById('formatBtn');
+const requestUploadBtn = document.getElementById('requestUploadBtn');
+const categorySelect = document.getElementById('categorySelect');
 
-  uploadInput.addEventListener('change', function() {
-    const file = this.files[0];
+formatBtn.onclick = () => fileInput.click();
+requestUploadBtn.onclick = () => fileInput.click();
+
+fileInput.onchange = (e) => {
+    const file = e.target.files[0];
     if (!file) return;
 
-    const url = URL.createObjectURL(file);
-    createBox(url, file.name);
-  });
+    const reader = new FileReader();
+    reader.onload = () => {
+        formatImageTemp = reader.result;
+        alert("Image loaded. Choose Format Image or Request Upload.");
+    };
+    reader.readAsDataURL(file);
+};(file);
+};
 
-  searchInput.addEventListener('input', function() {
-    const query = this.value.toLowerCase();
+// Human verification simulation
+const verifyBtn = document.getElementById('verifyBtn');
+verifyBtn.onclick = () => {
+    publicImages.push(...pendingUploads);
+    pendingUploads = [];
+    localStorage.setItem("publicImages", JSON.stringify(publicImages));
+    renderImages();
+};
 
-    [...container.children].forEach(box => {
-      const title = box.querySelector('.title').textContent.toLowerCase();
-      box.style.display = title.includes(query) ? 'block' : 'none';
-    });
-  });
+// Render
+function renderImages() {
+    const grid = document.getElementById('imageGrid');
+    grid.innerHTML = "";
+
+    const query = searchBox.value.toLowerCase();
+
+    const allImages = [...publicImages, ...pendingUploads];
+
+    allImages
+        .filter(img => img.src.toLowerCase().includes(query))
+        .forEach((img, index) => {
+            const box = document.createElement('div');
+            box.className = 'imgBox';
+
+            const image = document.createElement('img');
+            image.src = img.src;
+
+            // Rating
+            const rating = document.createElement('div');
+            rating.className = 'rating';
+
+            for (let i = 1; i <= 5; i++) {
+                const star = document.createElement('span');
+                star.textContent = i <= img.rating ? '★' : '☆';
+                star.onclick = () => {
+                    img.rating = i;
+                    localStorage.setItem("publicImages", JSON.stringify(publicImages));
+                    renderImages();
+                };
+                rating.appendChild(star);
+            }
+
+            // Download button
+            const dl = document.createElement('button');
+            dl.className = 'downloadBtn';
+            dl.textContent = "Download";
+            dl.onclick = () => downloadImage(img.src);
+
+            box.appendChild(image);
+            box.appendChild(rating);
+            box.appendChild(dl);
+
+            grid.appendChild(box);
+        });
+}
+
+// Download with formatting support
+function downloadImage(dataUrl) {
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = "profile.png"; // Discord-compatible PNG
+    a.click();
+}
 </script>
 
 </body>
