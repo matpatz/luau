@@ -224,11 +224,11 @@
     .service-tag {
         display: inline-block;
         background: #333;
-        padding: 2px 8px;
+        padding: 1px 6px;  /* make it shorter vertically */
         border-radius: 4px;
         font-size: 11px;
         color: #ccc;
-        margin-top: 5px;
+        margin-top: 3px;   /* raise it closer to the image */
     }
 </style>
 </head>
@@ -544,6 +544,7 @@ function renderImages() {
 
         const serviceTag = document.createElement('div');
         serviceTag.className = 'service-tag';
+        if (img.service && img.service.toLowerCase() === 'discord') serviceTag.classList.add('discord');
         serviceTag.textContent = img.service || 'Unknown';
 
         const bottom = document.createElement('div');
