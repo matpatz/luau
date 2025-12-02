@@ -125,13 +125,17 @@
         justify-content: flex-start;
     }
 
-    #verifyActions select, #verifyActions button {
+    #verifyActions input, #verifyActions select, #verifyActions button {
         padding: 6px 10px;
         border-radius: 6px;
         border: 1px solid #444;
         background: #222;
         color: #fff;
         cursor: pointer;
+    }
+
+    #verifyActions input {
+        width: 120px;
     }
 </style>
 </head>
@@ -140,15 +144,16 @@
 <header>
     <input id="search" placeholder="Search..." />
     <button id="formatBtn">Format Image</button>
-    <button id="uploadBtn">Upload Image</button>
+    <button id="uploadBtn">Request Upload</button>
     <input type="file" id="fileInput" accept="image/*" style="display:none;" />
 </header>
 
 <div id="verifyBoxContainer">
     <img id="verifyImg" src="" />
     <div id="verifyActions">
-        <select id="categorySelect">
-            <option value="">Select Category</option>
+        <input type="text" id="keywordsInput" placeholder="Keywords" />
+        <select id="serviceSelect">
+            <option value="">Services</option>
             <option value="Discord">Discord</option>
             <option value="YouTube">YouTube</option>
             <option value="TikTok">TikTok</option>
@@ -179,7 +184,8 @@ const formatBtn = document.getElementById('formatBtn');
 const uploadBtn = document.getElementById('uploadBtn');
 const verifyBoxContainer = document.getElementById('verifyBoxContainer');
 const verifyImg = document.getElementById('verifyImg');
-const categorySelect = document.getElementById('categorySelect');
+const keywordsInput = document.getElementById('keywordsInput');
+const serviceSelect = document.getElementById('serviceSelect');
 const submitVerifyBtn = document.getElementById('submitVerifyBtn');
 
 uploadBtn.onclick = () => fileInput.click();
@@ -196,31 +202,53 @@ fileInput.onchange = (e) => {
 };
 
 formatBtn.onclick = () => {
-    if (!tempImage) return alert("Upload an image first.");
-    const img = new Image();
-    img.src = tempImage;
-    img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const size = Math.min(img.width, img.height);
-        canvas.width = 512;
-        canvas.height = 512;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, (img.width-size)/2, (img.height-size)/2, size, size, 0, 0, 512, 512);
-        const a = document.createElement('a');
-        a.href = canvas.toDataURL("image/png");
-        a.download = "formatted_discord_pfp.png";
-        a.click();
+    fileInput.click();
+    fileInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            tempImage = reader.result;
+            const service = prompt("Enter service to format for (Discord, YouTube, TikTok, Other):");
+            if (!service) return alert("Service required.");
+
+            const img = new Image();
+            img.src = tempImage;
+            img.onload = () => {
+                let width = 512, height = 512;
+                if(service.toLowerCase() === 'youtube') { width = 1280; height = 720; }
+                else if(service.toLowerCase() === 'tiktok') { width = 1080; height = 1920; }
+                // Discord default already set 512x512
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                const a = document.createElement('a');
+                a.href = canvas.toDataURL("image/png");
+                a.download = `formatted_${service.toLowerCase()}_image.png`;
+                a.click();
+            };
+        };
+        reader.readAsDataURL(file);
     };
 };
 
 submitVerifyBtn.onclick = () => {
     if (!tempImage) return alert("No image to submit.");
-    if (!categorySelect.value) return alert("Select a category.");
-    pendingUploads.push({ src: tempImage, rating: 0, category: categorySelect.value });
-    alert("Upload request submitted for verification.");
+    if (!serviceSelect.value) return alert("Select a service.");
+    const keywords = keywordsInput.value.trim();
+    if (!keywords) return alert("Enter keywords.");
+
+    // Send tempImage, serviceSelect.value, and keywords somewhere for human verification
+    pendingUploads.push({ src: tempImage, rating: 0, service: serviceSelect.value, keywords });
+    alert("Upload request submitted for human verification.");
     tempImage = null;
     verifyBoxContainer.style.display = 'none';
-    categorySelect.value = '';
+    keywordsInput.value = '';
+    serviceSelect.value = '';
     renderImages();
 };
 
@@ -230,7 +258,7 @@ function renderImages() {
     const query = searchBox.value.toLowerCase();
     const allImages = [...publicImages, ...pendingUploads];
 
-    allImages.filter(img => img.category?.toLowerCase().includes(query)).forEach(img => {
+    allImages.filter(img => img.service?.toLowerCase().includes(query) || img.keywords?.toLowerCase().includes(query)).forEach(img => {
         const box = document.createElement('div');
         box.className = 'imgBox';
 
