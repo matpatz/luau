@@ -210,7 +210,7 @@
     .close-btn {
         position: absolute;
         top: 10px;
-        right: 10px;
+        right: 8px;
         background: #ff4444;
         border: none;
         border-radius: 50%;
@@ -239,7 +239,7 @@
         <input id="search" placeholder="Search..." />
         <button id="formatBtn">Format Image</button>
         <button id="uploadBtn">Request Upload</button>
-        <a href="admin.html" class="admin-link">Admin</a>
+        <a href="admin.html" class="admin-link">-</a>
     </div>
     <input type="file" id="fileInput" accept="image/*" style="display:none;" />
 </header>
@@ -424,6 +424,7 @@ closeVerifyBtn.onclick = () => {
     keywordsInput.value = '';
     serviceSelect.value = '';
     fileInput.value = '';
+    verifyImg.src = ''; // Clear the image preview
 };
 
 submitVerifyBtn.onclick = async () => {
@@ -458,14 +459,14 @@ submitVerifyBtn.onclick = async () => {
         const imageId = await saveImageToSupabase(imageData);
         
         if (imageId) {
-            alert("✅ Submitted for review!");
+            alert("Submitted for review!");
         } else {
-            alert("⚠️ Saved locally only.");
+            alert("Saved locally.");
         }
         
     } catch (error) {
         console.error('Upload error:', error);
-        alert("❌ Upload failed.");
+        alert("Upload failed.");
     } finally {
         // Reset UI
         verifyBoxContainer.style.display = 'none';
