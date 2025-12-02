@@ -182,13 +182,11 @@ const keywordsInput = document.getElementById('keywordsInput');
 const serviceSelect = document.getElementById('serviceSelect');
 const submitVerifyBtn = document.getElementById('submitVerifyBtn');
 
-window.onload = loadImages;
-
-// OPEN FILE DIALOG
+// Open file dialog
 uploadBtn.onclick = () => fileInput.click();
 formatBtn.onclick = handleFormat;
 
-// SELECT IMAGE FOR UPLOAD
+// Select image for preview & upload
 fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -201,7 +199,7 @@ fileInput.addEventListener('change', (e) => {
     reader.readAsDataURL(file);
 });
 
-// SUBMIT IMAGE TO SUPABASE
+// Submit image to Supabase
 submitVerifyBtn.addEventListener('click', async () => {
     if (!tempImage) return alert("No image selected");
     if (!serviceSelect.value) return alert("Select a service");
@@ -239,7 +237,7 @@ submitVerifyBtn.addEventListener('click', async () => {
     }
 });
 
-// LOAD VERIFIED IMAGES
+// Load verified images
 async function loadImages() {
     try {
         const { data: images, error } = await supabase
@@ -254,7 +252,7 @@ async function loadImages() {
     }
 }
 
-// RENDER IMAGE GRID
+// Render images in grid
 function renderImages(images) {
     const grid = document.getElementById('imageGrid');
     grid.innerHTML = '';
@@ -297,7 +295,7 @@ function renderImages(images) {
         });
 }
 
-// IMAGE FORMATTING
+// Format image for different services
 function handleFormat() {
     fileInput.click();
     fileInput.onchange = (e) => {
