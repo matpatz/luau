@@ -96,14 +96,20 @@
         color: #fff;
     }
 
-    #categoryInput {
+    #requestContainer {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-start;
+        align-items: center;
+        margin-top: 10px;
+    }
+
+    #categorySelect {
         padding: 6px 10px;
         background: #1a1a1a;
         border: 1px solid #333;
         border-radius: 6px;
         color: #fff;
-        display: none;
-        margin-left: 10px;
     }
 </style>
 </head>
@@ -112,17 +118,27 @@
 <header>
     <input id="search" placeholder="Search..." />
     <button id="formatBtn">Format Image</button>
-    <button id="requestUploadBtn">Request Upload</button>
+    <button id="fileUploadBtn">Upload / Request</button>
     <input type="file" id="fileInput" accept="image/*" style="display:none;" />
-    <input type="text" id="categoryInput" placeholder="Category" />
 </header>
+
+<div id="requestContainer" style="display:none;">
+    <select id="categorySelect">
+        <option value="">Select Category</option>
+        <option value="Discord">Discord</option>
+        <option value="YouTube">YouTube</option>
+        <option value="TikTok">TikTok</option>
+        <option value="Other">Other</option>
+    </select>
+    <button id="submitRequestBtn">Submit</button>
+</div>
 
 <div id="imageGrid"></div>
 
 <script>
 let pendingUploads = [];
 let publicImages = [];
-let formatImageTemp = null;
+let tempImage = null;
 
 // Load saved public images (max 1000) from localStorage
 window.onload = () => {
@@ -131,35 +147,35 @@ window.onload = () => {
     renderImages();
 };
 
-// Search filter
 const searchBox = document.getElementById('search');
 searchBox.addEventListener('input', renderImages);
 
 const fileInput = document.getElementById('fileInput');
+const fileUploadBtn = document.getElementById('fileUploadBtn');
 const formatBtn = document.getElementById('formatBtn');
-const requestUploadBtn = document.getElementById('requestUploadBtn');
-const categoryInput = document.getElementById('categoryInput');
+const requestContainer = document.getElementById('requestContainer');
+const categorySelect = document.getElementById('categorySelect');
+const submitRequestBtn = document.getElementById('submitRequestBtn');
 
-// Load image for formatting or upload
-formatBtn.onclick = () => fileInput.click();
-requestUploadBtn.onclick = () => fileInput.click();
+// File selection
+fileUploadBtn.onclick = () => fileInput.click();
 fileInput.onchange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-        formatImageTemp = reader.result;
-        categoryInput.style.display = 'inline-block';
-        alert("Image loaded. Enter category and choose action.");
+        tempImage = reader.result;
+        requestContainer.style.display = 'flex';
+        alert("Image loaded. Select category and submit.");
     };
     reader.readAsDataURL(file);
 };
 
-// Format image (does not upload)
-formatBtn.addEventListener('click', () => {
-    if (!formatImageTemp) return alert("Upload an image first.");
+// Format button (no upload)
+formatBtn.onclick = () => {
+    if (!tempImage) return alert("Upload an image first.");
     const img = new Image();
-    img.src = formatImageTemp;
+    img.src = tempImage;
     img.onload = () => {
         const canvas = document.createElement('canvas');
         const size = Math.min(img.width, img.height);
@@ -172,19 +188,20 @@ formatBtn.addEventListener('click', () => {
         a.download = "formatted_discord_pfp.png";
         a.click();
     };
-});
+};
 
-// Request upload (requires category)
-requestUploadBtn.addEventListener('click', () => {
-    if (!formatImageTemp) return alert("Upload an image first.");
-    if (!categoryInput.value) return alert("Enter a category before requesting upload.");
-    pendingUploads.push({ src: formatImageTemp, rating: 0, category: categoryInput.value });
-    alert("Upload request submitted. Pending human verification.");
-    formatImageTemp = null;
-    categoryInput.value = '';
-    categoryInput.style.display = 'none';
+// Submit request
+submitRequestBtn.onclick = () => {
+    if (!tempImage) return alert("Upload an image first.");
+    if (!categorySelect.value) return alert("Select a category.");
+
+    pendingUploads.push({ src: tempImage, rating: 0, category: categorySelect.value });
+    alert("Request submitted. Pending human verification.");
+    tempImage = null;
+    requestContainer.style.display = 'none';
+    categorySelect.value = '';
     renderImages();
-});
+};
 
 // Render images
 function renderImages() {
