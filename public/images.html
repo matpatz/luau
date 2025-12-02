@@ -1,184 +1,18 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Profile Pictures</title>
-<style>
-    body {
-        margin: 0;
-        background: #0f0f0f;
-        color: #fff;
-        font-family: Arial, sans-serif;
-    }
-
-    header {
-        width: 100%;
-        padding: 20px;
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        gap: 10px;
-        background: #111;
-        position: sticky;
-        top: 0;
-        z-index: 10;
-    }
-
-    #search {
-        padding: 6px 10px;
-        background: #1a1a1a;
-        border: 1px solid #333;
-        border-radius: 6px;
-        color: #fff;
-        width: 160px;
-    }
-
-    button {
-        padding: 7px 14px;
-        background: #222;
-        border: 1px solid #444;
-        border-radius: 6px;
-        cursor: pointer;
-        color: #fff;
-    }
-
-    button:hover {
-        background: #333;
-    }
-
-    #imageGrid {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 25px;
-        padding: 20px;
-        max-width: 100vw;
-        overflow-x: hidden;
-        box-sizing: border-box;
-    }
-
-    .imgBox {
-        background: #1b1b1b;
-        padding: 12px;
-        border-radius: 14px;
-        width: 220px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 10px;
-    }
-
-    .imgBox img {
-        width: 100%;
-        border-radius: 12px;
-    }
-
-    .rating {
-        display: flex;
-        gap: 6px;
-        align-self: flex-end;
-    }
-
-    .rating span {
-        cursor: pointer;
-        font-size: 20px;
-    }
-
-    .downloadBtn {
-        width: 100%;
-        padding: 6px 0;
-        text-align: center;
-        background: #222;
-        border: 1px solid #444;
-        border-radius: 6px;
-        cursor: pointer;
-        color: #fff;
-    }
-
-    #verifyBoxContainer {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: #1a1a1a;
-        padding: 20px;
-        border-radius: 12px;
-        display: none;
-        flex-direction: column;
-        align-items: center;
-        gap: 12px;
-        z-index: 20;
-    }
-
-    #verifyBoxContainer img {
-        max-width: 400px;
-        max-height: 400px;
-        border-radius: 12px;
-    }
-
-    #verifyActions {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        width: 100%;
-        justify-content: flex-start;
-    }
-
-    #verifyActions input, #verifyActions select, #verifyActions button {
-        padding: 6px 10px;
-        border-radius: 6px;
-        border: 1px solid #444;
-        background: #222;
-        color: #fff;
-        cursor: pointer;
-    }
-
-    #verifyActions input {
-        width: 120px;
-    }
-</style>
-</head>
-
-<body>
-<header>
-    <input id="search" placeholder="Search..." />
-    <button id="formatBtn">Format Image</button>
-    <button id="uploadBtn">Request Upload</button>
-    <input type="file" id="fileInput" accept="image/*" style="display:none;" />
-</header>
-
-<div id="verifyBoxContainer">
-    <img id="verifyImg" src="" />
-    <div id="verifyActions">
-        <input type="text" id="keywordsInput" placeholder="Keywords" />
-        <select id="serviceSelect">
-            <option value="">Services</option>
-            <option value="Discord">Discord</option>
-            <option value="YouTube">YouTube</option>
-            <option value="TikTok">TikTok</option>
-            <option value="Other">Other</option>
-        </select>
-        <button id="submitVerifyBtn">Submit</button>
-    </div>
-</div>
-
-<div id="imageGrid"></div>
-
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
 <script>
+const SUPABASE_URL = 'https://erctbeaqvqxjsrdjzonw.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY_HERE';
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 let pendingUploads = [];
 let publicImages = [];
 let tempImage = null;
 
 window.onload = () => {
-    const saved = localStorage.getItem("publicImages");
-    if (saved) publicImages = JSON.parse(saved).slice(0,1000);
-    renderImages();
+    loadImages();
 };
 
 const searchBox = document.getElementById('search');
-searchBox.addEventListener('input', renderImages);
-
 const fileInput = document.getElementById('fileInput');
 const formatBtn = document.getElementById('formatBtn');
 const uploadBtn = document.getElementById('uploadBtn');
@@ -188,84 +22,42 @@ const keywordsInput = document.getElementById('keywordsInput');
 const serviceSelect = document.getElementById('serviceSelect');
 const submitVerifyBtn = document.getElementById('submitVerifyBtn');
 
+searchBox.addEventListener('input', loadImages);
+
+// OPEN FILE DIALOG
+uploadBtn.onclick = () => fileInput.click();
+formatBtn.onclick = handleFormat;
+
+// SELECT IMAGE FOR UPLOAD
 fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    tempImage = file; // <-- store File object
+    tempImage = file; // store File object
     const reader = new FileReader();
     reader.onload = () => {
-        verifyImg.src = reader.result; // preview
-        verifyBoxContainer.style.display = 'flex';
-    };
-    reader.readAsDataURL(file); // preview only
-});
-
-uploadBtn.onclick = () => fileInput.click();
-fileInput.onchange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-        tempImage = reader.result;
-        verifyImg.src = tempImage;
+        verifyImg.src = reader.result;
         verifyBoxContainer.style.display = 'flex';
     };
     reader.readAsDataURL(file);
-};
+});
 
-formatBtn.onclick = () => {
-    fileInput.click();
-    fileInput.onchange = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            tempImage = reader.result;
-            const service = prompt("Enter service to format for (Discord, YouTube, TikTok, Other):");
-            if (!service) return alert("Service required.");
-
-            const img = new Image();
-            img.src = tempImage;
-            img.onload = () => {
-                let width = 512, height = 512;
-                if(service.toLowerCase() === 'youtube') { width = 1280; height = 720; }
-                else if(service.toLowerCase() === 'tiktok') { width = 1080; height = 1920; }
-                // Discord default already set 512x512
-
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-
-                const a = document.createElement('a');
-                a.href = canvas.toDataURL("image/png");
-                a.download = `formatted_${service.toLowerCase()}_image.png`;
-                a.click();
-            };
-        };
-        reader.readAsDataURL(file);
-    };
-};
-
+// SUBMIT TO SUPABASE
 submitVerifyBtn.addEventListener('click', async () => {
-    if (!tempImage) return alert("No image to submit.");
-    if (!serviceSelect.value) return alert("Select a service.");
+    if (!tempImage) return alert("No image selected");
+    if (!serviceSelect.value) return alert("Select a service");
     const keywords = keywordsInput.value.trim();
-    if (!keywords) return alert("Enter keywords.");
+    if (!keywords) return alert("Enter keywords");
 
     try {
-        // Make a unique filename
         const fileName = `${Date.now()}_${tempImage.name}`;
-
-        // Upload to Supabase Storage
+        // Upload file
         const { data: uploadData, error: uploadError } = await supabase
             .storage
             .from('pfps')
             .upload(fileName, tempImage, { upsert: true });
         if (uploadError) throw uploadError;
 
-        // Get public URL of the uploaded image
+        // Get public URL
         const { data: { publicUrl }, error: urlError } = supabase
             .storage
             .from('pfps')
@@ -275,16 +67,10 @@ submitVerifyBtn.addEventListener('click', async () => {
         // Insert metadata into DB
         const { error: dbError } = await supabase
             .from('images')
-            .insert([{
-                url: publicUrl,
-                service: serviceSelect.value,
-                keywords,
-                rating: 0,
-                verified: false
-            }]);
+            .insert([{ url: publicUrl, service: serviceSelect.value, keywords, rating: 0, verified: false }]);
         if (dbError) throw dbError;
 
-        alert("Upload request submitted for human verification!");
+        alert("Upload submitted for human verification!");
         tempImage = null;
         verifyBoxContainer.style.display = 'none';
         keywordsInput.value = '';
@@ -292,52 +78,100 @@ submitVerifyBtn.addEventListener('click', async () => {
         loadImages();
     } catch (err) {
         console.error(err);
-        alert('Error: ' + err.message);
+        alert("Upload failed: " + err.message);
     }
 });
 
-function renderImages() {
+// LOAD VERIFIED IMAGES
+async function loadImages() {
+    try {
+        const { data: images, error } = await supabase
+            .from('images')
+            .select('*')
+            .eq('verified', true)
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+        renderImages(images);
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+// RENDER IMAGE GRID
+function renderImages(images) {
     const grid = document.getElementById('imageGrid');
     grid.innerHTML = '';
     const query = searchBox.value.toLowerCase();
-    const allImages = [...publicImages, ...pendingUploads];
 
-    allImages.filter(img => img.service?.toLowerCase().includes(query) || img.keywords?.toLowerCase().includes(query)).forEach(img => {
-        const box = document.createElement('div');
-        box.className = 'imgBox';
+    images.filter(img => img.service?.toLowerCase().includes(query) || img.keywords?.toLowerCase().includes(query))
+        .forEach(img => {
+            const box = document.createElement('div');
+            box.className = 'imgBox';
 
-        const image = document.createElement('img');
-        image.src = img.src;
+            const image = document.createElement('img');
+            image.src = img.url;
 
-        const rating = document.createElement('div');
-        rating.className = 'rating';
-        for (let i = 1; i <= 5; i++) {
-            const star = document.createElement('span');
-            star.textContent = i <= img.rating ? '★' : '☆';
-            star.onclick = () => {
-                img.rating = i;
-                localStorage.setItem("publicImages", JSON.stringify(publicImages));
-                renderImages();
+            const rating = document.createElement('div');
+            rating.className = 'rating';
+            for (let i = 1; i <= 5; i++) {
+                const star = document.createElement('span');
+                star.textContent = i <= img.rating ? '★' : '☆';
+                star.onclick = async () => {
+                    await supabase.from('images').update({ rating: i }).eq('id', img.id);
+                    loadImages();
+                };
+                rating.appendChild(star);
+            }
+
+            const dl = document.createElement('button');
+            dl.className = 'downloadBtn';
+            dl.textContent = 'Download';
+            dl.onclick = () => {
+                const a = document.createElement('a');
+                a.href = img.url;
+                a.download = 'profile.png';
+                a.click();
             };
-            rating.appendChild(star);
-        }
 
-        const dl = document.createElement('button');
-        dl.className = 'downloadBtn';
-        dl.textContent = "Download";
-        dl.onclick = () => {
-            const a = document.createElement('a');
-            a.href = img.src;
-            a.download = "profile.png";
-            a.click();
+            box.appendChild(image);
+            box.appendChild(rating);
+            box.appendChild(dl);
+            grid.appendChild(box);
+        });
+}
+
+// IMAGE FORMATTING
+function handleFormat() {
+    fileInput.click();
+    fileInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const imgData = reader.result;
+            const service = prompt('Enter service to format (Discord, YouTube, TikTok, Other):');
+            if (!service) return alert('Service required.');
+
+            const img = new Image();
+            img.src = imgData;
+            img.onload = () => {
+                let width = 512, height = 512;
+                if (service.toLowerCase() === 'youtube') { width = 1280; height = 720; }
+                else if (service.toLowerCase() === 'tiktok') { width = 1080; height = 1920; }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                const a = document.createElement('a');
+                a.href = canvas.toDataURL('image/png');
+                a.download = `formatted_${service.toLowerCase()}_image.png`;
+                a.click();
+            };
         };
-
-        box.appendChild(image);
-        box.appendChild(rating);
-        box.appendChild(dl);
-        grid.appendChild(box);
-    });
+        reader.readAsDataURL(file);
+    };
 }
 </script>
-</body>
-</html>
