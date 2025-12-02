@@ -25,7 +25,7 @@
         position: sticky;
         top: 0;
         z-index: 10;
-        padding-right: 40px; /* Move everything slightly left */
+        padding-right: 60px; /* Moved left */
     }
 
     #search {
@@ -163,22 +163,6 @@
         margin-top: 5px;
     }
 
-    .loading {
-        color: #666;
-        text-align: center;
-        padding: 40px;
-        font-style: italic;
-    }
-
-    .error {
-        color: #ff4444;
-        text-align: center;
-        padding: 20px;
-        background: #2a0f0f;
-        border-radius: 8px;
-        margin: 20px;
-    }
-
     .close-btn {
         position: absolute;
         top: 10px;
@@ -219,98 +203,98 @@
     </div>
 </div>
 
-<div id="imageGrid">
-    <div class="loading">Loading images...</div>
-</div>
+<div id="imageGrid"></div>
 
 <script>
-// Initialize Supabase client with your credentials
+// Initialize Supabase client
 const supabaseUrl = 'https://erctbeaqvqxjsrdjzonw.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVyY3RiZWFxdnF4anNyZGp6b253Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MzE2OTgsImV4cCI6MjA4MDIwNzY5OH0.Yal4o1NDY7p5W822mX7kaigTpPakTyygKLlp67ic6Kg';
 const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 let pendingUploads = [];
 let verifiedImages = [];
-let tempImageFile = null;
-let tempImageUrl = null;
+let tempImage = null;
+
+// Check if Supabase connection works
+async function testSupabase() {
+    try {
+        console.log("Testing Supabase connection...");
+        const { data, error } = await supabase.from('profile_pictures').select('count');
+        if (error) {
+            console.error("Supabase connection error:", error);
+            return false;
+        }
+        console.log("Supabase connection successful");
+        return true;
+    } catch (err) {
+        console.error("Supabase test failed:", err);
+        return false;
+    }
+}
 
 window.onload = async () => {
-    await loadImagesFromSupabase();
+    console.log("Page loading...");
+    const connected = await testSupabase();
+    if (!connected) {
+        console.warn("Supabase not connected, using local storage only");
+        // Load from local storage as fallback
+        const saved = localStorage.getItem("verifiedImages");
+        if (saved) verifiedImages = JSON.parse(saved);
+    } else {
+        await loadImagesFromSupabase();
+    }
     renderImages();
 };
 
 // Function to load images from Supabase
 async function loadImagesFromSupabase() {
     try {
-        const grid = document.getElementById('imageGrid');
-        grid.innerHTML = '<div class="loading">Loading images...</div>';
-
-        // Get only verified images
+        console.log("Loading images from Supabase...");
         const { data, error } = await supabase
             .from('profile_pictures')
             .select('*')
             .eq('verified', true)
             .order('created_at', { ascending: false });
 
-        if (error) throw error;
+        if (error) {
+            console.error("Error loading from Supabase:", error);
+            throw error;
+        }
 
+        console.log("Loaded", data.length, "images from Supabase");
         verifiedImages = data.map(item => ({
             id: item.id,
             src: item.url,
             service: item.service,
             keywords: item.keywords,
             rating: item.rating || 0,
-            verified: item.verified
+            verified: true
         }));
+
+        // Save to local storage as backup
+        localStorage.setItem("verifiedImages", JSON.stringify(verifiedImages));
 
     } catch (error) {
         console.error('Error loading images:', error);
-        const grid = document.getElementById('imageGrid');
-        grid.innerHTML = '<div class="error">Error loading images. Please refresh the page.</div>';
+        // Fallback to local storage
+        const saved = localStorage.getItem("verifiedImages");
+        if (saved) verifiedImages = JSON.parse(saved);
     }
 }
 
-// Function to upload image to Supabase Storage
-async function uploadImageToStorage(file, service, keywords) {
+// Function to save image to Supabase (as Base64 for now)
+async function saveImageToSupabase(imageData) {
     try {
-        // Create a unique filename
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${service.toLowerCase()}_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-        const filePath = `profile-pictures/${fileName}`;
-
-        // Upload to Supabase Storage
-        const { data: uploadData, error: uploadError } = await supabase.storage
-            .from('images')
-            .upload(filePath, file, {
-                cacheControl: '3600',
-                upsert: false
-            });
-
-        if (uploadError) throw uploadError;
-
-        // Get public URL
-        const { data: urlData } = supabase.storage
-            .from('images')
-            .getPublicUrl(filePath);
-
-        return urlData.publicUrl;
-
-    } catch (error) {
-        console.error('Error uploading image:', error);
-        throw error;
-    }
-}
-
-// Function to save image metadata to Supabase
-async function saveImageMetadata(imageUrl, service, keywords) {
-    try {
+        console.log("Saving image to Supabase...");
+        
+        // For now, save as Base64 directly
         const { data, error } = await supabase
             .from('profile_pictures')
             .insert([
                 {
-                    url: imageUrl,
-                    service: service,
-                    keywords: keywords,
+                    url: imageData.src, // This is Base64
+                    service: imageData.service,
+                    keywords: imageData.keywords,
                     rating: 0,
                     verified: false,
                     created_at: new Date().toISOString()
@@ -318,20 +302,37 @@ async function saveImageMetadata(imageUrl, service, keywords) {
             ])
             .select();
 
-        if (error) throw error;
+        if (error) {
+            console.error("Supabase insert error:", error);
+            throw error;
+        }
         
-        console.log('Image metadata saved to Supabase:', data);
+        console.log('Image saved to Supabase:', data[0].id);
         return data[0].id;
 
     } catch (error) {
-        console.error('Error saving image metadata:', error);
-        throw error;
+        console.error('Error saving image:', error);
+        // Fallback: save to local storage
+        const id = 'local_' + Date.now();
+        pendingUploads.push({
+            id: id,
+            src: imageData.src,
+            rating: 0,
+            service: imageData.service,
+            keywords: imageData.keywords,
+            verified: false,
+            local: true
+        });
+        return id;
     }
 }
 
 // Function to update rating in Supabase
 async function updateRatingInSupabase(imageId, rating) {
     try {
+        // Skip if it's a local image
+        if (imageId.startsWith('local_')) return;
+        
         const { error } = await supabase
             .from('profile_pictures')
             .update({ rating: rating })
@@ -363,77 +364,31 @@ fileInput.onchange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     
-    // Check file size (limit to 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-        alert("File size too large. Please upload images under 5MB.");
+    // Check file size (limit to 2MB for Base64)
+    if (file.size > 2 * 1024 * 1024) {
+        alert("File size too large. Please upload images under 2MB.");
         return;
     }
     
-    // Check file type
-    if (!file.type.match('image.*')) {
-        alert("Please select an image file.");
-        return;
-    }
-    
-    // Store the file object
-    tempImageFile = file;
-    
-    // Create preview URL
-    tempImageUrl = URL.createObjectURL(file);
-    verifyImg.src = tempImageUrl;
-    verifyBoxContainer.style.display = 'flex';
-};
-
-formatBtn.onclick = () => {
-    fileInput.click();
-    fileInput.onchange = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        const reader = new FileReader();
-        reader.onload = () => {
-            const tempImage = reader.result;
-            const service = prompt("Enter service to format for (Discord, YouTube, TikTok, Other):");
-            if (!service) return alert("Service required.");
-
-            const img = new Image();
-            img.src = tempImage;
-            img.onload = () => {
-                let width = 512, height = 512;
-                if(service.toLowerCase() === 'youtube') { width = 1280; height = 720; }
-                else if(service.toLowerCase() === 'tiktok') { width = 1080; height = 1920; }
-                // Discord default already set 512x512
-
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-
-                const a = document.createElement('a');
-                a.href = canvas.toDataURL("image/png");
-                a.download = `formatted_${service.toLowerCase()}_image.png`;
-                a.click();
-            };
-        };
-        reader.readAsDataURL(file);
+    const reader = new FileReader();
+    reader.onload = () => {
+        tempImage = reader.result;
+        verifyImg.src = tempImage;
+        verifyBoxContainer.style.display = 'flex';
     };
+    reader.readAsDataURL(file);
 };
 
 closeVerifyBtn.onclick = () => {
     verifyBoxContainer.style.display = 'none';
-    if (tempImageUrl) {
-        URL.revokeObjectURL(tempImageUrl);
-        tempImageUrl = null;
-    }
-    tempImageFile = null;
+    tempImage = null;
     keywordsInput.value = '';
     serviceSelect.value = '';
     fileInput.value = '';
 };
 
 submitVerifyBtn.onclick = async () => {
-    if (!tempImageFile || !tempImageUrl) {
+    if (!tempImage) {
         alert("No image to submit.");
         return;
     }
@@ -450,48 +405,35 @@ submitVerifyBtn.onclick = async () => {
     }
 
     // Show loading state
+    const originalText = submitVerifyBtn.textContent;
     submitVerifyBtn.textContent = 'Uploading...';
     submitVerifyBtn.disabled = true;
 
     try {
-        // 1. Upload image to Supabase Storage
-        const imageUrl = await uploadImageToStorage(tempImageFile, serviceSelect.value, keywords);
-        
-        // 2. Save metadata to database
-        const imageId = await saveImageMetadata(imageUrl, serviceSelect.value, keywords);
+        const imageData = {
+            src: tempImage,
+            service: serviceSelect.value,
+            keywords: keywords
+        };
+
+        const imageId = await saveImageToSupabase(imageData);
         
         if (imageId) {
-            // Add to pending uploads locally
-            pendingUploads.push({
-                id: imageId,
-                src: imageUrl,
-                rating: 0,
-                service: serviceSelect.value,
-                keywords: keywords,
-                verified: false
-            });
-            
-            alert("✅ Upload submitted for review! The image will appear in the gallery once verified.");
-        } else {
-            alert("Failed to save image metadata. Please try again.");
+            alert("✅ Upload submitted! The image will appear in the gallery.");
         }
         
     } catch (error) {
         console.error('Upload error:', error);
-        alert("❌ Upload failed. Please check console for details and try again.");
+        alert("⚠️ Upload saved locally. May not sync to server.");
     } finally {
         // Reset UI
         verifyBoxContainer.style.display = 'none';
-        if (tempImageUrl) {
-            URL.revokeObjectURL(tempImageUrl);
-            tempImageUrl = null;
-        }
-        tempImageFile = null;
+        tempImage = null;
         keywordsInput.value = '';
         serviceSelect.value = '';
         fileInput.value = '';
         
-        submitVerifyBtn.textContent = 'Submit for Review';
+        submitVerifyBtn.textContent = originalText;
         submitVerifyBtn.disabled = false;
         
         // Refresh display
@@ -508,10 +450,23 @@ function renderImages() {
     const allImages = [...verifiedImages, ...pendingUploads];
     
     // Filter images based on search query
-    const filteredImages = allImages.filter(img => 
-        (img.service && img.service.toLowerCase().includes(query)) || 
-        (img.keywords && img.keywords.toLowerCase().includes(query))
-    );
+    const filteredImages = allImages.filter(img => {
+        if (!img) return false;
+        const serviceMatch = img.service && img.service.toLowerCase().includes(query);
+        const keywordMatch = img.keywords && img.keywords.toLowerCase().includes(query);
+        return serviceMatch || keywordMatch;
+    });
+    
+    if (filteredImages.length === 0) {
+        const message = document.createElement('div');
+        message.style.textAlign = 'center';
+        message.style.width = '100%';
+        message.style.padding = '40px';
+        message.style.color = '#666';
+        message.textContent = query ? 'No images found for your search.' : 'No images yet. Upload one!';
+        grid.appendChild(message);
+        return;
+    }
     
     // Display filtered images
     filteredImages.forEach(img => {
@@ -522,7 +477,7 @@ function renderImages() {
         image.src = img.src;
         image.alt = `${img.service || 'Unknown'} profile picture`;
         image.onerror = function() {
-            this.src = 'https://via.placeholder.com/220x200/1a1a1a/666666?text=Image+Error';
+            this.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="200" viewBox="0 0 220 200"><rect width="100%" height="100%" fill="%231a1a1a"/><text x="50%" y="50%" fill="%23666" font-family="Arial" font-size="14" text-anchor="middle" dy=".3em">Image</text></svg>';
         };
 
         const rating = document.createElement('div');
@@ -546,38 +501,23 @@ function renderImages() {
         const dl = document.createElement('button');
         dl.className = 'downloadBtn';
         dl.textContent = "Download";
-        dl.onclick = async () => {
-            try {
-                const response = await fetch(img.src);
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `profile_${(img.service || 'unknown').toLowerCase()}_${Date.now()}.png`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-            } catch (error) {
-                console.error('Download error:', error);
-                alert('Failed to download image. Please try again.');
-            }
+        dl.onclick = () => {
+            const a = document.createElement('a');
+            a.href = img.src;
+            a.download = `profile_${(img.service || 'unknown').toLowerCase()}.png`;
+            a.click();
         };
 
         // Add verification status badge
         const statusBadge = document.createElement('div');
         statusBadge.className = img.verified ? 'verified-badge' : 'pending-badge';
-        statusBadge.textContent = img.verified ? '✓ Verified' : '⏳ Pending Review';
+        statusBadge.textContent = img.verified ? '✓ Verified' : '⏳ Pending';
 
         // Add keywords display
         const keywordsDisplay = document.createElement('div');
         keywordsDisplay.style.color = '#888';
         keywordsDisplay.style.fontSize = '12px';
         keywordsDisplay.style.textAlign = 'center';
-        keywordsDisplay.style.width = '100%';
-        keywordsDisplay.style.overflow = 'hidden';
-        keywordsDisplay.style.textOverflow = 'ellipsis';
-        keywordsDisplay.style.whiteSpace = 'nowrap';
         keywordsDisplay.textContent = `Keywords: ${img.keywords || 'None'}`;
 
         box.appendChild(image);
@@ -587,18 +527,43 @@ function renderImages() {
         box.appendChild(dl);
         grid.appendChild(box);
     });
-    
-    // Show message if no images found
-    if (filteredImages.length === 0) {
-        const message = document.createElement('div');
-        message.style.textAlign = 'center';
-        message.style.width = '100%';
-        message.style.padding = '40px';
-        message.style.color = '#666';
-        message.textContent = query ? 'No images found for your search.' : 'No images available yet. Be the first to upload one!';
-        grid.appendChild(message);
-    }
 }
+
+// Format button functionality
+formatBtn.onclick = () => {
+    fileInput.click();
+    fileInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const tempImg = reader.result;
+            const service = prompt("Enter service to format for (Discord, YouTube, TikTok, Other):");
+            if (!service) return alert("Service required.");
+
+            const img = new Image();
+            img.src = tempImg;
+            img.onload = () => {
+                let width = 512, height = 512;
+                if(service.toLowerCase() === 'youtube') { width = 1280; height = 720; }
+                else if(service.toLowerCase() === 'tiktok') { width = 1080; height = 1920; }
+                // Discord default already set 512x512
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                const a = document.createElement('a');
+                a.href = canvas.toDataURL("image/png");
+                a.download = `formatted_${service.toLowerCase()}_image.png`;
+                a.click();
+            };
+        };
+        reader.readAsDataURL(file);
+    };
+};
 </script>
 </body>
 </html>
