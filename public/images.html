@@ -7,110 +7,190 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #f0f0f0;
+      background: #0d0d0d;
       margin: 0;
-      padding: 40px;
+      padding: 0;
+      color: white;
+    }
+
+    header {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 100%;
+      background: #1a1a1a;
+      padding: 12px 20px;
       display: flex;
-      justify-content: center;
+      justify-content: flex-end;
+      gap: 12px;
+      align-items: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      z-index: 10;
+    }
+
+    #searchInput {
+      width: 160px;
+      padding: 6px;
+      border-radius: 6px;
+      border: none;
+      background: #2a2a2a;
+      color: white;
+    }
+
+    #uploadInput {
+      padding: 6px;
+      background: #333;
+      border: none;
+      border-radius: 6px;
+      color: white;
+    }
+
+    #container {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 18px;
+      padding: 120px 20px 40px;
     }
 
     .box {
-      width: 350px;
-      background: #fff;
-      border-radius: 16px;
-      padding: 20px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-      display: flex;
-      flex-direction: column;
-      position: relative;
+      background: #1c1c1c;
+      padding: 14px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
     }
 
     .title {
       text-align: left;
-      font-size: 20px;
-      font-weight: bold;
-      margin-bottom: 12px;
+      font-size: 16px;
+      margin-bottom: 8px;
     }
 
     .image {
       width: 100%;
-      border-radius: 12px;
-      display: block;
+      aspect-ratio: 1/1;
+      border-radius: 50%;
+      object-fit: cover;
       margin: 0 auto;
+      display: block;
     }
 
     .bottom-row {
+      margin-top: 10px;
       display: flex;
       justify-content: space-between;
-      margin-top: 12px;
-      font-size: 14px;
+      font-size: 12px;
     }
-    .rating-stats { text-align: right; }
-    .category { text-align: left; }
 
-    .rating-stars {
+    .rating-stars span {
+      cursor: pointer;
+      font-size: 18px;
+    }
+
+    .download {
       margin-top: 6px;
-      text-align: left;
-      font-size: 16px;
-      letter-spacing: 2px;
+      text-align: right;
+    }
+
+    .download button {
+      background: #333;
+      border: none;
+      padding: 6px 10px;
+      border-radius: 6px;
+      color: white;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
 
-  <div class="box">
-    <div class="title">Title Here</div>
-    <img class="image" src="image.png" alt="Image" />
+<header>
+  <input type="file" id="uploadInput" accept="image/*" />
+  <input type="text" id="searchInput" placeholder="Search..." />
+</header>
 
-    <div class="bottom-row">
-      <div class="rating-stats">Rating: 4.5/5</div>
-      <div class="category">Category: Example</div>
-    </div>
-      <div class="category">Category: Example</div>
-    </div>
+<div id="container"></div>
 
-    <div class="rating-stars" style="text-align:right;">★★★★★</div>
-  </div>
+<script>
+  const container = document.getElementById('container');
+  const uploadInput = document.getElementById('uploadInput');
+  const searchInput = document.getElementById('searchInput');
 
-  <header style="position:fixed; top:0; left:0; width:100%; background:#ffffffee; padding:15px; display:flex; gap:20px; align-items:center; box-shadow:0 2px 8px rgba(0,0,0,0.1); z-index:10;">
-    <input type="file" id="uploadInput" accept="image/*" />
-    <input type="text" id="searchInput" placeholder="Search..." style="flex:1; padding:8px; border-radius:8px; border:1px solid #ccc;" />
-  </header>
+  function createBox(src, name = 'Discord PFP') {
+    const box = document.createElement('div');
+    box.className = 'box';
 
-  <script>
-    const uploadInput = document.getElementById('uploadInput');
-    const container = document.createElement('div');
-    container.style.display = 'grid';
-    container.style.gridTemplateColumns = 'repeat(6, 1fr)';
-    container.style.gap = '20px';
-    container.style.marginTop = '100px';
-    document.body.appendChild(container);
+    const title = document.createElement('div');
+    title.className = 'title';
+    title.textContent = name;
 
-    function createBox(src, title='User Upload', category='PFP', rating='5/5') {
-      const box = document.createElement('div');
-      box.className = 'box';
+    const img = document.createElement('img');
+    img.className = 'image';
+    img.src = src;
 
-      const html = `
-        <div class="title">${title}</div>
-        <img class="image" src="${src}" />
-        <div class="bottom-row">
-          <div class="rating-stats">Rating: ${rating}</div>
-          <div class="category">${category}</div>
-        </div>
-        <div class="rating-stars">★★★★★</div>
-      `;
+    const ratingRow = document.createElement('div');
+    ratingRow.className = 'rating-stars';
 
-      box.innerHTML = html;
-      container.appendChild(box);
+    let rating = 0;
+
+    for (let i = 1; i <= 5; i++) {
+      const star = document.createElement('span');
+      star.textContent = '★';
+      star.style.color = '#555';
+      star.dataset.value = i;
+
+      star.onclick = () => {
+        rating = i;
+        updateStars();
+      };
+
+      ratingRow.appendChild(star);
     }
 
-    uploadInput.addEventListener('change', function() {
-      const file = this.files[0];
-      if (!file) return;
-      const url = URL.createObjectURL(file);
-      createBox(url);
+    function updateStars() {
+      [...ratingRow.children].forEach(star => {
+        star.style.color = star.dataset.value <= rating ? '#f5b301' : '#555';
+      });
+    }
+
+    const downloadDiv = document.createElement('div');
+    downloadDiv.className = 'download';
+
+    const downloadBtn = document.createElement('button');
+    downloadBtn.textContent = 'Download';
+    downloadBtn.onclick = () => {
+      const a = document.createElement('a');
+      a.href = src;
+      a.download = 'pfp.png';
+      a.click();
+    };
+
+    downloadDiv.appendChild(downloadBtn);
+
+    box.appendChild(title);
+    box.appendChild(img);
+    box.appendChild(ratingRow);
+    box.appendChild(downloadDiv);
+
+    container.appendChild(box);
+  }
+
+  uploadInput.addEventListener('change', function() {
+    const file = this.files[0];
+    if (!file) return;
+
+    const url = URL.createObjectURL(file);
+    createBox(url, file.name);
+  });
+
+  searchInput.addEventListener('input', function() {
+    const query = this.value.toLowerCase();
+
+    [...container.children].forEach(box => {
+      const title = box.querySelector('.title').textContent.toLowerCase();
+      box.style.display = title.includes(query) ? 'block' : 'none';
     });
-  </script>
+  });
+</script>
 
 </body>
 </html>
