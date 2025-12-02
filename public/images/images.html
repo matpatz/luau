@@ -289,7 +289,7 @@ async function loadImagesFromSupabase() {
             .select('*')
             .eq('verified', true)
             .order('created_at', { ascending: false })
-            .limit(100); // Limit to prevent overfetching
+            .limit(100);
 
         if (error) throw error;
 
@@ -305,20 +305,11 @@ async function loadImagesFromSupabase() {
 
         lastFetchTime = Date.now();
         renderImages();
-        
-        localStorage.setItem('cachedImages', JSON.stringify({
-            images: verifiedImages,
-            timestamp: lastFetchTime
-        }));
-        
+
     } catch (error) {
         console.error('Error loading images:', error);
-        const cached = localStorage.getItem('cachedImages');
-        if (cached) {
-            const cacheData = JSON.parse(cached);
-            verifiedImages = cacheData.images || [];
-            renderImages();
-        }
+        // just render whatever is in memory
+        renderImages();
     }
 }
 
