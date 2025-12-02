@@ -1,185 +1,148 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
 <script>
-const SUPABASE_URL = 'https://erctbeaqvqxjsrdjzonw.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVyY3RiZWFxdnF4anNyZGp6b253Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MzE2OTgsImV4cCI6MjA4MDIwNzY5OH0.Yal4o1NDY7p5W822mX7kaigTpPakTyygKLlp67ic6Kg';
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+document.addEventListener('DOMContentLoaded', () => {
+    const SUPABASE_URL = 'https://erctbeaqvqxjsrdjzonw.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVyY3RiZWFxdnF4anNyZGp6b253Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MzE2OTgsImV4cCI6MjA4MDIwNzY5OH0.Yal4o1NDY7p5W822mX7kaigTpPakTyygKLlp67ic6Kg';
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-let tempImage = null;
-let currentAction = null; // "upload" or "format"
+    let tempImage = null;
+    let currentAction = null;
 
-const fileInput = document.getElementById('fileInput');
-const uploadBtn = document.getElementById('uploadBtn');
-const formatBtn = document.getElementById('formatBtn');
-const verifyBoxContainer = document.getElementById('verifyBoxContainer');
-const verifyImg = document.getElementById('verifyImg');
-const keywordsInput = document.getElementById('keywordsInput');
-const serviceSelect = document.getElementById('serviceSelect');
-const submitVerifyBtn = document.getElementById('submitVerifyBtn');
-const searchBox = document.getElementById('search');
+    const fileInput = document.getElementById('fileInput');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const formatBtn = document.getElementById('formatBtn');
+    const verifyBoxContainer = document.getElementById('verifyBoxContainer');
+    const verifyImg = document.getElementById('verifyImg');
+    const keywordsInput = document.getElementById('keywordsInput');
+    const serviceSelect = document.getElementById('serviceSelect');
+    const submitVerifyBtn = document.getElementById('submitVerifyBtn');
+    const searchBox = document.getElementById('search');
+    const imageGrid = document.getElementById('imageGrid');
 
-// ---- BUTTON CLICKS ----
-uploadBtn.onclick = () => {
-    currentAction = 'upload';
-    fileInput.click();
-};
+    // --- BUTTONS ---
+    uploadBtn.onclick = () => { currentAction = 'upload'; fileInput.click(); };
+    formatBtn.onclick = () => { currentAction = 'format'; fileInput.click(); };
 
-formatBtn.onclick = () => {
-    currentAction = 'format';
-    fileInput.click();
-};
+    // --- FILE SELECTION ---
+    fileInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        tempImage = file;
+        if (currentAction === 'upload') {
+            const reader = new FileReader();
+            reader.onload = () => {
+                verifyImg.src = reader.result;
+                verifyBoxContainer.style.display = 'flex';
+            };
+            reader.readAsDataURL(file);
+        } else if (currentAction === 'format') {
+            handleFormat(file);
+        }
+    };
 
-// ---- FILE SELECTION ----
-fileInput.onchange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    // --- SUBMIT ---
+    submitVerifyBtn.onclick = async () => {
+        if (!tempImage) return alert("No image selected");
+        if (!serviceSelect.value) return alert("Select a service");
+        const keywords = keywordsInput.value.trim();
+        if (!keywords) return alert("Enter keywords");
 
-    tempImage = file;
+        try {
+            const fileName = `${Date.now()}_${tempImage.name}`;
+            const { data: uploadData, error: uploadError } = await supabase.storage.from('pfps').upload(fileName, tempImage, { upsert: true });
+            if (uploadError) throw uploadError;
 
-    if (currentAction === 'upload') {
-        // show preview & verification box
+            const { data: { publicUrl }, error: urlError } = supabase.storage.from('pfps').getPublicUrl(fileName);
+            if (urlError) throw urlError;
+
+            const { error: dbError } = await supabase.from('images').insert([{ url: publicUrl, service: serviceSelect.value, keywords, rating: 0, verified: false }]);
+            if (dbError) throw dbError;
+
+            alert("Upload submitted for verification!");
+            tempImage = null;
+            verifyBoxContainer.style.display = 'none';
+            keywordsInput.value = '';
+            serviceSelect.value = '';
+            loadImages();
+        } catch (err) {
+            console.error(err);
+            alert("Upload failed: " + err.message);
+        }
+    };
+
+    // --- LOAD & RENDER ---
+    async function loadImages() {
+        try {
+            const { data: images, error } = await supabase.from('images').select('*').eq('verified', true).order('created_at', { ascending: false });
+            if (error) throw error;
+            renderImages(images);
+        } catch (err) { console.error(err); }
+    }
+
+    function renderImages(images) {
+        imageGrid.innerHTML = '';
+        const query = searchBox.value.toLowerCase();
+        images.filter(img => img.service?.toLowerCase().includes(query) || img.keywords?.toLowerCase().includes(query))
+            .forEach(img => {
+                const box = document.createElement('div');
+                box.className = 'imgBox';
+
+                const image = document.createElement('img');
+                image.src = img.url;
+
+                const rating = document.createElement('div');
+                rating.className = 'rating';
+                for (let i = 1; i <= 5; i++) {
+                    const star = document.createElement('span');
+                    star.textContent = i <= img.rating ? '★' : '☆';
+                    star.onclick = async () => { await supabase.from('images').update({ rating: i }).eq('id', img.id); loadImages(); };
+                    rating.appendChild(star);
+                }
+
+                const dl = document.createElement('button');
+                dl.className = 'downloadBtn';
+                dl.textContent = 'Download';
+                dl.onclick = () => { const a = document.createElement('a'); a.href = img.url; a.download = 'profile.png'; a.click(); };
+
+                box.appendChild(image);
+                box.appendChild(rating);
+                box.appendChild(dl);
+                imageGrid.appendChild(box);
+            });
+    }
+
+    // --- FORMAT ---
+    function handleFormat(file) {
         const reader = new FileReader();
         reader.onload = () => {
-            verifyImg.src = reader.result;
-            verifyBoxContainer.style.display = 'flex';
-        };
-        reader.readAsDataURL(file);
-    } else if (currentAction === 'format') {
-        handleFormat(file);
-    }
-};
+            const imgData = reader.result;
+            const service = prompt('Enter service to format (Discord, YouTube, TikTok, Other):');
+            if (!service) return alert('Service required.');
 
-// ---- SUBMIT FOR VERIFICATION ----
-submitVerifyBtn.onclick = async () => {
-    if (!tempImage) return alert("No image selected");
-    if (!serviceSelect.value) return alert("Select a service");
-    const keywords = keywordsInput.value.trim();
-    if (!keywords) return alert("Enter keywords");
+            const img = new Image();
+            img.src = imgData;
+            img.onload = () => {
+                let width = 512, height = 512;
+                if(service.toLowerCase() === 'youtube') { width = 1280; height = 720; }
+                else if(service.toLowerCase() === 'tiktok') { width = 1080; height = 1920; }
 
-    try {
-        const fileName = `${Date.now()}_${tempImage.name}`;
-        // Upload image
-        const { data: uploadData, error: uploadError } = await supabase
-            .storage
-            .from('pfps')
-            .upload(fileName, tempImage, { upsert: true });
-        if (uploadError) throw uploadError;
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
 
-        // Get public URL
-        const { data: { publicUrl }, error: urlError } = supabase
-            .storage
-            .from('pfps')
-            .getPublicUrl(fileName);
-        if (urlError) throw urlError;
-
-        // Insert metadata
-        const { error: dbError } = await supabase
-            .from('images')
-            .insert([{ url: publicUrl, service: serviceSelect.value, keywords, rating: 0, verified: false }]);
-        if (dbError) throw dbError;
-
-        alert("Upload submitted for verification!");
-        tempImage = null;
-        verifyBoxContainer.style.display = 'none';
-        keywordsInput.value = '';
-        serviceSelect.value = '';
-        loadImages();
-    } catch (err) {
-        console.error(err);
-        alert("Upload failed: " + err.message);
-    }
-};
-
-// ---- LOAD VERIFIED IMAGES ----
-async function loadImages() {
-    try {
-        const { data: images, error } = await supabase
-            .from('images')
-            .select('*')
-            .eq('verified', true)
-            .order('created_at', { ascending: false });
-        if (error) throw error;
-        renderImages(images);
-    } catch (err) {
-        console.error(err);
-    }
-}
-
-// ---- RENDER GRID ----
-function renderImages(images) {
-    const grid = document.getElementById('imageGrid');
-    grid.innerHTML = '';
-    const query = searchBox.value.toLowerCase();
-
-    images.filter(img => img.service?.toLowerCase().includes(query) || img.keywords?.toLowerCase().includes(query))
-        .forEach(img => {
-            const box = document.createElement('div');
-            box.className = 'imgBox';
-
-            const image = document.createElement('img');
-            image.src = img.url;
-
-            const rating = document.createElement('div');
-            rating.className = 'rating';
-            for (let i = 1; i <= 5; i++) {
-                const star = document.createElement('span');
-                star.textContent = i <= img.rating ? '★' : '☆';
-                star.onclick = async () => {
-                    await supabase.from('images').update({ rating: i }).eq('id', img.id);
-                    loadImages();
-                };
-                rating.appendChild(star);
-            }
-
-            const dl = document.createElement('button');
-            dl.className = 'downloadBtn';
-            dl.textContent = 'Download';
-            dl.onclick = () => {
                 const a = document.createElement('a');
-                a.href = img.url;
-                a.download = 'profile.png';
+                a.href = canvas.toDataURL('image/png');
+                a.download = `formatted_${service.toLowerCase()}_image.png`;
                 a.click();
             };
-
-            box.appendChild(image);
-            box.appendChild(rating);
-            box.appendChild(dl);
-            grid.appendChild(box);
-        });
-}
-
-// ---- FORMAT IMAGE FUNCTION ----
-function handleFormat(file) {
-    const reader = new FileReader();
-    reader.onload = () => {
-        const imgData = reader.result;
-        const service = prompt('Enter service to format (Discord, YouTube, TikTok, Other):');
-        if (!service) return alert('Service required.');
-
-        const img = new Image();
-        img.src = imgData;
-        img.onload = () => {
-            let width = 512, height = 512;
-            if (service.toLowerCase() === 'youtube') { width = 1280; height = 720; }
-            else if (service.toLowerCase() === 'tiktok') { width = 1080; height = 1920; }
-
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, width, height);
-
-            const a = document.createElement('a');
-            a.href = canvas.toDataURL('image/png');
-            a.download = `formatted_${service.toLowerCase()}_image.png`;
-            a.click();
         };
-    };
-    reader.readAsDataURL(file);
-}
+        reader.readAsDataURL(file);
+    }
 
-// ---- SEARCH ----
-searchBox.addEventListener('input', loadImages);
+    searchBox.addEventListener('input', loadImages);
 
-// ---- INITIAL LOAD ----
-window.onload = loadImages;
+    loadImages(); // initial load
+});
 </script>
