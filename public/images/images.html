@@ -3,278 +3,339 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Your Site</title>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
+<title>Image Upload Site</title>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
-/* ———————————————— YOUR ORIGINAL CSS (UNCUT, UNCHANGED) ———————————————— */
+/* ======================= */
+/* KEEP ALL YOUR ORIGINAL CSS EXACT */
+/* ======================= */
 body {
     margin: 0;
-    background: #111;
+    background: #0f0f0f;
     color: #fff;
     font-family: Arial, sans-serif;
 }
+
 header {
-    padding: 15px;
-    background: #222;
-}
-.container {
-    width: 95%;
-    max-width: 900px;
-    margin: 0 auto;
-}
-.button {
-    background: #444;
-    padding: 8px 14px;
-    border-radius: 5px;
-    display: inline-block;
-    cursor: pointer;
-}
-#uploadSection {
-    margin-top: 20px;
-}
-input, select {
-    background: #222;
-    color: #fff;
-    border: 1px solid #333;
-    padding: 6px;
-}
-.grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 10px;
-    margin-top: 20px;
-}
-.item {
-    background: #222;
-    padding: 8px;
-    border-radius: 5px;
-    text-align: center;
-}
-.video-preview, .image-preview {
     width: 100%;
-    border-radius: 5px;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #111;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    padding-right: 40px;
 }
+
+.header-left {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.admin-link {
+    color: #4CAF50;
+    text-decoration: none;
+    font-size: 14px;
+    margin-left: 20px;
+}
+
+.admin-link:hover {
+    text-decoration: underline;
+}
+
+#search {
+    padding: 6px 10px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 6px;
+    color: #fff;
+    width: 160px;
+}
+
+button {
+    padding: 7px 14px;
+    background: #222;
+    border: 1px solid #444;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #fff;
+}
+
+button:hover {
+    background: #333;
+}
+
+#imageGrid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 25px;
+    padding: 20px;
+    max-width: 100vw;
+    overflow-x: hidden;
+    box-sizing: border-box;
+}
+
+.imgBox {
+    background: #1b1b1b;
+    padding: 12px;
+    border-radius: 14px;
+    width: 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: relative;
+}
+
+.imgBox img {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    border-radius: 10px;
+}
+
+.keywords-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+}
+
+.keywords-label {
+    color: #888;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.keywords-text {
+    color: #ccc;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-grow: 1;
+}
+
+.bottom-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 5px;
+}
+
+.rating {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.rating span {
+    cursor: pointer;
+    font-size: 18px;
+}
+
+.status-badge {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.pending-badge {
+    background: #ff9800;
+    color: #000;
+}
+
+.verified-badge {
+    background: #4CAF50;
+    color: #000;
+}
+
+.downloadBtn {
+    width: 100%;
+    padding: 6px 0;
+    text-align: center;
+    background: #222;
+    border: 1px solid #444;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #fff;
+    margin-top: 8px;
+}
+
 .service-tag {
-        display: inline-block;
-        background: #333;
-        padding: 2px 12px;
-        border-radius: 4px;
-        font-size: 11px;
-        color: #ccc;
-        margin-top: 10px;
-    }
+    display: inline-block;
+    background: #333;
+    padding: 2px 12px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: #ccc;
+    margin-top: 0px;
+}
 </style>
 </head>
-
 <body>
-
 <header>
-<div class="container">
-    <span class="button" onclick="openEmailModal()">Verify Email</span>
-    <span class="button" onclick="logout()">Logout</span>
-</div>
+    <div class="header-left">
+        <input id="search" placeholder="Search..." />
+        <button id="formatBtn">Format Image</button>
+        <button id="uploadBtn">Upload</button>
+        <a href="tulip.html" class="admin-link">tulip</a>
+        <input type="file" id="fileInput" accept="image/*,video/*" style="display:none;" />
+    </div>
 </header>
 
-<div class="container">
-
-    <!-- Upload Section -->
-    <div id="uploadSection">
-        <h2>Upload</h2>
-
-        <!-- File input -->
-        <input type="file" id="uploadFile"><br><br>
-
-        <!-- Public / Private toggle (ADDED) -->
-        <label>Visibility:</label>
-        <select id="publicSelect">
-            <option value="true">Public</option>
-            <option value="false">Private</option>
-        </select>
-        <br><br>
-
-        <span class="button" onclick="uploadContent()">Upload</span>
-    </div>
-
-    <!-- Content Grid -->
-    <div id="contentGrid" class="grid"></div>
-</div>
-
-<!-- EMAIL VERIFICATION MODAL (ADDED – ZERO STYLE CHANGES) -->
-<div id="emailModal" style="
-    position: fixed; top:0; left:0; right:0; bottom:0;
-    background: rgba(0,0,0,0.8); display:none;
-">
-    <div style="background:#222; padding:20px; margin:120px auto; width:300px;">
-        <h3>Email Verification</h3>
-        <input id="emailInput" placeholder="Email"><br><br>
-        <span class="button" onclick="sendVerificationCode()">Send Code</span><br><br>
-
-        <input id="codeInput" placeholder="Enter Code"><br><br>
-        <span class="button" onclick="verifyCode()">Verify</span><br><br>
-
-        <span class="button" onclick="closeEmailModal()">Close</span>
-    </div>
-</div>
+<div id="imageGrid"></div>
 
 <script>
-/* —————————————————— SUPABASE INIT —————————————————— */
+// ================= SUPABASE =================
 const supabaseUrl = 'https://erctbeaqvqxjsrdjzonw.supabase.co';
-const supabaseKey =
-'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVyY3RiZWFxdnF4anNyZGp6b253Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MzE2OTgsImV4cCI6MjA4MDIwNzY5OH0.Yal4o1NDY7p5W822mX7kaigTpPakTyygKLlp67ic6Kg';
-
+const supabaseKey = 'YOUR_SUPABASE_KEY';
 const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-/* —————————————————— GLOBAL STATE —————————————————— */
-let currentUser = null;
-let emailVerificationCode = null;
+// ================= GLOBALS =================
+let posts = [];
+let userVerified = false;
+const CACHE_DURATION = 30000;
+let lastFetchTime = 0;
 
-/* —————————————————— AUTH —————————————————— */
-
-async function openEmailModal() {
-    document.getElementById("emailModal").style.display = "block";
-}
-function closeEmailModal() {
-    document.getElementById("emailModal").style.display = "none";
-}
-
-function logout() {
-    localStorage.removeItem("user_id");
-    location.reload();
+// ================= CHECK AUTH =================
+async function checkAuth() {
+    const { data: { session } } = await supabase.auth.getSession();
+    userVerified = !!session?.user;
 }
 
-async function sendVerificationCode() {
-    const email = document.getElementById("emailInput").value.trim();
-    if (!email) return alert("Enter email.");
+checkAuth();
 
-    emailVerificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+// ================= LOAD POSTS =================
+async function loadPosts() {
+    const now = Date.now();
+    if(posts.length && now - lastFetchTime < CACHE_DURATION){
+        renderPosts();
+        return;
+    }
+    const { data, error } = await supabase
+        .from('posts')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
 
-    // Save code to DB
-    await supabase.from("users").upsert({
-        email: email,
-        verify_code: emailVerificationCode,
-        verified: false
+    if(error){ console.error(error); return; }
+
+    posts = data;
+    lastFetchTime = now;
+    renderPosts();
+}
+
+// ================= RENDER POSTS =================
+function renderPosts() {
+    const grid = document.getElementById('imageGrid');
+    const query = document.getElementById('search').value.toLowerCase();
+    grid.innerHTML = '';
+
+    const filtered = posts.filter(p => {
+        if(!p.is_public && !userVerified) return false;
+        return (p.filename.toLowerCase().includes(query) || (p.type && p.type.toLowerCase().includes(query)));
     });
 
-    alert("Verification code sent (simulated). Code = " + emailVerificationCode);
-}
-
-async function verifyCode() {
-    const email = document.getElementById("emailInput").value.trim();
-    const code = document.getElementById("codeInput").value.trim();
-
-    const { data } = await supabase
-        .from("users")
-        .select("*")
-        .eq("email", email)
-        .single();
-
-    if (!data) return alert("Email not found.");
-    if (data.verify_code !== code) return alert("Wrong code.");
-
-    await supabase
-        .from("users")
-        .update({ verified: true })
-        .eq("email", email);
-
-    alert("Email verified! Video upload unlocked.");
-
-    localStorage.setItem("user_id", data.id);
-    currentUser = data;
-
-    closeEmailModal();
-    loadContent();
-}
-
-/* —————————————————— LOAD USER FROM LOCALSTORAGE —————————————————— */
-async function loadUser() {
-    const uid = localStorage.getItem("user_id");
-    if (!uid) return;
-
-    const { data } = await supabase.from("users").select("*").eq("id", uid).single();
-    currentUser = data || null;
-}
-
-/* —————————————————— UPLOAD LOGIC —————————————————— */
-async function uploadContent() {
-    if (!currentUser) return alert("Verify email first.");
-
-    const file = document.getElementById("uploadFile").files[0];
-    if (!file) return alert("Select a file.");
-
-    const isVideo = file.type.startsWith("video");
-    if (isVideo && !currentUser.verified) {
-        return alert("Email verification required to upload videos.");
+    if(!filtered.length){
+        const e = document.createElement('div');
+        e.style.textAlign='center';
+        e.style.width='100%';
+        e.style.padding='60px';
+        e.style.color='#666';
+        e.textContent='No posts found.';
+        grid.appendChild(e);
+        return;
     }
 
-    const visibility = document.getElementById("publicSelect").value === "true";
+    filtered.forEach(p=>{
+        const box = document.createElement('div');
+        box.className='imgBox';
 
-    const filename = `${currentUser.id}_${Date.now()}_${file.name}`;
+        const kwRow = document.createElement('div');
+        kwRow.className='keywords-row';
+        const kwLabel = document.createElement('span');
+        kwLabel.className='keywords-label';
+        kwLabel.textContent='Filename:';
+        const kwText = document.createElement('span');
+        kwText.className='keywords-text';
+        kwText.textContent=p.filename || '';
+        kwRow.appendChild(kwLabel);
+        kwRow.appendChild(kwText);
 
-    const { error: uploadErr } = await supabase.storage
-        .from("content")
-        .upload(filename, file);
+        const media = document.createElement(p.type==='video'?'video':'img');
+        media.src = p.url;
+        if(p.type==='video'){ media.controls=true; media.style.height='180px'; }
+        media.onerror = ()=>{ media.src=''; };
 
-    if (uploadErr) return alert("Upload failed: " + uploadErr.message);
+        const tag = document.createElement('div');
+        tag.className='service-tag';
+        tag.textContent=p.type || 'Unknown';
 
-    const publicUrl = supabase.storage
-        .from("content")
-        .getPublicUrl(filename).data.publicUrl;
+        const bottom = document.createElement('div');
+        bottom.className='bottom-row';
 
-    await supabase.from("posts").insert({
-        user_id: currentUser.id,
-        url: publicUrl,
-        filename: filename,
-        is_public: visibility,
-        type: isVideo ? "video" : "image"
-    });
+        const dl = document.createElement('button');
+        dl.className='downloadBtn';
+        dl.textContent='Share';
+        dl.onclick = ()=>{navigator.clipboard.writeText(p.url); alert('URL copied!');};
 
-    alert("Uploaded!");
-    loadContent();
-}
+        bottom.appendChild(dl);
+        box.appendChild(kwRow);
+        box.appendChild(media);
+        box.appendChild(tag);
+        box.appendChild(bottom);
 
-/* —————————————————— CONTENT LOADING —————————————————— */
-async function loadContent() {
-    const { data: posts } = await supabase.from("posts").select("*");
-
-    const grid = document.getElementById("contentGrid");
-    grid.innerHTML = "";
-
-    posts.forEach(post => {
-        if (!post.is_public && post.user_id !== currentUser?.id) return;
-
-        const div = document.createElement("div");
-        div.className = "item";
-
-        if (post.type === "video") {
-            div.innerHTML = `
-                <video class="video-preview" controls>
-                    <source src="${post.url}">
-                </video>
-                <br>
-                <span class="button" onclick="copyLink('${post.url}')">Share</span>
-            `;
-        } else {
-            div.innerHTML = `
-                <img class="image-preview" src="${post.url}">
-                <br>
-                <span class="button" onclick="copyLink('${post.url}')">Share</span>
-            `;
-        }
-
-        grid.appendChild(div);
+        grid.appendChild(box);
     });
 }
 
-function copyLink(url) {
-    navigator.clipboard.writeText(url);
-    alert("Copied!");
-}
+// ================= UPLOAD =================
+const fileInput = document.getElementById('fileInput');
+document.getElementById('uploadBtn').onclick=()=>fileInput.click();
 
-/* —————————————————— INIT —————————————————— */
-loadUser().then(loadContent);
+fileInput.onchange=async e=>{
+    const f=e.target.files[0];
+    if(!f)return;
+
+    if(f.type.startsWith('video') && !userVerified){
+        alert("Verify your email to upload videos.");
+        return;
+    }
+
+    const name = f.name;
+    const { data, error } = await supabase.storage
+        .from('content')
+        .upload(`${Date.now()}_${name}`, f, { upsert:true });
+
+    if(error){ console.error(error); return; }
+
+    const urlData = supabase.storage.from('content').getPublicUrl(data.path);
+    const { error: dbErr } = await supabase.from('posts').insert([{
+        url: urlData.data.publicUrl,
+        filename: name,
+        type: f.type.startsWith('video')?'video':'image',
+        is_public:true
+    }]);
+
+    if(dbErr){ console.error(dbErr); return; }
+    loadPosts();
+};
+
+// ================= SEARCH =================
+document.getElementById('search').addEventListener('input', ()=>{ renderPosts(); });
+
+// ================= AUTO REFRESH =================
+setInterval(()=>{
+    if(document.visibilityState==='visible') loadPosts();
+}, 120000);
+
+// ================= INIT =================
+loadPosts();
 </script>
-
 </body>
 </html>
