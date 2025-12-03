@@ -556,28 +556,40 @@ async function loadImages() {
     }
 }
 
-// Save image
+// Save image - FIXED VERSION
 async function saveImage(imageData) {
     try {
+        // Create a smaller data URL if it's too large
+        let imageSrc = imageData.src;
+        
+        // If data URL is too large (> 1MB), compress it
+        if (imageSrc.length > 1000000) { // 1MB in characters
+            console.log('Compressing large image...');
+            imageSrc = await compressImage(imageSrc);
+        }
+        
         const { data, error } = await supabase
             .from('profile_pictures')
             .insert([
                 {
-                    url: imageData.src,
+                    url: imageSrc, // Use potentially compressed version
                     service: imageData.service,
                     keywords: imageData.keywords,
                     rating: 0,
                     views: 0,
                     verified: true,
                     type: imageData.type || 'image',
-                    user_id: currentUser?.id || null,
+                    user_id: getUserId(),
                     created_at: new Date().toISOString()
                 }
             ])
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+            console.error('Supabase error:', error);
+            throw error;
+        }
         
         console.log('Image saved with ID:', data.id);
         return data.id;
@@ -586,6 +598,38 @@ async function saveImage(imageData) {
         console.error('Error saving image:', error);
         return null;
     }
+}
+
+// Helper function to compress image
+function compressImage(dataUrl) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            // Calculate new dimensions (max 800px)
+            let width = img.width;
+            let height = img.height;
+            const maxSize = 800;
+            
+            if (width > height && width > maxSize) {
+                height = (height * maxSize) / width;
+                width = maxSize;
+            } else if (height > maxSize) {
+                width = (width * maxSize) / height;
+                height = maxSize;
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // Compress to JPEG with 0.8 quality
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            resolve(compressedDataUrl);
+        };
+        img.src = dataUrl;
+    });
 }
 
 // Increment view count (only once per session per image)
@@ -727,7 +771,7 @@ searchBox.addEventListener('input', () => {
 
 sortFilter.addEventListener('change', renderImages);
 
-// Upload functionality
+// Upload functionality - FIXED VERSION
 const fileInput = document.getElementById('fileInput');
 const uploadBtn = document.getElementById('uploadBtn');
 const uploadNotice = document.getElementById('uploadNotice');
@@ -743,7 +787,26 @@ fileInput.onchange = async (e) => {
     const isGif = file.type === 'image/gif';
     
     // Check if user is verified for GIF/video upload
-    if ((isVideo || isGif) && (!currentUser || !currentUser.verified)) {
+    const userId = getUserId();
+    let userCanUploadGifs = false;
+    
+    try {
+        // Check if user is verified for GIF uploads
+        const { data: userData } = await supabase
+            .from('verified_users')
+            .select('can_upload_gifs')
+            .eq('user_id', userId)
+            .single();
+        
+        if (userData && userData.can_upload_gifs) {
+            userCanUploadGifs = true;
+        }
+    } catch (error) {
+        // User not found or not verified
+        console.log('User not verified for GIF uploads');
+    }
+    
+    if ((isVideo || isGif) && !userCanUploadGifs) {
         uploadNotice.classList.add('show');
         setTimeout(() => uploadNotice.classList.remove('show'), 3000);
         fileInput.value = '';
@@ -751,14 +814,16 @@ fileInput.onchange = async (e) => {
     }
     
     // Size validation
-    const maxSize = isVideo ? 10 * 1024 * 1024 : 2 * 1024 * 1024;
+    const maxSize = isVideo ? 10 * 1024 * 1024 : 2 * 1024 * 1024; // 10MB for videos, 2MB for images
     if (file.size > maxSize) {
         alert(`Max size: ${maxSize / 1024 / 1024}MB`);
+        fileInput.value = '';
         return;
     }
     
     const keywords = prompt("Enter keywords for this image (comma separated):");
-    if (!keywords) {
+    if (!keywords || keywords.trim() === '') {
+        alert('Keywords are required.');
         fileInput.value = '';
         return;
     }
@@ -785,17 +850,24 @@ fileInput.onchange = async (e) => {
                 alert("Image uploaded successfully!");
                 loadImages(); // Refresh the gallery
             } else {
-                alert("Upload failed.");
+                alert("Upload failed. The image might be too large or there was a server error.");
             }
             
         } catch (error) {
             console.error('Upload error:', error);
-            alert("Upload failed.");
+            alert("Upload failed. Please try again with a smaller image.");
         } finally {
             uploadBtn.textContent = originalText;
             uploadBtn.disabled = false;
             fileInput.value = '';
         }
+    };
+    
+    reader.onerror = () => {
+        alert('Error reading file. Please try again.');
+        uploadBtn.textContent = 'Upload Image';
+        uploadBtn.disabled = false;
+        fileInput.value = '';
     };
     
     reader.readAsDataURL(file);
