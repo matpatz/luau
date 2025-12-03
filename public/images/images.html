@@ -3,339 +3,607 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Image Upload Site</title>
+<title>Profile Pictures</title>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
-/* ======================= */
-/* KEEP ALL YOUR ORIGINAL CSS EXACT */
-/* ======================= */
-body {
-    margin: 0;
-    background: #0f0f0f;
-    color: #fff;
-    font-family: Arial, sans-serif;
-}
+    body {
+        margin: 0;
+        background: #0f0f0f;
+        color: #fff;
+        font-family: Arial, sans-serif;
+    }
 
-header {
-    width: 100%;
-    padding: 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: #111;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    padding-right: 40px;
-}
+    header {
+        width: 100%;
+        padding: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #111;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        padding-right: 40px;
+    }
 
-.header-left {
-    display: flex;
-    gap: 15px;
-    align-items: center;
-}
+    .header-left {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+    }
 
-.admin-link {
-    color: #4CAF50;
-    text-decoration: none;
-    font-size: 14px;
-    margin-left: 20px;
-}
+    .admin-link {
+        color: #4CAF50;
+        text-decoration: none;
+        font-size: 14px;
+        margin-left: 20px;
+    }
 
-.admin-link:hover {
-    text-decoration: underline;
-}
+    .admin-link:hover {
+        text-decoration: underline;
+    }
 
-#search {
-    padding: 6px 10px;
-    background: #1a1a1a;
-    border: 1px solid #333;
-    border-radius: 6px;
-    color: #fff;
-    width: 160px;
-}
+    #search {
+        padding: 6px 10px;
+        background: #1a1a1a;
+        border: 1px solid #333;
+        border-radius: 6px;
+        color: #fff;
+        width: 160px;
+    }
 
-button {
-    padding: 7px 14px;
-    background: #222;
-    border: 1px solid #444;
-    border-radius: 6px;
-    cursor: pointer;
-    color: #fff;
-}
+    button {
+        padding: 7px 14px;
+        background: #222;
+        border: 1px solid #444;
+        border-radius: 6px;
+        cursor: pointer;
+        color: #fff;
+    }
 
-button:hover {
-    background: #333;
-}
+    button:hover {
+        background: #333;
+    }
 
-#imageGrid {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 25px;
-    padding: 20px;
-    max-width: 100vw;
-    overflow-x: hidden;
-    box-sizing: border-box;
-}
+    #imageGrid {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 25px;
+        padding: 20px;
+        max-width: 100vw;
+        overflow-x: hidden;
+        box-sizing: border-box;
+    }
 
-.imgBox {
-    background: #1b1b1b;
-    padding: 12px;
-    border-radius: 14px;
-    width: 220px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    position: relative;
-}
+    .imgBox {
+        background: #1b1b1b;
+        padding: 12px;
+        border-radius: 14px;
+        width: 220px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        position: relative;
+    }
 
-.imgBox img {
-    width: 100%;
-    height: 180px;
-    object-fit: cover;
-    border-radius: 10px;
-}
+    .imgBox img {
+        width: 100%;
+        height: 180px;
+        object-fit: cover;
+        border-radius: 10px;
+    }
 
-.keywords-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 5px;
-}
+    .keywords-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 5px;
+    }
 
-.keywords-label {
-    color: #888;
-    font-size: 12px;
-    white-space: nowrap;
-}
+    .keywords-label {
+        color: #888;
+        font-size: 12px;
+        white-space: nowrap;
+    }
 
-.keywords-text {
-    color: #ccc;
-    font-size: 12px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    flex-grow: 1;
-}
+    .keywords-text {
+        color: #ccc;
+        font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex-grow: 1;
+    }
 
-.bottom-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 5px;
-}
+    .bottom-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 5px;
+    }
 
-.rating {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-}
+    .rating {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+    }
 
-.rating span {
-    cursor: pointer;
-    font-size: 18px;
-}
+    .rating span {
+        cursor: pointer;
+        font-size: 18px;
+    }
 
-.status-badge {
-    padding: 3px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 500;
-}
+    .status-badge {
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 500;
+    }
 
-.pending-badge {
-    background: #ff9800;
-    color: #000;
-}
+    .pending-badge {
+        background: #ff9800;
+        color: #000;
+    }
 
-.verified-badge {
-    background: #4CAF50;
-    color: #000;
-}
+    .verified-badge {
+        background: #4CAF50;
+        color: #000;
+    }
 
-.downloadBtn {
-    width: 100%;
-    padding: 6px 0;
-    text-align: center;
-    background: #222;
-    border: 1px solid #444;
-    border-radius: 6px;
-    cursor: pointer;
-    color: #fff;
-    margin-top: 8px;
-}
+    .downloadBtn {
+        width: 100%;
+        padding: 6px 0;
+        text-align: center;
+        background: #222;
+        border: 1px solid #444;
+        border-radius: 6px;
+        cursor: pointer;
+        color: #fff;
+        margin-top: 8px;
+    }
 
-.service-tag {
-    display: inline-block;
-    background: #333;
-    padding: 2px 12px;
-    border-radius: 4px;
-    font-size: 11px;
-    color: #ccc;
-    margin-top: 0px;
-}
+    #verifyContainer {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: #1a1a1a;
+        padding: 20px;
+        border-radius: 12px;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        z-index: 20;
+        border: 1px solid #333;
+    }
+
+    #verifyContainer img {
+        max-width: 400px;
+        max-height: 400px;
+        border-radius: 12px;
+        border: 1px solid #444;
+    }
+
+    #verifyActions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    #verifyActions input, #verifyActions select, #verifyActions button {
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid #444;
+        background: #222;
+        color: #fff;
+        cursor: pointer;
+    }
+
+    #verifyActions input {
+        width: 120px;
+    }
+
+    .close-btn {
+        position: absolute;
+        top: 10px;
+        right: 8px;
+        background: #ff4444;
+        border: none;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        cursor: pointer;
+        color: white;
+        font-weight: bold;
+    }
+
+    .service-tag {
+        display: inline-block;
+        background: #333;
+        padding: 2px 12px;
+        border-radius: 4px;
+        font-size: 11px;
+        color: #ccc;
+        margin-top: 0px;
+    }
 </style>
 </head>
+
 <body>
 <header>
     <div class="header-left">
         <input id="search" placeholder="Search..." />
         <button id="formatBtn">Format Image</button>
-        <button id="uploadBtn">Upload</button>
+        <button id="uploadBtn">Request Upload</button>
         <a href="tulip.html" class="admin-link">tulip</a>
-        <input type="file" id="fileInput" accept="image/*,video/*" style="display:none;" />
     </div>
+    <input type="file" id="fileInput" accept="image/*" style="display:none;" />
 </header>
+
+<div id="verifyContainer">
+    <button class="close-btn" id="closeVerifyBtn">×</button>
+    <img id="verifyImg" src="" />
+    <div id="verifyActions">
+        <input type="text" id="keywordsInput" placeholder="Keywords" />
+        <select id="serviceSelect">
+            <option value="">Select Service</option>
+            <option value="Discord">Discord</option>
+            <option value="YouTube">YouTube</option>
+            <option value="TikTok">TikTok</option>
+            <option value="Other">Other</option>
+        </select>
+        <button id="submitVerifyBtn">Submit</button>
+    </div>
+</div>
 
 <div id="imageGrid"></div>
 
 <script>
-// ================= SUPABASE =================
+
+// tuff ik
 const supabaseUrl = 'https://erctbeaqvqxjsrdjzonw.supabase.co';
-const supabaseKey = 'YOUR_SUPABASE_KEY';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVyY3RiZWFxdnF4anNyZGp6b253Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MzE2OTgsImV4cCI6MjA4MDIwNzY5OH0.Yal4o1NDY7p5W822mX7kaigTpPakTyygKLlp67ic6Kg';
 const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-// ================= GLOBALS =================
-let posts = [];
-let userVerified = false;
-const CACHE_DURATION = 30000;
+let verifiedImages = [];
 let lastFetchTime = 0;
+const CACHE_DURATION = 30000; // 30s
 
-// ================= CHECK AUTH =================
-async function checkAuth() {
-    const { data: { session } } = await supabase.auth.getSession();
-    userVerified = !!session?.user;
-}
-
-checkAuth();
-
-// ================= LOAD POSTS =================
-async function loadPosts() {
+async function loadImagesFromSupabase() {
     const now = Date.now();
-    if(posts.length && now - lastFetchTime < CACHE_DURATION){
-        renderPosts();
+    
+    if (verifiedImages.length > 0 && (now - lastFetchTime) < CACHE_DURATION) {
+        console.log('Using cached images');
+        renderImages();
         return;
     }
-    const { data, error } = await supabase
-        .from('posts')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100);
 
-    if(error){ console.error(error); return; }
+    try {
+        console.log('Fetching images from Supabase...');
+        const { data, error } = await supabase
+            .from('profile_pictures')
+            .select('*')
+            .eq('verified', true)
+            .order('created_at', { ascending: false })
+            .limit(100);
 
-    posts = data;
-    lastFetchTime = now;
-    renderPosts();
+        if (error) throw error;
+
+        verifiedImages = data.map(item => ({
+            id: item.id,
+            src: item.url,
+            service: item.service,
+            keywords: item.keywords,
+            rating: item.rating || 0,
+            verified: true,
+            created_at: item.created_at
+        }));
+
+        lastFetchTime = Date.now();
+        renderImages();
+
+    } catch (error) {
+        console.error('Error loading images:', error);
+        // just render whatever is in memory
+        renderImages();
+    }
 }
 
-// ================= RENDER POSTS =================
-function renderPosts() {
-    const grid = document.getElementById('imageGrid');
-    const query = document.getElementById('search').value.toLowerCase();
-    grid.innerHTML = '';
+async function saveImageToSupabase(imageData) {
+    try {
+        const { data, error } = await supabase
+            .from('profile_pictures')
+            .insert([
+                {
+                    url: imageData.src,
+                    service: imageData.service,
+                    keywords: imageData.keywords,
+                    rating: 0,
+                    verified: false,
+                    created_at: new Date().toISOString()
+                }
+            ])
+            .select()
+            .single();
 
-    const filtered = posts.filter(p => {
-        if(!p.is_public && !userVerified) return false;
-        return (p.filename.toLowerCase().includes(query) || (p.type && p.type.toLowerCase().includes(query)));
+        if (error) throw error;
+        
+        console.log('Image saved with ID:', data.id);
+        return data.id;
+        
+    } catch (error) {
+        console.error('Error saving image:', error);
+        return null;
+    }
+}
+
+let ratingTimeout;
+async function updateRatingInSupabase(imageId, rating) {
+    clearTimeout(ratingTimeout);
+    
+    ratingTimeout = setTimeout(async () => {
+        try {
+            const { error } = await supabase
+                .from('profile_pictures')
+                .update({ rating: rating })
+                .eq('id', imageId);
+
+            if (error) throw error;
+            console.log('Rating updated for:', imageId);
+            
+        } catch (error) {
+            console.error('Error updating rating:', error);
+        }
+    }, 1000); // 1s
+}
+
+window.onload = loadImagesFromSupabase;
+
+const searchBox = document.getElementById('search');
+let searchTimeout;
+searchBox.addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(renderImages, 300);
+});
+
+const fileInput = document.getElementById('fileInput');
+const formatBtn = document.getElementById('formatBtn');
+const uploadBtn = document.getElementById('uploadBtn');
+const verifyContainer = document.getElementById('verifyContainer');
+const verifyImg = document.getElementById('verifyImg');
+const keywordsInput = document.getElementById('keywordsInput');
+const serviceSelect = document.getElementById('serviceSelect');
+const submitVerifyBtn = document.getElementById('submitVerifyBtn');
+const closeVerifyBtn = document.getElementById('closeVerifyBtn');
+
+uploadBtn.onclick = () => fileInput.click();
+
+fileInput.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    if (file.size > 2 * 1024 * 1024) {
+        alert("Max size: 2MB");
+        return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = () => {
+        verifyImg.src = reader.result;
+        verifyContainer.style.display = 'flex';
+    };
+    reader.readAsDataURL(file);
+};
+
+closeVerifyBtn.onclick = () => {
+    verifyContainer.style.display = 'none';
+    keywordsInput.value = '';
+    serviceSelect.value = '';
+    fileInput.value = '';
+    verifyImg.src = '';
+};
+
+submitVerifyBtn.onclick = async () => {
+    if (!verifyImg.src) {
+        alert("No image to submit.");
+        return;
+    }
+    
+    if (!serviceSelect.value) {
+        alert("Select a service.");
+        return;
+    }
+    
+    const keywords = keywordsInput.value.trim();
+    if (!keywords) {
+        alert("Enter keywords.");
+        return;
+    }
+
+    const originalText = submitVerifyBtn.textContent;
+    submitVerifyBtn.textContent = 'Uploading...';
+    submitVerifyBtn.disabled = true;
+
+    try {
+        const imageData = {
+            src: verifyImg.src,
+            service: serviceSelect.value,
+            keywords: keywords
+        };
+
+        const imageId = await saveImageToSupabase(imageData);
+        
+        if (imageId) {
+            alert("Submitted for review!");
+        } else {
+            alert("Saved locally.");
+        }
+        
+    } catch (error) {
+        console.error('Upload error:', error);
+        alert("Upload failed.");
+    } finally {
+
+        verifyContainer.style.display = 'none';
+        keywordsInput.value = '';
+        serviceSelect.value = '';
+        fileInput.value = '';
+        submitVerifyBtn.textContent = originalText;
+        submitVerifyBtn.disabled = false;
+    }
+};
+
+formatBtn.onclick = () => {
+    fileInput.click();
+    fileInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const tempImg = reader.result;
+            const service = prompt("Service to format for (Discord, YouTube, TikTok, Other):");
+            if (!service) return;
+
+            const img = new Image();
+            img.src = tempImg;
+            img.onload = () => {
+                let width = 512, height = 512;
+                if(service.toLowerCase() === 'youtube') { width = 1280; height = 720; }
+                else if(service.toLowerCase() === 'tiktok') { width = 1080; height = 1920; }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                const a = document.createElement('a');
+                a.href = canvas.toDataURL("image/png");
+                a.download = `formatted_${service.toLowerCase()}.png`;
+                a.click();
+            };
+        };
+        reader.readAsDataURL(file);
+    };
+};
+
+function renderImages() {
+    const grid = document.getElementById('imageGrid');
+    const query = searchBox.value.toLowerCase();
+
+    const filteredImages = verifiedImages.filter(img => {
+        if (!img) return false;
+        const serviceMatch = img.service && img.service.toLowerCase().includes(query);
+        const keywordMatch = img.keywords && img.keywords.toLowerCase().includes(query);
+        return serviceMatch || keywordMatch;
     });
 
-    if(!filtered.length){
-        const e = document.createElement('div');
-        e.style.textAlign='center';
-        e.style.width='100%';
-        e.style.padding='60px';
-        e.style.color='#666';
-        e.textContent='No posts found.';
-        grid.appendChild(e);
+    grid.innerHTML = '';
+
+    if (filteredImages.length === 0) {
+        const empty = document.createElement('div');
+        empty.style.textAlign = 'center';
+        empty.style.width = '100%';
+        empty.style.padding = '60px';
+        empty.style.color = '#666';
+        empty.textContent = query ? 'No images found.' : 'No images yet.';
+        grid.appendChild(empty);
         return;
     }
 
-    filtered.forEach(p=>{
+    filteredImages.forEach(img => {
+
         const box = document.createElement('div');
-        box.className='imgBox';
+        box.className = 'imgBox';
 
         const kwRow = document.createElement('div');
-        kwRow.className='keywords-row';
+        kwRow.className = 'keywords-row';
+
         const kwLabel = document.createElement('span');
-        kwLabel.className='keywords-label';
-        kwLabel.textContent='Filename:';
+        kwLabel.className = 'keywords-label';
+        kwLabel.textContent = 'Keywords:';
+
         const kwText = document.createElement('span');
-        kwText.className='keywords-text';
-        kwText.textContent=p.filename || '';
+        kwText.className = 'keywords-text';
+        kwText.title = img.keywords || '';
+        kwText.textContent = img.keywords || 'None';
+
         kwRow.appendChild(kwLabel);
         kwRow.appendChild(kwText);
 
-        const media = document.createElement(p.type==='video'?'video':'img');
-        media.src = p.url;
-        if(p.type==='video'){ media.controls=true; media.style.height='180px'; }
-        media.onerror = ()=>{ media.src=''; };
+        const image = document.createElement('img');
+        image.src = img.src;
+        image.alt = img.service || 'Profile';
+        image.onerror = () => {
+            image.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="180"><rect width="100%" height="100%" fill="%231a1a1a"/><text x="50%" y="50%" fill="%23666" font-size="14" text-anchor="middle" dy=".3em">Image</text></svg>';
+        };
 
-        const tag = document.createElement('div');
-        tag.className='service-tag';
-        tag.textContent=p.type || 'Unknown';
+        const serviceTag = document.createElement('div');
+        serviceTag.className = 'service-tag';
+        serviceTag.textContent = img.service || 'Unknown';
 
         const bottom = document.createElement('div');
-        bottom.className='bottom-row';
+        bottom.className = 'bottom-row';
+
+        const ratingDiv = document.createElement('div');
+        ratingDiv.className = 'rating';
+
+        [1,2,3,4,5].forEach(i => {
+            const star = document.createElement('span');
+            star.style.color = (i <= img.rating ? '#ffd700' : '#666');
+            star.textContent = (i <= img.rating ? '★' : '☆');
+            star.onclick = () => rateImage(img.id, i);
+            ratingDiv.appendChild(star);
+        });
+
+        const status = document.createElement('div');
+        status.className = `status-badge ${img.verified ? 'verified-badge' : 'pending-badge'}`;
+        status.textContent = img.verified ? '✓' : '⏳';
+
+        bottom.appendChild(ratingDiv);
+        bottom.appendChild(status);
 
         const dl = document.createElement('button');
-        dl.className='downloadBtn';
-        dl.textContent='Share';
-        dl.onclick = ()=>{navigator.clipboard.writeText(p.url); alert('URL copied!');};
+        dl.className = 'downloadBtn';
+        dl.textContent = 'Download';
+        dl.onclick = () => downloadImage(img.src, img.service || 'profile');
 
-        bottom.appendChild(dl);
         box.appendChild(kwRow);
-        box.appendChild(media);
-        box.appendChild(tag);
+        box.appendChild(image);
+        box.appendChild(serviceTag);
         box.appendChild(bottom);
+        box.appendChild(dl);
 
         grid.appendChild(box);
     });
 }
 
-// ================= UPLOAD =================
-const fileInput = document.getElementById('fileInput');
-document.getElementById('uploadBtn').onclick=()=>fileInput.click();
+async function rateImage(imageId, rating) {
+    const image = verifiedImages.find(img => img.id === imageId);
+    if (!image) return;
+    
+    image.rating = rating;
+    renderImages();
+    await updateRatingInSupabase(imageId, rating);
+}
 
-fileInput.onchange=async e=>{
-    const f=e.target.files[0];
-    if(!f)return;
+function downloadImage(src, service) {
+    const a = document.createElement('a');
+    a.href = src;
+    a.download = `profile_${service.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}.png`;
+    a.click();
+}
 
-    if(f.type.startsWith('video') && !userVerified){
-        alert("Verify your email to upload videos.");
-        return;
+// refresh images every 2 minutes if tab is active ykyk
+setInterval(() => {
+    if (document.visibilityState === 'visible') {
+        loadImagesFromSupabase();
     }
-
-    const name = f.name;
-    const { data, error } = await supabase.storage
-        .from('content')
-        .upload(`${Date.now()}_${name}`, f, { upsert:true });
-
-    if(error){ console.error(error); return; }
-
-    const urlData = supabase.storage.from('content').getPublicUrl(data.path);
-    const { error: dbErr } = await supabase.from('posts').insert([{
-        url: urlData.data.publicUrl,
-        filename: name,
-        type: f.type.startsWith('video')?'video':'image',
-        is_public:true
-    }]);
-
-    if(dbErr){ console.error(dbErr); return; }
-    loadPosts();
-};
-
-// ================= SEARCH =================
-document.getElementById('search').addEventListener('input', ()=>{ renderPosts(); });
-
-// ================= AUTO REFRESH =================
-setInterval(()=>{
-    if(document.visibilityState==='visible') loadPosts();
 }, 120000);
-
-// ================= INIT =================
-loadPosts();
 </script>
 </body>
 </html>
