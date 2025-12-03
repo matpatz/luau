@@ -43,17 +43,6 @@
         flex-wrap: wrap;
     }
 
-    .admin-link {
-        color: #4CAF50;
-        text-decoration: none;
-        font-size: 14px;
-        margin-left: 20px;
-    }
-
-    .admin-link:hover {
-        text-decoration: underline;
-    }
-
     #search {
         padding: 6px 10px;
         background: #1a1a1a;
@@ -163,23 +152,18 @@
         display: flex;
         gap: 4px;
         align-items: center;
+        font-size: 14px;
     }
 
-    .rating span {
-        cursor: pointer;
-        font-size: 18px;
+    .rating-number {
+        color: #ffd700;
+        font-weight: bold;
+        margin-right: 5px;
     }
 
-    .status-badge {
-        padding: 3px 8px;
-        border-radius: 4px;
-        font-size: 11px;
-        font-weight: 500;
-    }
-
-    .verified-badge {
-        background: #4CAF50;
-        color: #000;
+    .rating-stars {
+        color: #ffd700;
+        letter-spacing: -2px;
     }
 
     .actions-row {
@@ -332,6 +316,44 @@
     .upload-notice.show {
         display: block;
     }
+
+    .rate-btn {
+        background: #444;
+        border: none;
+        border-radius: 4px;
+        color: #ffd700;
+        cursor: pointer;
+        padding: 2px 6px;
+        font-size: 11px;
+        margin-left: 5px;
+    }
+
+    .rate-btn:hover {
+        background: #555;
+    }
+
+    .star-rating {
+        display: flex;
+        gap: 2px;
+        align-items: center;
+        margin-top: 5px;
+    }
+
+    .star-rating span {
+        cursor: pointer;
+        font-size: 16px;
+        color: #666;
+        transition: color 0.2s;
+    }
+
+    .star-rating span:hover,
+    .star-rating span:hover ~ span {
+        color: #ffd700;
+    }
+
+    .star-rating span.active {
+        color: #ffd700;
+    }
 </style>
 </head>
 
@@ -348,14 +370,8 @@
                 <option value="rating_desc">Highest Rated</option>
                 <option value="rating_asc">Lowest Rated</option>
             </select>
-            <select id="typeFilter" class="filter">
-                <option value="all">All Types</option>
-                <option value="image">Images Only</option>
-                <option value="gif">GIFs/Short Videos</option>
-            </select>
         </div>
         <button id="uploadBtn">Upload Image</button>
-        <a href="tulip.html" class="admin-link">Admin Panel</a>
     </div>
     <input type="file" id="fileInput" accept="image/*,video/mp4,video/webm,video/quicktime" style="display:none;" />
 </header>
@@ -420,31 +436,43 @@ async function loadImages() {
 
     try {
         console.log('Fetching images...');
-        let query = supabase
+        const { data, error } = await supabase
             .from('profile_pictures')
             .select('*')
+            .eq('verified', true)
             .order('created_at', { ascending: false });
-
-        // Remove category filter logic since we don't want that
-        query = query.order('created_at', { ascending: false });
-
-        const { data, error } = await query;
 
         if (error) throw error;
 
-        allImages = data.map(item => ({
-            id: item.id,
-            src: item.url,
-            service: item.service,
-            keywords: item.keywords,
-            rating: item.rating || 0,
-            views: item.views || 0,
-            verified: item.verified || false,
-            type: item.type || 'image',
-            created_at: item.created_at,
-            user_id: item.user_id
+        // Also get ratings for each image
+        const imagesWithRatings = await Promise.all(data.map(async (item) => {
+            // Get average rating from user_ratings table
+            const { data: ratings, error: ratingsError } = await supabase
+                .from('user_ratings')
+                .select('rating')
+                .eq('image_id', item.id);
+
+            let averageRating = item.rating || 0; // Fallback to old rating
+            if (!ratingsError && ratings && ratings.length > 0) {
+                const sum = ratings.reduce((total, r) => total + r.rating, 0);
+                averageRating = sum / ratings.length;
+            }
+
+            return {
+                id: item.id,
+                src: item.url,
+                service: item.service,
+                keywords: item.keywords,
+                rating: averageRating,
+                views: item.views || 0,
+                verified: item.verified || false,
+                type: item.type || 'image',
+                created_at: item.created_at,
+                user_id: item.user_id
+            };
         }));
 
+        allImages = imagesWithRatings;
         lastFetchTime = Date.now();
         renderImages();
 
@@ -466,7 +494,7 @@ async function saveImage(imageData) {
                     keywords: imageData.keywords,
                     rating: 0,
                     views: 0,
-                    verified: false,
+                    verified: true, // Auto-verify all uploads
                     type: imageData.type || 'image',
                     user_id: currentUser?.id || null,
                     created_at: new Date().toISOString()
@@ -487,19 +515,65 @@ async function saveImage(imageData) {
     }
 }
 
-// Update rating
-async function updateRating(imageId, rating) {
+// Save user rating
+async function saveUserRating(imageId, rating, userId) {
     try {
-        const { error } = await supabase
-            .from('profile_pictures')
-            .update({ rating: rating })
-            .eq('id', imageId);
+        // Check if user already rated this image
+        const { data: existingRating } = await supabase
+            .from('user_ratings')
+            .select('id')
+            .eq('image_id', imageId)
+            .eq('user_id', userId)
+            .single();
 
-        if (error) throw error;
-        console.log('Rating updated for:', imageId);
+        if (existingRating) {
+            // Update existing rating
+            const { error } = await supabase
+                .from('user_ratings')
+                .update({ rating: rating })
+                .eq('id', existingRating.id);
+
+            if (error) throw error;
+        } else {
+            // Insert new rating
+            const { error } = await supabase
+                .from('user_ratings')
+                .insert([
+                    {
+                        image_id: imageId,
+                        user_id: userId,
+                        rating: rating
+                    }
+                ]);
+
+            if (error) throw error;
+        }
+
+        console.log('Rating saved for image:', imageId);
         
     } catch (error) {
-        console.error('Error updating rating:', error);
+        console.error('Error saving rating:', error);
+    }
+}
+
+// Get user's rating for an image
+async function getUserRating(imageId, userId) {
+    if (!userId) return 0;
+    
+    try {
+        const { data, error } = await supabase
+            .from('user_ratings')
+            .select('rating')
+            .eq('image_id', imageId)
+            .eq('user_id', userId)
+            .single();
+
+        if (!error && data) {
+            return data.rating;
+        }
+        return 0;
+    } catch (error) {
+        return 0;
     }
 }
 
@@ -532,7 +606,6 @@ window.onload = async () => {
 // Search and filter functionality
 const searchBox = document.getElementById('search');
 const sortFilter = document.getElementById('sortFilter');
-const typeFilter = document.getElementById('typeFilter');
 let searchTimeout;
 
 searchBox.addEventListener('input', () => {
@@ -541,7 +614,6 @@ searchBox.addEventListener('input', () => {
 });
 
 sortFilter.addEventListener('change', renderImages);
-typeFilter.addEventListener('change', renderImages);
 
 // Upload functionality
 const fileInput = document.getElementById('fileInput');
@@ -622,20 +694,13 @@ fileInput.onchange = async (e) => {
 };
 
 // Render images with filters
-function renderImages() {
+async function renderImages() {
     const grid = document.getElementById('imageGrid');
     const query = searchBox.value.toLowerCase();
     const sortBy = sortFilter.value;
-    const typeFilterValue = typeFilter.value;
 
     let filteredImages = allImages.filter(img => {
         if (!img) return false;
-        
-        // Type filter
-        if (typeFilterValue !== 'all') {
-            if (typeFilterValue === 'image' && img.type !== 'image') return false;
-            if (typeFilterValue === 'gif' && img.type !== 'gif') return false;
-        }
         
         // Search filter
         const serviceMatch = img.service && img.service.toLowerCase().includes(query);
@@ -676,7 +741,7 @@ function renderImages() {
         return;
     }
 
-    filteredImages.forEach(img => {
+    for (const img of filteredImages) {
         const box = document.createElement('div');
         box.className = 'imgBox';
 
@@ -737,31 +802,27 @@ function renderImages() {
         stats.className = 'stats';
         stats.innerHTML = `
             <span>👁️ ${img.views || 0}</span>
-            <span>⭐ ${img.rating || 0}</span>
         `;
 
         const ratingDiv = document.createElement('div');
         ratingDiv.className = 'rating';
-
-        [1,2,3,4,5].forEach(i => {
-            const star = document.createElement('span');
-            star.style.color = (i <= img.rating ? '#ffd700' : '#666');
-            star.textContent = (i <= img.rating ? '★' : '☆');
-            star.onclick = async () => {
-                img.rating = i;
-                renderImages();
-                await updateRating(img.id, i);
-            };
-            ratingDiv.appendChild(star);
-        });
-
-        const status = document.createElement('div');
-        status.className = `status-badge ${img.verified ? 'verified-badge' : 'verified-badge'}`;
-        status.textContent = '✓';
+        
+        // Display average rating with stars
+        const avgRating = img.rating || 0;
+        const roundedRating = Math.round(avgRating * 10) / 10; // Round to 1 decimal
+        const fullStars = Math.floor(avgRating);
+        const hasHalfStar = avgRating % 1 >= 0.5;
+        
+        ratingDiv.innerHTML = `
+            <span class="rating-number">${roundedRating.toFixed(1)}</span>
+            <span class="rating-stars">
+                ${'★'.repeat(fullStars)}${hasHalfStar ? '½' : ''}${'☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0))}
+            </span>
+            <button class="rate-btn" data-image-id="${img.id}">Rate</button>
+        `;
 
         bottom.appendChild(stats);
         bottom.appendChild(ratingDiv);
-        bottom.appendChild(status);
 
         const actionsRow = document.createElement('div');
         actionsRow.className = 'actions-row';
@@ -786,6 +847,23 @@ function renderImages() {
         box.appendChild(actionsRow);
 
         grid.appendChild(box);
+    }
+
+    // Add click handlers for rate buttons
+    document.querySelectorAll('.rate-btn').forEach(btn => {
+        btn.onclick = async (e) => {
+            e.stopPropagation();
+            const imageId = parseInt(e.target.dataset.imageId);
+            const image = allImages.find(img => img.id === imageId);
+            if (!image) return;
+            
+            const rating = prompt("Rate this image (1-5):");
+            if (rating && rating >= 1 && rating <= 5) {
+                const userId = currentUser?.id || 'anonymous_' + Math.random().toString(36).substr(2, 9);
+                await saveUserRating(imageId, parseInt(rating), userId);
+                loadImages(); // Reload to update average
+            }
+        };
     });
 }
 
@@ -826,6 +904,7 @@ copyLinkItem.onclick = async () => {
             alert('Direct link copied to clipboard!');
         } catch (err) {
             console.error('Failed to copy:', err);
+            // Fallback for older browsers
             const textArea = document.createElement('textarea');
             textArea.value = currentContextImage.src;
             document.body.appendChild(textArea);
@@ -845,28 +924,59 @@ downloadItem.onclick = () => {
     hideContextMenu();
 };
 
-// Share image functionality
+// Share image functionality - FIXED
 function shareImage(image, raw = false) {
+    const shareUrl = raw ? image.src : window.location.origin + window.location.pathname + '?image=' + image.id;
+    
     if (navigator.share) {
         navigator.share({
-            title: 'Check out this image!',
-            text: `Image from ${image.service}: ${image.keywords}`,
-            url: raw ? image.src : window.location.href + '?image=' + image.id,
+            title: image.keywords || 'Image',
+            text: `Check out this image${image.service ? ' from ' + image.service : ''}: ${image.keywords || ''}`,
+            url: shareUrl,
         })
-        .catch(console.error);
+        .then(() => console.log('Shared successfully'))
+        .catch(err => {
+            console.log('Share failed:', err);
+            // Fallback to clipboard
+            copyToClipboard(shareUrl);
+        });
     } else {
-        const shareUrl = raw ? image.src : window.location.href + '?image=' + image.id;
-        navigator.clipboard.writeText(shareUrl)
+        // Fallback for browsers without Web Share API
+        copyToClipboard(shareUrl);
+    }
+}
+
+// Copy to clipboard helper
+function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text)
             .then(() => alert('Link copied to clipboard!'))
-            .catch(() => {
-                const textArea = document.createElement('textarea');
-                textArea.value = shareUrl;
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textArea);
-                alert('Link copied!');
-            });
+            .catch(() => fallbackCopy(text));
+    } else {
+        fallbackCopy(text);
+    }
+}
+
+function fallbackCopy(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.opacity = '0';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        if (successful) {
+            alert('Link copied to clipboard!');
+        } else {
+            alert('Failed to copy link. Please copy manually: ' + text);
+        }
+    } catch (err) {
+        document.body.removeChild(textArea);
+        alert('Failed to copy link. Please copy manually: ' + text);
     }
 }
 
@@ -918,8 +1028,11 @@ function downloadImage(src, name) {
     const a = document.createElement('a');
     a.href = src;
     const extension = src.includes('data:video') ? 'mp4' : 'png';
-    a.download = `image_${name.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}.${extension}`;
+    const filename = name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    a.download = `${filename}_${Date.now()}.${extension}`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
 }
 
 function downloadImageAtSize(src, width, height, name) {
@@ -934,8 +1047,15 @@ function downloadImageAtSize(src, width, height, name) {
         
         const a = document.createElement('a');
         a.href = canvas.toDataURL('image/png');
-        a.download = `image_${name.toLowerCase().replace(/\s+/g, '_')}_${width}x${height}_${Date.now()}.png`;
+        const filename = name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        a.download = `${filename}_${width}x${height}_${Date.now()}.png`;
+        document.body.appendChild(a);
         a.click();
+        document.body.removeChild(a);
+    };
+    img.onerror = function() {
+        // If resizing fails, download original
+        downloadImage(src, name);
     };
     img.src = src;
 }
