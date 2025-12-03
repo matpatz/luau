@@ -148,6 +148,12 @@
         color: #888;
     }
 
+    .upload-date {
+        font-size: 11px;
+        color: #666;
+        margin-top: 2px;
+    }
+
     .rating {
         display: flex;
         gap: 4px;
@@ -228,7 +234,7 @@
     .size-inputs {
         display: flex;
         gap: 10px;
-        justify-content: center; /* center inputs */
+        justify-content: center;
         margin-bottom: 10px;
     }
 
@@ -239,9 +245,9 @@
         border: 1px solid #444;
         border-radius: 6px;
         color: #fff;
-        min-width: 120px;      /* won't shrink too small */
-        max-width: 160px;     /* won't grow too big */
-        text-align: center;   /* looks nicer for numbers */
+        min-width: 120px;
+        max-width: 160px;
+        text-align: center;
         box-sizing: border-box;
     }
 
@@ -273,16 +279,6 @@
         font-size: 11px;
         color: #ccc;
         margin-top: 0px;
-    }
-
-    .verified-user-badge {
-        background: #4CAF50;
-        color: #000;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 11px;
-        font-weight: bold;
-        margin-left: 10px;
     }
 
     .context-menu {
@@ -337,27 +333,54 @@
         background: #555;
     }
 
-    .star-rating {
-        display: flex;
-        gap: 2px;
+    .rate-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.8);
+        display: none;
+        justify-content: center;
         align-items: center;
-        margin-top: 5px;
+        z-index: 100;
     }
 
-    .star-rating span {
-        cursor: pointer;
-        font-size: 16px;
+    .rate-modal-content {
+        background: #1a1a1a;
+        padding: 20px;
+        border-radius: 12px;
+        width: 300px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .star-rating-input {
+        display: flex;
+        gap: 5px;
+        margin: 10px 0;
+    }
+
+    .star-rating-input span {
+        font-size: 32px;
         color: #666;
+        cursor: pointer;
         transition: color 0.2s;
     }
 
-    .star-rating span:hover,
-    .star-rating span:hover ~ span {
+    .star-rating-input span:hover,
+    .star-rating-input span:hover ~ span {
         color: #ffd700;
     }
 
-    .star-rating span.active {
+    .star-rating-input span.selected {
         color: #ffd700;
+    }
+
+    .viewed-images {
+        display: none;
     }
 </style>
 </head>
@@ -396,6 +419,23 @@
     </div>
 </div>
 
+<div id="rateModal" class="rate-modal">
+    <div class="rate-modal-content">
+        <h3>Rate this Image</h3>
+        <div class="star-rating-input" id="starRating">
+            <span data-rating="1">☆</span>
+            <span data-rating="2">☆</span>
+            <span data-rating="3">☆</span>
+            <span data-rating="4">☆</span>
+            <span data-rating="5">☆</span>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button id="submitRatingBtn">Submit Rating</button>
+            <button id="cancelRatingBtn">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <div class="upload-notice" id="uploadNotice">
     Only verified users can upload GIFs/short videos. Contact admin for verification.
 </div>
@@ -416,16 +456,46 @@ const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 let allImages = [];
 let currentUser = null;
 let selectedImageForDownload = null;
+let selectedImageForRating = null;
+let currentSelectedRating = 0;
 let lastFetchTime = 0;
 const CACHE_DURATION = 30000;
 
-// Initialize user session
-async function initUser() {
-    const storedUser = localStorage.getItem('image_gallery_user');
-    if (storedUser) {
-        currentUser = JSON.parse(storedUser);
-        console.log('Loaded user from storage:', currentUser);
+// Track viewed images in session storage
+const VIEWED_IMAGES_KEY = 'viewed_images';
+const USER_ID_KEY = 'image_gallery_user_id';
+
+// Generate or get user ID
+function getUserId() {
+    let userId = localStorage.getItem(USER_ID_KEY);
+    if (!userId) {
+        userId = 'user_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+        localStorage.setItem(USER_ID_KEY, userId);
     }
+    return userId;
+}
+
+// Get viewed images from session storage
+function getViewedImages() {
+    const viewed = sessionStorage.getItem(VIEWED_IMAGES_KEY);
+    return viewed ? JSON.parse(viewed) : [];
+}
+
+// Mark image as viewed
+function markImageAsViewed(imageId) {
+    const viewed = getViewedImages();
+    if (!viewed.includes(imageId)) {
+        viewed.push(imageId);
+        sessionStorage.setItem(VIEWED_IMAGES_KEY, JSON.stringify(viewed));
+        return true;
+    }
+    return false;
+}
+
+// Initialize user
+async function initUser() {
+    const userId = getUserId();
+    currentUser = { id: userId };
 }
 
 // Load images with filters
@@ -448,7 +518,7 @@ async function loadImages() {
 
         if (error) throw error;
 
-        // Also get ratings for each image
+        // Get ratings for each image
         const imagesWithRatings = await Promise.all(data.map(async (item) => {
             // Get average rating from user_ratings table
             const { data: ratings, error: ratingsError } = await supabase
@@ -456,7 +526,7 @@ async function loadImages() {
                 .select('rating')
                 .eq('image_id', item.id);
 
-            let averageRating = item.rating || 0; // Fallback to old rating
+            let averageRating = 0;
             if (!ratingsError && ratings && ratings.length > 0) {
                 const sum = ratings.reduce((total, r) => total + r.rating, 0);
                 averageRating = sum / ratings.length;
@@ -486,7 +556,7 @@ async function loadImages() {
     }
 }
 
-// Save image (no verification process)
+// Save image
 async function saveImage(imageData) {
     try {
         const { data, error } = await supabase
@@ -498,7 +568,7 @@ async function saveImage(imageData) {
                     keywords: imageData.keywords,
                     rating: 0,
                     views: 0,
-                    verified: true, // Auto-verify all uploads
+                    verified: true,
                     type: imageData.type || 'image',
                     user_id: currentUser?.id || null,
                     created_at: new Date().toISOString()
@@ -510,7 +580,6 @@ async function saveImage(imageData) {
         if (error) throw error;
         
         console.log('Image saved with ID:', data.id);
-        await incrementViews(data.id); // Count initial view
         return data.id;
         
     } catch (error) {
@@ -519,8 +588,43 @@ async function saveImage(imageData) {
     }
 }
 
-// Save user rating
-async function saveUserRating(imageId, rating, userId) {
+// Increment view count (only once per session per image)
+async function incrementViews(imageId) {
+    // Check if user has already viewed this image in this session
+    if (!markImageAsViewed(imageId)) {
+        return; // Already viewed in this session
+    }
+    
+    try {
+        const { data: image } = await supabase
+            .from('profile_pictures')
+            .select('views')
+            .eq('id', imageId)
+            .single();
+
+        if (image) {
+            const { error } = await supabase
+                .from('profile_pictures')
+                .update({ views: (image.views || 0) + 1 })
+                .eq('id', imageId);
+
+            if (!error) {
+                // Update local cache
+                const imgIndex = allImages.findIndex(img => img.id === imageId);
+                if (imgIndex !== -1) {
+                    allImages[imgIndex].views = (image.views || 0) + 1;
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error incrementing views:', error);
+    }
+}
+
+// Save user rating (replaces existing rating if exists)
+async function saveUserRating(imageId, rating) {
+    const userId = getUserId();
+    
     try {
         // Check if user already rated this image
         const { data: existingRating } = await supabase
@@ -528,16 +632,20 @@ async function saveUserRating(imageId, rating, userId) {
             .select('id')
             .eq('image_id', imageId)
             .eq('user_id', userId)
-            .single();
+            .maybeSingle();
 
         if (existingRating) {
             // Update existing rating
             const { error } = await supabase
                 .from('user_ratings')
-                .update({ rating: rating })
+                .update({ 
+                    rating: rating,
+                    created_at: new Date().toISOString()
+                })
                 .eq('id', existingRating.id);
 
             if (error) throw error;
+            console.log('Rating updated for image:', imageId);
         } else {
             // Insert new rating
             const { error } = await supabase
@@ -546,23 +654,43 @@ async function saveUserRating(imageId, rating, userId) {
                     {
                         image_id: imageId,
                         user_id: userId,
-                        rating: rating
+                        rating: rating,
+                        created_at: new Date().toISOString()
                     }
                 ]);
 
             if (error) throw error;
+            console.log('New rating saved for image:', imageId);
         }
 
-        console.log('Rating saved for image:', imageId);
+        // Update average rating in cache
+        const { data: ratings } = await supabase
+            .from('user_ratings')
+            .select('rating')
+            .eq('image_id', imageId);
+
+        if (ratings && ratings.length > 0) {
+            const sum = ratings.reduce((total, r) => total + r.rating, 0);
+            const averageRating = sum / ratings.length;
+            
+            // Update in local cache
+            const imgIndex = allImages.findIndex(img => img.id === imageId);
+            if (imgIndex !== -1) {
+                allImages[imgIndex].rating = averageRating;
+            }
+        }
+        
+        return true;
         
     } catch (error) {
         console.error('Error saving rating:', error);
+        return false;
     }
 }
 
 // Get user's rating for an image
-async function getUserRating(imageId, userId) {
-    if (!userId) return 0;
+async function getUserRating(imageId) {
+    const userId = getUserId();
     
     try {
         const { data, error } = await supabase
@@ -578,26 +706,6 @@ async function getUserRating(imageId, userId) {
         return 0;
     } catch (error) {
         return 0;
-    }
-}
-
-// Increment view count
-async function incrementViews(imageId) {
-    try {
-        const { data: image } = await supabase
-            .from('profile_pictures')
-            .select('views')
-            .eq('id', imageId)
-            .single();
-
-        if (image) {
-            await supabase
-                .from('profile_pictures')
-                .update({ views: (image.views || 0) + 1 })
-                .eq('id', imageId);
-        }
-    } catch (error) {
-        console.error('Error incrementing views:', error);
     }
 }
 
@@ -643,7 +751,7 @@ fileInput.onchange = async (e) => {
     }
     
     // Size validation
-    const maxSize = isVideo ? 10 * 1024 * 1024 : 2 * 1024 * 1024; // 10MB for videos, 2MB for images
+    const maxSize = isVideo ? 10 * 1024 * 1024 : 2 * 1024 * 1024;
     if (file.size > maxSize) {
         alert(`Max size: ${maxSize / 1024 / 1024}MB`);
         return;
@@ -690,12 +798,29 @@ fileInput.onchange = async (e) => {
         }
     };
     
-    if (isVideo || isGif) {
-        reader.readAsDataURL(file);
-    } else {
-        reader.readAsDataURL(file);
-    }
+    reader.readAsDataURL(file);
 };
+
+// Format date for display
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+        return 'Today';
+    } else if (diffDays === 1) {
+        return 'Yesterday';
+    } else if (diffDays < 7) {
+        return `${diffDays} days ago`;
+    } else if (diffDays < 30) {
+        const weeks = Math.floor(diffDays / 7);
+        return `${weeks} week${weeks > 1 ? 's' : ''} ago`;
+    } else {
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+}
 
 // Render images with filters
 async function renderImages() {
@@ -781,11 +906,11 @@ async function renderImages() {
                 mediaElement.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="240" height="200"><rect width="100%" height="100%" fill="%231a1a1a"/><text x="50%" y="50%" fill="%23666" font-size="14" text-anchor="middle" dy=".3em">Image</text></svg>';
             };
         }
-        mediaElement.onclick = () => {
-            incrementViews(img.id);
-            // Update view count locally
-            img.views = (img.views || 0) + 1;
-            renderImages();
+        
+        // Handle click for view counting
+        mediaElement.onclick = async () => {
+            await incrementViews(img.id);
+            renderImages(); // Re-render to update view count
         };
         
         // Right-click context menu
@@ -798,6 +923,11 @@ async function renderImages() {
         const serviceTag = document.createElement('div');
         serviceTag.className = 'service-tag';
         serviceTag.textContent = img.service || 'General';
+
+        // Upload date
+        const uploadDate = document.createElement('div');
+        uploadDate.className = 'upload-date';
+        uploadDate.textContent = formatDate(img.created_at);
 
         const bottom = document.createElement('div');
         bottom.className = 'bottom-row';
@@ -813,7 +943,7 @@ async function renderImages() {
         
         // Display average rating with stars
         const avgRating = img.rating || 0;
-        const roundedRating = Math.round(avgRating * 10) / 10; // Round to 1 decimal
+        const roundedRating = Math.round(avgRating * 10) / 10;
         const fullStars = Math.floor(avgRating);
         const hasHalfStar = avgRating % 1 >= 0.5;
         
@@ -847,6 +977,7 @@ async function renderImages() {
         box.appendChild(kwRow);
         box.appendChild(mediaElement);
         box.appendChild(serviceTag);
+        box.appendChild(uploadDate);
         box.appendChild(bottom);
         box.appendChild(actionsRow);
 
@@ -858,18 +989,111 @@ async function renderImages() {
         btn.onclick = async (e) => {
             e.stopPropagation();
             const imageId = parseInt(e.target.dataset.imageId);
-            const image = allImages.find(img => img.id === imageId);
-            if (!image) return;
+            selectedImageForRating = imageId;
             
-            const rating = prompt("Rate this image (1-5):");
-            if (rating && rating >= 1 && rating <= 5) {
-                const userId = currentUser?.id || 'anonymous_' + Math.random().toString(36).substr(2, 9);
-                await saveUserRating(imageId, parseInt(rating), userId);
-                loadImages(); // Reload to update average
-            }
+            // Get user's existing rating if any
+            const existingRating = await getUserRating(imageId);
+            currentSelectedRating = existingRating;
+            
+            // Show rating modal
+            showRateModal(existingRating);
         };
     });
 }
+
+// Rating modal functionality
+const rateModal = document.getElementById('rateModal');
+const starRating = document.getElementById('starRating');
+const submitRatingBtn = document.getElementById('submitRatingBtn');
+const cancelRatingBtn = document.getElementById('cancelRatingBtn');
+
+// Star rating interaction
+starRating.addEventListener('click', (e) => {
+    if (e.target.tagName === 'SPAN' && e.target.dataset.rating) {
+        const rating = parseInt(e.target.dataset.rating);
+        currentSelectedRating = rating;
+        
+        // Update star display
+        const stars = starRating.querySelectorAll('span');
+        stars.forEach((star, index) => {
+            if (index < rating) {
+                star.textContent = '★';
+                star.classList.add('selected');
+            } else {
+                star.textContent = '☆';
+                star.classList.remove('selected');
+            }
+        });
+    }
+});
+
+// Star hover effect
+starRating.addEventListener('mouseover', (e) => {
+    if (e.target.tagName === 'SPAN' && e.target.dataset.rating) {
+        const hoverRating = parseInt(e.target.dataset.rating);
+        const stars = starRating.querySelectorAll('span');
+        stars.forEach((star, index) => {
+            if (index < hoverRating) {
+                star.textContent = '★';
+            } else {
+                star.textContent = '☆';
+            }
+        });
+    }
+});
+
+// Reset stars on mouse leave
+starRating.addEventListener('mouseleave', () => {
+    const stars = starRating.querySelectorAll('span');
+    stars.forEach((star, index) => {
+        if (index < currentSelectedRating) {
+            star.textContent = '★';
+            star.classList.add('selected');
+        } else {
+            star.textContent = '☆';
+            star.classList.remove('selected');
+        }
+    });
+});
+
+function showRateModal(existingRating = 0) {
+    currentSelectedRating = existingRating;
+    
+    // Set initial star display
+    const stars = starRating.querySelectorAll('span');
+    stars.forEach((star, index) => {
+        if (index < existingRating) {
+            star.textContent = '★';
+            star.classList.add('selected');
+        } else {
+            star.textContent = '☆';
+            star.classList.remove('selected');
+        }
+    });
+    
+    rateModal.style.display = 'flex';
+}
+
+function hideRateModal() {
+    rateModal.style.display = 'none';
+    selectedImageForRating = null;
+    currentSelectedRating = 0;
+}
+
+submitRatingBtn.onclick = async () => {
+    if (selectedImageForRating && currentSelectedRating > 0) {
+        const success = await saveUserRating(selectedImageForRating, currentSelectedRating);
+        if (success) {
+            alert('Rating submitted!');
+            hideRateModal();
+            renderImages(); // Update display
+        } else {
+            alert('Failed to submit rating. Please try again.');
+        }
+    }
+};
+
+cancelRatingBtn.onclick = hideRateModal;
 
 // Context menu functionality
 const contextMenu = document.getElementById('contextMenu');
@@ -928,7 +1152,7 @@ downloadItem.onclick = () => {
     hideContextMenu();
 };
 
-// Share image functionality - FIXED
+// Share image functionality
 function shareImage(image, raw = false) {
     const shareUrl = raw ? image.src : window.location.origin + window.location.pathname + '?image=' + image.id;
     
@@ -1068,6 +1292,12 @@ function downloadImageAtSize(src, width, height, name) {
 downloadModal.onclick = (e) => {
     if (e.target === downloadModal) {
         hideDownloadModal();
+    }
+};
+
+rateModal.onclick = (e) => {
+    if (e.target === rateModal) {
+        hideRateModal();
     }
 };
 
