@@ -131,8 +131,7 @@ return function()
         newchams(p)
         newhealthbar(p)
     end
-
-    -- Cleanup function
+    
     local function cleanupPlayer(p)
         local objects = {
             boxes, names, tracers, quads, healths, distances, chams, healthbars
@@ -206,7 +205,7 @@ return function()
                 col = gray
             end
 
-            -- Box ESP
+            -- box
             if esp.showbox and hrpOnScreen and headOnScreen then
                 local height = math.abs(hrpPos.Y - headPos.Y)
                 local width = height * 0.6
@@ -218,7 +217,7 @@ return function()
                 b.Visible = false
             end
 
-            -- Name and Distance
+            -- name + distance
             if (esp.showname or esp.showdistance) and headOnScreen then
                 local nameText = ""
                 local distanceText = ""
@@ -264,7 +263,7 @@ return function()
                 tracers[p].Visible = false
             end
 
-            -- Quad
+            -- quad
             if esp.showquad and hrpOnScreen and headOnScreen then
                 local q = quads[p]
                 local height = math.abs(hrpPos.Y - headPos.Y)
@@ -281,7 +280,7 @@ return function()
                 quads[p].Visible = false
             end
 
-            -- Health Text
+            -- health (text)
             if esp.showhealth and humanoid and headOnScreen then
                 local health = healths[p]
                 local healthText = math.floor(humanoid.Health) .. "/" .. math.floor(humanoid.MaxHealth)
@@ -294,7 +293,7 @@ return function()
                 healths[p].Visible = false
             end
 
-            -- Health Bar
+            -- health (bar/line)
             if esp.showhealthbar and humanoid and hrpOnScreen and headOnScreen then
                 local bar = healthbars[p]
                 local height = math.abs(hrpPos.Y - headPos.Y)
@@ -314,7 +313,7 @@ return function()
                 healthbars[p].Visible = false
             end
 
-            -- Chams
+            -- chams
             if esp.showchams then
                 local cham = chams[p]
                 cham.Adornee = ch
@@ -344,7 +343,6 @@ return function()
         end
     end
 
-    -- Configuration setters
     function esp:box(v) self.showbox = v end
     function esp:name(v) self.showname = v end
     function esp:held(v) self.showheld = v end
