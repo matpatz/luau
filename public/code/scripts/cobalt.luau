@@ -1,5 +1,5 @@
 --[[
-    make get function return
+    make/fix get function return
 
     Cobalt
     A runtime developer tool to monitor and intercept network traffic
@@ -1211,16 +1211,17 @@ wax.shared.NamecallHook = wax.shared.Hooking.HookMetaMethod(game, "__namecall", 
 
 				local Result = table.pack(wax.shared.NamecallHook(...))
 				if not Log.Ignored then
-					local RFResultInfo = {
-						Arguments = Result,
-						Time = os.date("%X"),
-						Origin = getcallingscript(),
-						Function = getcallingfunction(),
-						Line = getcallingline(),
-						Source = getcallingsource(),
-						IsExecutor = checkcaller(),
-						OriginalInvokeArgs = table.pack(select(2, ...)),
-					}
+                    local RFResultInfo = {
+                        Arguments = Result,
+                        OriginalInvokeArgs = table.pack(select(2, ...)),
+                        Time = os.date("%X"),
+                        Origin = getcallingscript(),
+                        Function = getcallingfunction(),
+                        Line = getcallingline(),
+                        Source = getcallingsource(),
+                        IsExecutor = checkcaller(),
+                        OriginalInvokeArgs = table.pack(select(2, ...)),
+                    }
 					Log:Call(RFResultInfo)
 				end
 
@@ -7703,7 +7704,48 @@ CreateInfoDropdownButton("network", "Event", {
 
 			wax.shared.Sonner.success("Cleared logs for event successfully!")
 		end,
-	},
+    },
+    {
+        Text = "Get Return",
+        Icon = "Code",
+        Callback = function()
+            local CallInfo = SelectedCallInfo
+            if not CallInfo
+                or CallInfo.Type ~= "Incoming"
+                or not CallInfo.Arguments
+            then
+                wax.shared.Sonner.warning("No return available")
+                return
+            end
+
+            local LuaEncode = wax.shared.LuaEncode
+            local args = CallInfo.Arguments
+
+            -- encode return values as a table
+            local encoded = LuaEncode(
+                { table.unpack(args, 1, args.n) },
+                { Prettify = true, InsertCycles = true }
+            )
+
+            -- build final output
+            local output = table.concat({
+                "-- Generated with Sigma Spy Github: https://github.com/depthso/Sigma-Spy",
+                "-- Services",
+                "local ReplicatedStorage = game:GetService(\"ReplicatedStorage\")",
+                "",
+                "-- Remote",
+                ("local %s = %s -- RemoteFunction"):format(
+                    CallInfo.Instance.Name,
+                    CallInfo.Instance:GetFullName()
+                ),
+                "",
+                "return " .. string.sub(encoded, 2, #encoded - 1)
+            }, "\n")
+
+            setclipboard(output)
+            wax.shared.Sonner.success("Return copied to clipboard")
+        end,
+    },
 })
 
 -- Search
