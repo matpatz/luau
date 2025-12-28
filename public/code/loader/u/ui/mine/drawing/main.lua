@@ -1,22 +1,21 @@
--- Simple Drawing UI Library
-local DrawingUI = {}
-DrawingUI.Elements = {}
+-- Flat Drawing UI Library
+local UI = {}
+UI.Elements = {}
 
--- Utility function to check if mouse is over a rectangle
+-- Utility: check if mouse is over a rectangle
 local function isMouseOver(pos, size)
     local mouse = game:GetService("UserInputService"):GetMouseLocation()
     return mouse.X >= pos.X and mouse.X <= pos.X + size.X
        and mouse.Y >= pos.Y and mouse.Y <= pos.Y + size.Y
 end
 
--- Base function to create a button
-function DrawingUI:CreateButton(props)
+-- BUTTON
+function UI:CreateButton(props)
     local button = Drawing.new("Square")
-    button.Size = Vector2.new(150, 30)
+    button.Size = props.Size or Vector2.new(150, 30)
     button.Position = props.Position or Vector2.new(100, 100)
-    button.Color = Color3.fromRGB(50, 50, 50)
+    button.Color = props.Color or Color3.fromRGB(50, 50, 50)
     button.Filled = true
-    button.Transparency = 1
     button.Visible = true
 
     local text = Drawing.new("Text")
@@ -26,8 +25,8 @@ function DrawingUI:CreateButton(props)
     text.Color = Color3.fromRGB(255, 255, 255)
     text.Visible = true
 
-    -- store element
-    table.insert(self.Elements, {Button = button, Text = text, Callback = props.Callback})
+    -- store
+    table.insert(UI.Elements, {Button = button, Text = text, Callback = props.Callback})
 
     -- click handler
     task.spawn(function()
@@ -43,33 +42,33 @@ function DrawingUI:CreateButton(props)
     return button
 end
 
--- Toggle
-function DrawingUI:CreateToggle(props)
-    local toggleBox = Drawing.new("Square")
-    toggleBox.Size = Vector2.new(20, 20)
-    toggleBox.Position = props.Position or Vector2.new(100, 100)
-    toggleBox.Color = Color3.fromRGB(100, 100, 100)
-    toggleBox.Filled = true
-    toggleBox.Visible = true
+-- TOGGLE
+function UI:CreateToggle(props)
+    local box = Drawing.new("Square")
+    box.Size = Vector2.new(20, 20)
+    box.Position = props.Position or Vector2.new(100, 100)
+    box.Color = Color3.fromRGB(100, 100, 100)
+    box.Filled = true
+    box.Visible = true
 
     local text = Drawing.new("Text")
     text.Text = props.Name or "Toggle"
-    text.Position = toggleBox.Position + Vector2.new(30, 0)
     text.Size = 20
+    text.Position = box.Position + Vector2.new(30, 0)
     text.Color = Color3.fromRGB(255, 255, 255)
     text.Visible = true
 
     local state = props.CurrentValue or false
 
     local function updateColor()
-        toggleBox.Color = state and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(100, 100, 100)
+        box.Color = state and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(100, 100, 100)
     end
     updateColor()
 
     task.spawn(function()
         while true do
             task.wait()
-            if isMouseOver(toggleBox.Position, toggleBox.Size) and game:GetService("UserInputService"):IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+            if isMouseOver(box.Position, box.Size) and game:GetService("UserInputService"):IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
                 state = not state
                 updateColor()
                 pcall(props.Callback, state)
@@ -78,11 +77,11 @@ function DrawingUI:CreateToggle(props)
         end
     end)
 
-    return {Box = toggleBox, Text = text, GetState = function() return state end}
+    return {Box = box, Text = text, GetState = function() return state end}
 end
 
--- Dropdown
-function DrawingUI:CreateDropdown(props)
+-- DROPDOWN
+function UI:CreateDropdown(props)
     local box = Drawing.new("Square")
     box.Size = Vector2.new(150, 30)
     box.Position = props.Position or Vector2.new(100, 100)
@@ -103,12 +102,10 @@ function DrawingUI:CreateDropdown(props)
 
     local function toggleDropdown()
         open = not open
-        for _, it in ipairs(items) do
-            it.Visible = open
-        end
+        for _, it in ipairs(items) do it.Visible = open end
     end
 
-    -- click main box to toggle
+    -- main box click
     task.spawn(function()
         while true do
             task.wait()
@@ -119,7 +116,7 @@ function DrawingUI:CreateDropdown(props)
         end
     end)
 
-    -- create items
+    -- dropdown items
     for i, option in ipairs(props.Options or {}) do
         local item = Drawing.new("Text")
         item.Text = option
@@ -147,28 +144,26 @@ function DrawingUI:CreateDropdown(props)
 end
 
 -- Example usage
-local UI = DrawingUI
-
--- Button
 UI:CreateButton({
     Name = "Redeem Codes",
+    Position = Vector2.new(100, 100),
     Callback = function()
         print("Redeem clicked")
     end
 })
 
--- Toggle
 UI:CreateToggle({
     Name = "Start Match",
+    Position = Vector2.new(100, 150),
     CurrentValue = false,
     Callback = function(state)
         print("Toggle state:", state)
     end
 })
 
--- Dropdown
 UI:CreateDropdown({
     Name = "Difficulty",
+    Position = Vector2.new(100, 200),
     Options = {"Easy", "Medium", "Hard"},
     CurrentOption = {"Medium"},
     Callback = function(option)
