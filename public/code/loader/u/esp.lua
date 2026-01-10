@@ -11,7 +11,7 @@ return function()
     esp.maxdist = 2000
 
     esp.showbox = true
-    esp.showcorners = true -- NEW: toggle for corner boxes
+    esp.showcorners = true
     esp.showname = true
     esp.showheld = true
     esp.showtracer = true
@@ -32,13 +32,12 @@ return function()
     esp.healthtextcolor = Color3.fromRGB(0, 255, 0)
     esp.distancecolor = Color3.fromRGB(255, 255, 255)
     esp.chamscolor = Color3.fromRGB(255, 255, 255)
-    esp.healthbarcoloroverride = nil -- nil = use HP gradient
+    esp.healthbarcoloroverride = nil
 
     local boxes, names, tracers, quads, healths, distances, chams, healthbars = {}, {}, {}, {}, {}, {}, {}, {}
-    local corners = {} -- NEW: corner lines per player
+    local corners = {} -- 8 corner lines per player
 
     local frameCount, uInterval = 0, 2
-
     local viewportSize = cam.ViewportSize
     local white = Color3.fromRGB(255, 255, 255)
     local red = Color3.fromRGB(255, 0, 0)
@@ -49,11 +48,9 @@ return function()
     local function getparts(p)
         local ch = p.Character
         if not ch then return end
-
         local hrp = ch:FindFirstChild("HumanoidRootPart")
         local head = ch:FindFirstChild("Head") or ch:FindFirstChild("UpperTorso") or ch:FindFirstChild("Torso")
         local humanoid = ch:FindFirstChildOfClass("Humanoid")
-
         if hrp and head then
             return ch, hrp, head, humanoid
         end
@@ -85,10 +82,10 @@ return function()
         })
     end
 
+    -- 8 corner lines: TL vert, TL horiz, TR vert, TR horiz, BL vert, BL horiz, BR vert, BR horiz
     local function newcorners(p)
-        -- 4 corner lines: TL, TR, BL, BR
         local t = {}
-        for i = 1, 4 do
+        for i = 1, 8 do
             t[i] = createDrawing("Line", {
                 Thickness = 2,
                 Transparency = 1,
@@ -150,20 +147,6 @@ return function()
         })
     end
 
-    local function trackplayer(p)
-        if p == lp then return end
-
-        newbox(p)
-        newcorners(p)
-        newname(p)
-        newtracer(p)
-        newquad(p)
-        newhealth(p)
-        newdistance(p)
-        newchams(p)
-        newhealthbar(p)
-    end
-
     local function cleanupPlayer(p)
         local objects = {
             boxes, names, tracers, quads, healths, distances, chams, healthbars, corners
@@ -192,12 +175,32 @@ return function()
         end
     end
 
+    local function trackplayer(p)
+        if p == lp then return end
+        newbox(p)
+        newcorners(p)
+        newname(p)
+        newtracer(p)
+        newquad(p)
+        newhealth(p)
+        newdistance(p)
+        newchams(p)
+        newhealthbar(p)
+
+        -- extra safety: if character is removed (died and not respawned yet), hide ESP
+        p.CharacterRemoving:Connect(function()
+            cleanupPlayer(p)
+        end)
+    end
+
     for _, p in pairs(players:GetPlayers()) do
         trackplayer(p)
     end
 
     players.PlayerAdded:Connect(trackplayer)
-    players.PlayerRemoving:Connect(cleanupPlayer)
+    players.PlayerRemoving:Connect(function(p)
+        cleanupPlayer(p)
+    end)
 
     rs.RenderStepped:Connect(function()
         if not esp.active then return end
@@ -209,20 +212,16 @@ return function()
         local cameraPos = cam.CFrame.Position
 
         for p, b in pairs(boxes) do
+            -- if player object itself vanished (should be rare, but guard)
+            if not p or not p.Parent then
+                cleanupPlayer(p)
+                continue
+            end
+
             local ch, hrp, head, humanoid = getparts(p)
 
             if not ch or not hrp or not head then
-                b.Visible = false
-                if corners[p] then
-                    for _, ln in ipairs(corners[p]) do ln.Visible = false end
-                end
-                if names[p] then names[p].Visible = false end
-                if tracers[p] then tracers[p].Visible = false end
-                if quads[p] then quads[p].Visible = false end
-                if healths[p] then healths[p].Visible = false end
-                if distances[p] then distances[p].Visible = false end
-                if chams[p] then chams[p].Enabled = false end
-                if healthbars[p] then healthbars[p].Visible = false end
+                cleanupPlayer(p) -- fully remove drawings when character is gone
                 continue
             end
 
@@ -231,10 +230,9 @@ return function()
             local dist = (cameraPos - hrp.Position).Magnitude
 
             if dist > esp.maxdist then
+                -- just hide when out of range, keep objects for when they come back in range
                 b.Visible = false
-                if corners[p] then
-                    for _, ln in ipairs(corners[p]) do ln.Visible = false end
-                end
+                if corners[p] then for _, ln in ipairs(corners[p]) do ln.Visible = false end end
                 if names[p] then names[p].Visible = false end
                 if tracers[p] then tracers[p].Visible = false end
                 if quads[p] then quads[p].Visible = false end
@@ -245,7 +243,6 @@ return function()
                 continue
             end
 
-            -- base team/dead color modifier
             local baseCol = white
             if esp.teamcolor and p.Team ~= lp.Team then
                 baseCol = red
@@ -254,7 +251,7 @@ return function()
                 baseCol = gray
             end
 
-            -- box
+            -- box / box metrics
             local height, width, boxLeft, boxTop
             if (esp.showbox or esp.showcorners) and hrpOnScreen and headOnScreen then
                 height = math.abs(hrpPos.Y - headPos.Y)
@@ -265,7 +262,6 @@ return function()
                 if esp.showbox then
                     b.Size = Vector2.new(width, height)
                     b.Position = Vector2.new(boxLeft, boxTop)
-                    -- per element color *with* team/death tint
                     b.Color = esp.boxcolor or baseCol
                     b.Visible = true
                 else
@@ -275,7 +271,7 @@ return function()
                 b.Visible = false
             end
 
-            -- corner box
+            -- corner box (top + bottom)
             if esp.showcorners and hrpOnScreen and headOnScreen and height and width then
                 local c = corners[p]
                 if c then
@@ -285,29 +281,51 @@ return function()
                     local x4, y4 = boxLeft + width, boxTop + height
 
                     local cornerLen = math.max(3, height * 0.2)
+                    local col = esp.cornercolor or baseCol
 
-                    -- TL
+                    -- TOP LEFT
                     c[1].From = Vector2.new(x1, y1 + cornerLen)
                     c[1].To   = Vector2.new(x1, y1)
-                    c[1].Color = esp.cornercolor or baseCol
+                    c[1].Color = col
                     c[1].Visible = true
 
                     c[2].From = Vector2.new(x1, y1)
                     c[2].To   = Vector2.new(x1 + cornerLen, y1)
-                    c[2].Color = esp.cornercolor or baseCol
+                    c[2].Color = col
                     c[2].Visible = true
 
-                    -- TR
+                    -- TOP RIGHT
                     c[3].From = Vector2.new(x2, y2 + cornerLen)
                     c[3].To   = Vector2.new(x2, y2)
-                    c[3].Color = esp.cornercolor or baseCol
+                    c[3].Color = col
                     c[3].Visible = true
 
                     c[4].From = Vector2.new(x2 - cornerLen, y2)
                     c[4].To   = Vector2.new(x2, y2)
-                    c[4].Color = esp.cornercolor or baseCol
+                    c[4].Color = col
                     c[4].Visible = true
 
+                    -- BOTTOM LEFT
+                    c[5].From = Vector2.new(x3, y3 - cornerLen)
+                    c[5].To   = Vector2.new(x3, y3)
+                    c[5].Color = col
+                    c[5].Visible = true
+
+                    c[6].From = Vector2.new(x3, y3)
+                    c[6].To   = Vector2.new(x3 + cornerLen, y3)
+                    c[6].Color = col
+                    c[6].Visible = true
+
+                    -- BOTTOM RIGHT
+                    c[7].From = Vector2.new(x4, y4 - cornerLen)
+                    c[7].To   = Vector2.new(x4, y4)
+                    c[7].Color = col
+                    c[7].Visible = true
+
+                    c[8].From = Vector2.new(x4 - cornerLen, y4)
+                    c[8].To   = Vector2.new(x4, y4)
+                    c[8].Color = col
+                    c[8].Visible = true
                 end
             elseif corners[p] then
                 for _, ln in ipairs(corners[p]) do ln.Visible = false end
@@ -315,8 +333,7 @@ return function()
 
             -- name + distance
             if (esp.showname or esp.showdistance) and headOnScreen then
-                local nameText = ""
-                local distanceText = ""
+                local nameText, distanceText = "", ""
 
                 if esp.showname then
                     nameText = p.Name
@@ -412,9 +429,11 @@ return function()
             -- chams
             if esp.showchams then
                 local cham = chams[p]
-                cham.Adornee = ch
-                cham.Enabled = true
-                cham.FillColor = esp.chamscolor or baseCol
+                if cham then
+                    cham.Adornee = ch
+                    cham.Enabled = true
+                    cham.FillColor = esp.chamscolor or baseCol
+                end
             elseif chams[p] then
                 chams[p].Enabled = false
             end
