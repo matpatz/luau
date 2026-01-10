@@ -48,7 +48,7 @@ return function()
     local corners = {}
     local box3dLines = {}
     local skeletonLines = {}
-p
+
     local tracked = {}
     local conns = {}
 
