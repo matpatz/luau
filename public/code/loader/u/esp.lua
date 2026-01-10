@@ -10,6 +10,7 @@ return function()
     esp.active = false
     esp.maxdist = 2000
 
+    -- 2D options
     esp.showbox = true
     esp.showcorners = true
     esp.showname = true
@@ -23,6 +24,10 @@ return function()
     esp.showhealthbar = false
     esp.performancemode = false
 
+    -- 3D options
+    esp.showskeleton = false
+    esp.show3dbox = false
+
     -- per element colors (default)
     esp.boxcolor = Color3.fromRGB(255, 255, 255)
     esp.cornercolor = Color3.fromRGB(255, 255, 255)
@@ -34,11 +39,19 @@ return function()
     esp.chamscolor = Color3.fromRGB(255, 255, 255)
     esp.healthbarcoloroverride = nil
 
+    -- sizing options
+    esp.tracerThickness = 1
+    esp.boxWidthScale = 0.6
+    esp.boxHeightScale = 1
+
     local boxes, names, tracers, quads, healths, distances, chams, healthbars = {}, {}, {}, {}, {}, {}, {}, {}
-    local corners = {} -- 8 corner lines per player
+    local corners = {}      -- 8 corner lines per player
+    local box3dLines = {}   -- 12 lines per player
+    local skeletonLines = {} -- skeleton segments per player
 
     local frameCount, uInterval = 0, 2
     local viewportSize = cam.ViewportSize
+
     local white = Color3.fromRGB(255, 255, 255)
     local red = Color3.fromRGB(255, 0, 0)
     local green = Color3.fromRGB(0, 255, 0)
@@ -48,6 +61,7 @@ return function()
     local function getparts(p)
         local ch = p.Character
         if not ch then return end
+
         local hrp = ch:FindFirstChild("HumanoidRootPart")
         local head = ch:FindFirstChild("Head") or ch:FindFirstChild("UpperTorso") or ch:FindFirstChild("Torso")
         local humanoid = ch:FindFirstChildOfClass("Humanoid")
@@ -105,7 +119,7 @@ return function()
 
     local function newtracer(p)
         tracers[p] = createDrawing("Line", {
-            Thickness = 1, Color = esp.tracercolor, Visible = false
+            Thickness = esp.tracerThickness, Color = esp.tracercolor, Visible = false
         })
     end
 
@@ -147,9 +161,36 @@ return function()
         })
     end
 
+    -- 3D box: 12 lines
+    local function new3dbox(p)
+        local t = {}
+        for i = 1, 12 do
+            t[i] = createDrawing("Line", {
+                Thickness = 1,
+                Color = esp.boxcolor,
+                Visible = false
+            })
+        end
+        box3dLines[p] = t
+    end
+
+    -- skeleton lines (R6/R15 basic)
+    local function newskeleton(p)
+        local t = {}
+        for i = 1, 15 do
+            t[i] = createDrawing("Line", {
+                Thickness = 1,
+                Color = esp.boxcolor,
+                Visible = false
+            })
+        end
+        skeletonLines[p] = t
+    end
+
     local function cleanupPlayer(p)
         local objects = {
-            boxes, names, tracers, quads, healths, distances, chams, healthbars, corners
+            boxes, names, tracers, quads, healths, distances, chams, healthbars,
+            corners, box3dLines, skeletonLines
         }
 
         for _, storage in pairs(objects) do
@@ -177,6 +218,7 @@ return function()
 
     local function trackplayer(p)
         if p == lp then return end
+
         newbox(p)
         newcorners(p)
         newname(p)
@@ -186,8 +228,10 @@ return function()
         newdistance(p)
         newchams(p)
         newhealthbar(p)
+        new3dbox(p)
+        newskeleton(p)
 
-        -- extra safety: if character is removed (died and not respawned yet), hide ESP
+        -- Character cleanup
         p.CharacterRemoving:Connect(function()
             cleanupPlayer(p)
         end)
@@ -202,6 +246,27 @@ return function()
         cleanupPlayer(p)
     end)
 
+    -- helper to get limb part positions
+    local function getJointPositions(ch)
+        local parts = {
+            Head = ch:FindFirstChild("Head"),
+            Torso = ch:FindFirstChild("Torso") or ch:FindFirstChild("UpperTorso"),
+            LowerTorso = ch:FindFirstChild("LowerTorso"),
+            LeftArm = ch:FindFirstChild("Left Arm") or ch:FindFirstChild("LeftUpperArm"),
+            RightArm = ch:FindFirstChild("Right Arm") or ch:FindFirstChild("RightUpperArm"),
+            LeftLeg = ch:FindFirstChild("Left Leg") or ch:FindFirstChild("LeftUpperLeg"),
+            RightLeg = ch:FindFirstChild("Right Leg") or ch:FindFirstChild("RightUpperLeg"),
+        }
+
+        local pos = {}
+        for name, part in pairs(parts) do
+            if part then
+                pos[name] = part.Position
+            end
+        end
+        return pos
+    end
+
     rs.RenderStepped:Connect(function()
         if not esp.active then return end
 
@@ -212,7 +277,6 @@ return function()
         local cameraPos = cam.CFrame.Position
 
         for p, b in pairs(boxes) do
-            -- if player object itself vanished (should be rare, but guard)
             if not p or not p.Parent then
                 cleanupPlayer(p)
                 continue
@@ -221,7 +285,7 @@ return function()
             local ch, hrp, head, humanoid = getparts(p)
 
             if not ch or not hrp or not head then
-                cleanupPlayer(p) -- fully remove drawings when character is gone
+                cleanupPlayer(p)
                 continue
             end
 
@@ -230,7 +294,6 @@ return function()
             local dist = (cameraPos - hrp.Position).Magnitude
 
             if dist > esp.maxdist then
-                -- just hide when out of range, keep objects for when they come back in range
                 b.Visible = false
                 if corners[p] then for _, ln in ipairs(corners[p]) do ln.Visible = false end end
                 if names[p] then names[p].Visible = false end
@@ -240,6 +303,8 @@ return function()
                 if distances[p] then distances[p].Visible = false end
                 if chams[p] then chams[p].Enabled = false end
                 if healthbars[p] then healthbars[p].Visible = false end
+                if box3dLines[p] then for _, ln in ipairs(box3dLines[p]) do ln.Visible = false end end
+                if skeletonLines[p] then for _, ln in ipairs(skeletonLines[p]) do ln.Visible = false end end
                 continue
             end
 
@@ -251,11 +316,11 @@ return function()
                 baseCol = gray
             end
 
-            -- box / box metrics
+            -- BOX metrics
             local height, width, boxLeft, boxTop
             if (esp.showbox or esp.showcorners) and hrpOnScreen and headOnScreen then
-                height = math.abs(hrpPos.Y - headPos.Y)
-                width = height * 0.6
+                height = math.abs(hrpPos.Y - headPos.Y) * (esp.boxHeightScale or 1)
+                width = height * (esp.boxWidthScale or 0.6)
                 boxLeft = hrpPos.X - width/2
                 boxTop = headPos.Y
 
@@ -271,7 +336,7 @@ return function()
                 b.Visible = false
             end
 
-            -- corner box (top + bottom)
+            -- CORNER BOX (top + bottom)
             if esp.showcorners and hrpOnScreen and headOnScreen and height and width then
                 local c = corners[p]
                 if c then
@@ -331,7 +396,7 @@ return function()
                 for _, ln in ipairs(corners[p]) do ln.Visible = false end
             end
 
-            -- name + distance
+            -- NAME + DISTANCE
             if (esp.showname or esp.showdistance) and headOnScreen then
                 local nameText, distanceText = "", ""
 
@@ -365,18 +430,19 @@ return function()
                 names[p].Visible = false
             end
 
-            -- Tracer
+            -- TRACER
             if esp.showtracer and hrpOnScreen then
                 local tr = tracers[p]
                 tr.From = Vector2.new(viewportSize.X/2, viewportSize.Y)
                 tr.To = Vector2.new(hrpPos.X, hrpPos.Y)
                 tr.Color = esp.tracercolor or baseCol
+                tr.Thickness = esp.tracerThickness or 1
                 tr.Visible = true
             elseif tracers[p] then
                 tracers[p].Visible = false
             end
 
-            -- quad
+            -- QUAD
             if esp.showquad and hrpOnScreen and headOnScreen then
                 local q = quads[p]
                 local heightQ = math.abs(hrpPos.Y - headPos.Y)
@@ -393,20 +459,20 @@ return function()
                 quads[p].Visible = false
             end
 
-            -- health (text)
+            -- HEALTH TEXT
             if esp.showhealth and humanoid and headOnScreen then
-                local health = healths[p]
+                local htxt = healths[p]
                 local healthText = math.floor(humanoid.Health) .. "/" .. math.floor(humanoid.MaxHealth)
                 local healthCol = esp.healthtextcolor or getColor(humanoid.Health, humanoid.MaxHealth)
-                health.Position = Vector2.new(headPos.X, headPos.Y + 5)
-                health.Text = healthText
-                health.Color = healthCol
-                health.Visible = true
+                htxt.Position = Vector2.new(headPos.X, headPos.Y + 5)
+                htxt.Text = healthText
+                htxt.Color = healthCol
+                htxt.Visible = true
             elseif healths[p] then
                 healths[p].Visible = false
             end
 
-            -- health (bar/line)
+            -- HEALTH BAR
             if esp.showhealthbar and humanoid and hrpOnScreen and headOnScreen then
                 local bar = healthbars[p]
                 local heightHB = math.abs(hrpPos.Y - headPos.Y)
@@ -426,7 +492,7 @@ return function()
                 healthbars[p].Visible = false
             end
 
-            -- chams
+            -- CHAMS (Highlight)
             if esp.showchams then
                 local cham = chams[p]
                 if cham then
@@ -436,6 +502,122 @@ return function()
                 end
             elseif chams[p] then
                 chams[p].Enabled = false
+            end
+
+            -- 3D BOX
+            if esp.show3dbox and box3dLines[p] then
+                local lines = box3dLines[p]
+                local size = hrp.Size * 1.5
+                local cf = hrp.CFrame
+
+                local offsets = {
+                    Vector3.new(-size.X/2,  size.Y/2, -size.Z/2), -- 1
+                    Vector3.new( size.X/2,  size.Y/2, -size.Z/2), -- 2
+                    Vector3.new( size.X/2,  size.Y/2,  size.Z/2), -- 3
+                    Vector3.new(-size.X/2,  size.Y/2,  size.Z/2), -- 4
+                    Vector3.new(-size.X/2, -size.Y/2, -size.Z/2), -- 5
+                    Vector3.new( size.X/2, -size.Y/2, -size.Z/2), -- 6
+                    Vector3.new( size.X/2, -size.Y/2,  size.Z/2), -- 7
+                    Vector3.new(-size.X/2, -size.Y/2,  size.Z/2), -- 8
+                }
+
+                local points2d = {}
+                local onscreenAny = false
+
+                for i = 1, 8 do
+                    local worldPos = (cf * CFrame.new(offsets[i])).Position
+                    local v2, onScreen = cam:WorldToViewportPoint(worldPos)
+                    points2d[i] = {Vector2.new(v2.X, v2.Y), onScreen}
+                    if onScreen then
+                        onscreenAny = true
+                    end
+                end
+
+                if onscreenAny then
+                    local col = esp.boxcolor or baseCol
+
+                    local function setLine(idx, i1, i2)
+                        local p1, o1 = points2d[i1][1], points2d[i1][2]
+                        local p2, o2 = points2d[i2][1], points2d[i2][2]
+                        local ln = lines[idx]
+                        if o1 or o2 then
+                            ln.From = p1
+                            ln.To = p2
+                            ln.Color = col
+                            ln.Visible = true
+                        else
+                            ln.Visible = false
+                        end
+                    end
+
+                    -- top rectangle: 1-2-3-4
+                    setLine(1, 1, 2)
+                    setLine(2, 2, 3)
+                    setLine(3, 3, 4)
+                    setLine(4, 4, 1)
+
+                    -- bottom rectangle: 5-6-7-8
+                    setLine(5, 5, 6)
+                    setLine(6, 6, 7)
+                    setLine(7, 7, 8)
+                    setLine(8, 8, 5)
+
+                    -- vertical edges
+                    setLine(9, 1, 5)
+                    setLine(10, 2, 6)
+                    setLine(11, 3, 7)
+                    setLine(12, 4, 8)
+                else
+                    for _, ln in ipairs(lines) do ln.Visible = false end
+                end
+            elseif box3dLines[p] then
+                for _, ln in ipairs(box3dLines[p]) do ln.Visible = false end
+            end
+
+            -- SKELETON
+            if esp.showskeleton and skeletonLines[p] then
+                local lines = skeletonLines[p]
+                local joints = getJointPositions(ch)
+
+                local function proj(name)
+                    local pos = joints[name]
+                    if not pos then return nil, false end
+                    local v, onScreen = cam:WorldToViewportPoint(pos)
+                    return Vector2.new(v.X, v.Y), onScreen
+                end
+
+                local pairsDef = {
+                    {"Head", "Torso"},           -- 1
+                    {"Torso", "LeftArm"},        -- 2
+                    {"Torso", "RightArm"},       -- 3
+                    {"Torso", "LeftLeg"},        -- 4
+                    {"Torso", "RightLeg"},       -- 5
+                }
+
+                local idx = 1
+                local col = esp.boxcolor or baseCol
+
+                for _, pair in ipairs(pairsDef) do
+                    local p1, o1 = proj(pair[1])
+                    local p2, o2 = proj(pair[2])
+                    local ln = lines[idx]
+                    idx = idx + 1
+
+                    if p1 and p2 and (o1 or o2) then
+                        ln.From = p1
+                        ln.To = p2
+                        ln.Color = col
+                        ln.Visible = true
+                    else
+                        ln.Visible = false
+                    end
+                end
+
+                for i = idx, #lines do
+                    lines[i].Visible = false
+                end
+            elseif skeletonLines[p] then
+                for _, ln in ipairs(skeletonLines[p]) do ln.Visible = false end
             end
         end
     end)
@@ -456,9 +638,12 @@ return function()
             if distances[p] then distances[p].Visible = false end
             if chams[p] then chams[p].Enabled = false end
             if healthbars[p] then healthbars[p].Visible = false end
+            if box3dLines[p] then for _, ln in ipairs(box3dLines[p]) do ln.Visible = false end end
+            if skeletonLines[p] then for _, ln in ipairs(skeletonLines[p]) do ln.Visible = false end end
         end
     end
 
+    -- 2D toggles
     function esp:box(v) self.showbox = v end
     function esp:corners(v) self.showcorners = v end
     function esp:name(v) self.showname = v end
@@ -473,6 +658,11 @@ return function()
     function esp:healthbar(v) self.showhealthbar = v end
     function esp:performance(v) self.performancemode = v end
 
+    -- 3D toggles
+    function esp:skeleton(v) self.showskeleton = v end
+    function esp:box3d(v) self.show3dbox = v end
+
+    -- color setters
     function esp:setBoxColor(c) self.boxcolor = c end
     function esp:setCornerColor(c) self.cornercolor = c end
     function esp:setNameColor(c) self.namecolor = c end
@@ -483,12 +673,20 @@ return function()
     function esp:setChamsColor(c) self.chamscolor = c end
     function esp:setHealthbarColor(c) self.healthbarcoloroverride = c end
 
+    -- sizing setters
+    function esp:setTracerThickness(v) self.tracerThickness = v end
+    function esp:setBoxSize(widthScale, heightScale)
+        if widthScale then self.boxWidthScale = widthScale end
+        if heightScale then self.boxHeightScale = heightScale end
+    end
+
     function esp:clear()
         for p in pairs(boxes) do
             cleanupPlayer(p)
         end
-        boxes, names, tracers, quads, healths, distances, chams, healthbars, corners =
-            {}, {}, {}, {}, {}, {}, {}, {}, {}
+        boxes, names, tracers, quads, healths, distances, chams, healthbars,
+        corners, box3dLines, skeletonLines =
+            {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
         self.active = false
     end
 
