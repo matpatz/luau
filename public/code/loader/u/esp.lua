@@ -10,6 +10,11 @@ return function()
     esp.active = false
     esp.maxdist = 2000
 
+    -- Target container:
+    -- default = Players (real players)
+    -- can be set to Folder/Model in workspace containing character Models
+    esp.container = players
+
     -- 2D options
     esp.showbox = true
     esp.showcorners = true
@@ -45,9 +50,13 @@ return function()
     esp.boxHeightScale = 1
 
     local boxes, names, tracers, quads, healths, distances, chams, healthbars = {}, {}, {}, {}, {}, {}, {}, {}
-    local corners = {}      -- 8 corner lines per player
-    local box3dLines = {}   -- 12 lines per player
-    local skeletonLines = {} -- skeleton segments per player
+    local corners = {}       -- 8 corner lines per target
+    local box3dLines = {}    -- 12 lines per target
+    local skeletonLines = {} -- skeleton segments per target
+
+    -- FIX: track connections per target so they can be disconnected on cleanup
+    local tracked = {} -- tracked[target] = true
+    local conns = {}   -- conns[target] = { RBXScriptConnection... }
 
     local frameCount, uInterval = 0, 2
     local viewportSize = cam.ViewportSize
@@ -58,19 +67,28 @@ return function()
     local yellow = Color3.fromRGB(255, 255, 0)
     local gray = Color3.fromRGB(128, 128, 128)
 
-    local function getparts(p)
-        local ch = p.Character
-        if not ch then return end
+    local containerAddedConn, containerRemovedConn
 
-        local hrp = ch:FindFirstChild("HumanoidRootPart")
-        local head = ch:FindFirstChild("Head") or ch:FindFirstChild("UpperTorso") or ch:FindFirstChild("Torso")
-        local humanoid = ch:FindFirstChildOfClass("Humanoid")
-        if hrp and head then
-            return ch, hrp, head, humanoid
+    local function isPlayerContainer()
+        return esp.container == players
+    end
+
+    local function isLocalTarget(target)
+        return isPlayerContainer() and target == lp
+    end
+
+    local function createDrawing(tp, properties)
+        local d = Drawing.new(tp)
+        for k, v in pairs(properties) do
+            d[k] = v
         end
+        return d
     end
 
     local function getColor(health, maxhealth)
+        if maxhealth <= 0 then
+            return red
+        end
         local percentage = health / maxhealth
         if percentage > 0.7 then
             return green
@@ -81,23 +99,85 @@ return function()
         end
     end
 
-    local function createDrawing(type, properties)
-        local drawing = Drawing.new(type)
-        for prop, value in pairs(properties) do
-            drawing[prop] = value
+    local function getCharacterFromTarget(target)
+        if isPlayerContainer() then
+            return target.Character
         end
-        return drawing
+        if typeof(target) == "Instance" and target:IsA("Model") then
+            return target
+        end
+        return nil
     end
 
-    local function newbox(p)
-        boxes[p] = createDrawing("Square", {
+    local function getparts(target)
+        local ch = getCharacterFromTarget(target)
+        if not ch then return end
+
+        local hrp = ch:FindFirstChild("HumanoidRootPart")
+        local head = ch:FindFirstChild("Head") or ch:FindFirstChild("UpperTorso") or ch:FindFirstChild("Torso")
+        local humanoid = ch:FindFirstChildOfClass("Humanoid")
+        if hrp and head then
+            return ch, hrp, head, humanoid
+        end
+    end
+
+    local function hideTarget(target)
+        if boxes[target] then boxes[target].Visible = false end
+        if corners[target] then for _, ln in ipairs(corners[target]) do ln.Visible = false end end
+        if names[target] then names[target].Visible = false end
+        if tracers[target] then tracers[target].Visible = false end
+        if quads[target] then quads[target].Visible = false end
+        if healths[target] then healths[target].Visible = false end
+        if distances[target] then distances[target].Visible = false end
+        if healthbars[target] then healthbars[target].Visible = false end
+        if box3dLines[target] then for _, ln in ipairs(box3dLines[target]) do ln.Visible = false end end
+        if skeletonLines[target] then for _, ln in ipairs(skeletonLines[target]) do ln.Visible = false end end
+        if chams[target] then chams[target].Enabled = false end
+    end
+
+    local function cleanupTarget(target)
+        -- disconnect per-target connections (prevents “stuck ESP” + leaks)
+        local t = conns[target]
+        if t then
+            for _, c in ipairs(t) do
+                if c and c.Disconnect then
+                    c:Disconnect()
+                end
+            end
+        end
+        conns[target] = nil
+
+        local storages = {boxes, names, tracers, quads, healths, distances, healthbars, corners, box3dLines, skeletonLines}
+        for _, storage in ipairs(storages) do
+            local obj = storage[target]
+            if obj then
+                if typeof(obj) == "table" then
+                    for _, v in pairs(obj) do
+                        if v and v.Remove then v:Remove() end
+                    end
+                else
+                    if obj and obj.Remove then obj:Remove() end
+                end
+            end
+            storage[target] = nil
+        end
+
+        if chams[target] then
+            chams[target]:Destroy()
+            chams[target] = nil
+        end
+
+        tracked[target] = nil
+    end
+
+    local function newbox(target)
+        boxes[target] = createDrawing("Square", {
             Thickness = 2, Filled = false, Transparency = 1,
             Color = esp.boxcolor, Visible = false
         })
     end
 
-    -- 8 corner lines: TL vert, TL horiz, TR vert, TR horiz, BL vert, BL horiz, BR vert, BR horiz
-    local function newcorners(p)
+    local function newcorners(target)
         local t = {}
         for i = 1, 8 do
             t[i] = createDrawing("Line", {
@@ -107,62 +187,61 @@ return function()
                 Visible = false
             })
         end
-        corners[p] = t
+        corners[target] = t
     end
 
-    local function newname(p)
-        names[p] = createDrawing("Text", {
+    local function newname(target)
+        names[target] = createDrawing("Text", {
             Size = 16, Center = true, Outline = true, Font = 2,
             Color = esp.namecolor, Visible = false
         })
     end
 
-    local function newtracer(p)
-        tracers[p] = createDrawing("Line", {
+    local function newtracer(target)
+        tracers[target] = createDrawing("Line", {
             Thickness = esp.tracerThickness, Color = esp.tracercolor, Visible = false
         })
     end
 
-    local function newquad(p)
-        quads[p] = createDrawing("Quad", {
+    local function newquad(target)
+        quads[target] = createDrawing("Quad", {
             Color = esp.quadcolor, Visible = false, Thickness = 1
         })
     end
 
-    local function newhealth(p)
-        healths[p] = createDrawing("Text", {
+    local function newhealth(target)
+        healths[target] = createDrawing("Text", {
             Size = 14, Center = true, Outline = true, Font = 2,
             Color = esp.healthtextcolor, Visible = false
         })
     end
 
-    local function newdistance(p)
-        distances[p] = createDrawing("Text", {
+    local function newdistance(target)
+        distances[target] = createDrawing("Text", {
             Size = 14, Center = true, Outline = true, Font = 2,
             Color = esp.distancecolor, Visible = false
         })
     end
 
-    local function newchams(p)
+    local function newchams(target)
         local highlight = Instance.new("Highlight")
         highlight.FillTransparency = 0.7
         highlight.OutlineTransparency = 1
         highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         highlight.Enabled = false
         highlight.Parent = ws
-        chams[p] = highlight
+        chams[target] = highlight
     end
 
-    local function newhealthbar(p)
-        healthbars[p] = createDrawing("Line", {
+    local function newhealthbar(target)
+        healthbars[target] = createDrawing("Line", {
             Thickness = 3,
             Color = esp.healthbarcoloroverride or green,
             Visible = false
         })
     end
 
-    -- 3D box: 12 lines
-    local function new3dbox(p)
+    local function new3dbox(target)
         local t = {}
         for i = 1, 12 do
             t[i] = createDrawing("Line", {
@@ -171,11 +250,10 @@ return function()
                 Visible = false
             })
         end
-        box3dLines[p] = t
+        box3dLines[target] = t
     end
 
-    -- skeleton lines (R6/R15 basic)
-    local function newskeleton(p)
+    local function newskeleton(target)
         local t = {}
         for i = 1, 15 do
             t[i] = createDrawing("Line", {
@@ -184,74 +262,83 @@ return function()
                 Visible = false
             })
         end
-        skeletonLines[p] = t
+        skeletonLines[target] = t
     end
 
-    local function cleanupPlayer(p)
-        local objects = {
-            boxes, names, tracers, quads, healths, distances, chams, healthbars,
-            corners, box3dLines, skeletonLines
-        }
+    local function trackTarget(target)
+        if tracked[target] then return end
+        if isLocalTarget(target) then return end
 
-        for _, storage in pairs(objects) do
-            local obj = storage[p]
-            if obj then
-                if typeof(obj) == "table" then
-                    for _, v in pairs(obj) do
-                        if typeof(v) == "Instance" then
-                            v:Destroy()
-                        elseif v and v.Remove then
-                            v:Remove()
-                        end
-                    end
-                else
-                    if typeof(obj) == "Instance" then
-                        obj:Destroy()
-                    elseif obj and obj.Remove then
-                        obj:Remove()
-                    end
-                end
-                storage[p] = nil
-            end
+        tracked[target] = true
+
+        newbox(target)
+        newcorners(target)
+        newname(target)
+        newtracer(target)
+        newquad(target)
+        newhealth(target)
+        newdistance(target)
+        newchams(target)
+        newhealthbar(target)
+        new3dbox(target)
+        newskeleton(target)
+
+        conns[target] = conns[target] or {}
+
+        -- FIX: on respawn, hide (don’t destroy drawings)
+        if isPlayerContainer() and target.CharacterRemoving then
+            table.insert(conns[target], target.CharacterRemoving:Connect(function()
+                hideTarget(target)
+            end))
         end
     end
 
-    local function trackplayer(p)
-        if p == lp then return end
-
-        newbox(p)
-        newcorners(p)
-        newname(p)
-        newtracer(p)
-        newquad(p)
-        newhealth(p)
-        newdistance(p)
-        newchams(p)
-        newhealthbar(p)
-        new3dbox(p)
-        newskeleton(p)
-
-        -- Character cleanup
-        p.CharacterRemoving:Connect(function()
-            cleanupPlayer(p)
-        end)
+    local function untrackTarget(target)
+        cleanupTarget(target)
     end
 
-    for _, p in pairs(players:GetPlayers()) do
-        trackplayer(p)
+    local function attachContainerListeners()
+        if containerAddedConn then containerAddedConn:Disconnect(); containerAddedConn = nil end
+        if containerRemovedConn then containerRemovedConn:Disconnect(); containerRemovedConn = nil end
+
+        if isPlayerContainer() then
+            containerAddedConn = players.PlayerAdded:Connect(trackTarget)
+            containerRemovedConn = players.PlayerRemoving:Connect(untrackTarget) -- correct leave cleanup [web:2]
+        else
+            containerAddedConn = esp.container.ChildAdded:Connect(trackTarget)
+            containerRemovedConn = esp.container.ChildRemoved:Connect(untrackTarget)
+        end
     end
 
-    players.PlayerAdded:Connect(trackplayer)
-    players.PlayerRemoving:Connect(function(p)
-        cleanupPlayer(p)
-    end)
+    local function setContainer(container)
+        container = container or players
 
-    -- helper to get limb part positions
+        for target in pairs(tracked) do
+            cleanupTarget(target)
+        end
+
+        esp.container = container
+
+        if isPlayerContainer() then
+            for _, p in ipairs(players:GetPlayers()) do
+                trackTarget(p)
+            end
+        else
+            for _, child in ipairs(esp.container:GetChildren()) do
+                trackTarget(child)
+            end
+        end
+
+        attachContainerListeners()
+    end
+
+    -- init default container
+    setContainer(players)
+
     local function getJointPositions(ch)
         local parts = {
             Head = ch:FindFirstChild("Head"),
             Torso = ch:FindFirstChild("Torso") or ch:FindFirstChild("UpperTorso"),
-            LowerTorso = ch:FindFirstChild("LowerTorso"),
             LeftArm = ch:FindFirstChild("Left Arm") or ch:FindFirstChild("LeftUpperArm"),
             RightArm = ch:FindFirstChild("Right Arm") or ch:FindFirstChild("RightUpperArm"),
             LeftLeg = ch:FindFirstChild("Left Leg") or ch:FindFirstChild("LeftUpperLeg"),
@@ -260,9 +347,7 @@ return function()
 
         local pos = {}
         for name, part in pairs(parts) do
-            if part then
-                pos[name] = part.Position
-            end
+            if part then pos[name] = part.Position end
         end
         return pos
     end
@@ -270,22 +355,23 @@ return function()
     rs.RenderStepped:Connect(function()
         if not esp.active then return end
 
-        frameCount = frameCount + 1
+        frameCount += 1
         if esp.performancemode and frameCount % uInterval ~= 0 then return end
 
         viewportSize = cam.ViewportSize
         local cameraPos = cam.CFrame.Position
 
-        for p, b in pairs(boxes) do
-            if not p or not p.Parent then
-                cleanupPlayer(p)
+        for target, b in pairs(boxes) do
+            if not target or not target.Parent then
+                cleanupTarget(target)
                 continue
             end
 
-            local ch, hrp, head, humanoid = getparts(p)
+            local ch, hrp, head, humanoid = getparts(target)
 
+            -- FIX: don't cleanup on respawn; just hide until character exists again
             if not ch or not hrp or not head then
-                cleanupPlayer(p)
+                hideTarget(target)
                 continue
             end
 
@@ -294,22 +380,12 @@ return function()
             local dist = (cameraPos - hrp.Position).Magnitude
 
             if dist > esp.maxdist then
-                b.Visible = false
-                if corners[p] then for _, ln in ipairs(corners[p]) do ln.Visible = false end end
-                if names[p] then names[p].Visible = false end
-                if tracers[p] then tracers[p].Visible = false end
-                if quads[p] then quads[p].Visible = false end
-                if healths[p] then healths[p].Visible = false end
-                if distances[p] then distances[p].Visible = false end
-                if chams[p] then chams[p].Enabled = false end
-                if healthbars[p] then healthbars[p].Visible = false end
-                if box3dLines[p] then for _, ln in ipairs(box3dLines[p]) do ln.Visible = false end end
-                if skeletonLines[p] then for _, ln in ipairs(skeletonLines[p]) do ln.Visible = false end end
+                hideTarget(target)
                 continue
             end
 
             local baseCol = white
-            if esp.teamcolor and p.Team ~= lp.Team then
+            if isPlayerContainer() and esp.teamcolor and target.Team ~= lp.Team then
                 baseCol = red
             end
             if humanoid and humanoid.Health <= 0 then
@@ -336,9 +412,9 @@ return function()
                 b.Visible = false
             end
 
-            -- CORNER BOX (top + bottom)
+            -- CORNER BOX
             if esp.showcorners and hrpOnScreen and headOnScreen and height and width then
-                local c = corners[p]
+                local c = corners[target]
                 if c then
                     local x1, y1 = boxLeft, boxTop
                     local x2, y2 = boxLeft + width, boxTop
@@ -348,52 +424,20 @@ return function()
                     local cornerLen = math.max(3, height * 0.2)
                     local col = esp.cornercolor or baseCol
 
-                    -- TOP LEFT
-                    c[1].From = Vector2.new(x1, y1 + cornerLen)
-                    c[1].To   = Vector2.new(x1, y1)
-                    c[1].Color = col
-                    c[1].Visible = true
+                    c[1].From = Vector2.new(x1, y1 + cornerLen); c[1].To = Vector2.new(x1, y1); c[1].Color = col; c[1].Visible = true
+                    c[2].From = Vector2.new(x1, y1); c[2].To = Vector2.new(x1 + cornerLen, y1); c[2].Color = col; c[2].Visible = true
 
-                    c[2].From = Vector2.new(x1, y1)
-                    c[2].To   = Vector2.new(x1 + cornerLen, y1)
-                    c[2].Color = col
-                    c[2].Visible = true
+                    c[3].From = Vector2.new(x2, y2 + cornerLen); c[3].To = Vector2.new(x2, y2); c[3].Color = col; c[3].Visible = true
+                    c[4].From = Vector2.new(x2 - cornerLen, y2); c[4].To = Vector2.new(x2, y2); c[4].Color = col; c[4].Visible = true
 
-                    -- TOP RIGHT
-                    c[3].From = Vector2.new(x2, y2 + cornerLen)
-                    c[3].To   = Vector2.new(x2, y2)
-                    c[3].Color = col
-                    c[3].Visible = true
+                    c[5].From = Vector2.new(x3, y3 - cornerLen); c[5].To = Vector2.new(x3, y3); c[5].Color = col; c[5].Visible = true
+                    c[6].From = Vector2.new(x3, y3); c[6].To = Vector2.new(x3 + cornerLen, y3); c[6].Color = col; c[6].Visible = true
 
-                    c[4].From = Vector2.new(x2 - cornerLen, y2)
-                    c[4].To   = Vector2.new(x2, y2)
-                    c[4].Color = col
-                    c[4].Visible = true
-
-                    -- BOTTOM LEFT
-                    c[5].From = Vector2.new(x3, y3 - cornerLen)
-                    c[5].To   = Vector2.new(x3, y3)
-                    c[5].Color = col
-                    c[5].Visible = true
-
-                    c[6].From = Vector2.new(x3, y3)
-                    c[6].To   = Vector2.new(x3 + cornerLen, y3)
-                    c[6].Color = col
-                    c[6].Visible = true
-
-                    -- BOTTOM RIGHT
-                    c[7].From = Vector2.new(x4, y4 - cornerLen)
-                    c[7].To   = Vector2.new(x4, y4)
-                    c[7].Color = col
-                    c[7].Visible = true
-
-                    c[8].From = Vector2.new(x4 - cornerLen, y4)
-                    c[8].To   = Vector2.new(x4, y4)
-                    c[8].Color = col
-                    c[8].Visible = true
+                    c[7].From = Vector2.new(x4, y4 - cornerLen); c[7].To = Vector2.new(x4, y4); c[7].Color = col; c[7].Visible = true
+                    c[8].From = Vector2.new(x4 - cornerLen, y4); c[8].To = Vector2.new(x4, y4); c[8].Color = col; c[8].Visible = true
                 end
-            elseif corners[p] then
-                for _, ln in ipairs(corners[p]) do ln.Visible = false end
+            elseif corners[target] then
+                for _, ln in ipairs(corners[target]) do ln.Visible = false end
             end
 
             -- NAME + DISTANCE
@@ -401,8 +445,8 @@ return function()
                 local nameText, distanceText = "", ""
 
                 if esp.showname then
-                    nameText = p.Name
-                    if esp.showheld then
+                    nameText = (typeof(target) == "Instance") and target.Name or "Target"
+                    if esp.showheld and isPlayerContainer() then
                         local tool = ch:FindFirstChildOfClass("Tool")
                         if tool then
                             nameText = nameText .. " [" .. tool.Name .. "]"
@@ -421,30 +465,30 @@ return function()
                     combinedText = distanceText
                 end
 
-                local n = names[p]
+                local n = names[target]
                 n.Position = Vector2.new(headPos.X, headPos.Y - 15)
                 n.Text = combinedText
                 n.Color = esp.namecolor or baseCol
                 n.Visible = true
-            elseif names[p] then
-                names[p].Visible = false
+            elseif names[target] then
+                names[target].Visible = false
             end
 
             -- TRACER
             if esp.showtracer and hrpOnScreen then
-                local tr = tracers[p]
+                local tr = tracers[target]
                 tr.From = Vector2.new(viewportSize.X/2, viewportSize.Y)
                 tr.To = Vector2.new(hrpPos.X, hrpPos.Y)
                 tr.Color = esp.tracercolor or baseCol
                 tr.Thickness = esp.tracerThickness or 1
                 tr.Visible = true
-            elseif tracers[p] then
-                tracers[p].Visible = false
+            elseif tracers[target] then
+                tracers[target].Visible = false
             end
 
             -- QUAD
             if esp.showquad and hrpOnScreen and headOnScreen then
-                local q = quads[p]
+                local q = quads[target]
                 local heightQ = math.abs(hrpPos.Y - headPos.Y)
                 local widthQ = heightQ * 0.6
                 local halfWidth = widthQ/2
@@ -455,70 +499,72 @@ return function()
                 q.PointD = Vector2.new(hrpPos.X - halfWidth, hrpPos.Y)
                 q.Color = esp.quadcolor or baseCol
                 q.Visible = true
-            elseif quads[p] then
-                quads[p].Visible = false
+            elseif quads[target] then
+                quads[target].Visible = false
             end
 
             -- HEALTH TEXT
             if esp.showhealth and humanoid and headOnScreen then
-                local htxt = healths[p]
+                local htxt = healths[target]
                 local healthText = math.floor(humanoid.Health) .. "/" .. math.floor(humanoid.MaxHealth)
                 local healthCol = esp.healthtextcolor or getColor(humanoid.Health, humanoid.MaxHealth)
                 htxt.Position = Vector2.new(headPos.X, headPos.Y + 5)
                 htxt.Text = healthText
                 htxt.Color = healthCol
                 htxt.Visible = true
-            elseif healths[p] then
-                healths[p].Visible = false
+            elseif healths[target] then
+                healths[target].Visible = false
             end
 
             -- HEALTH BAR
             if esp.showhealthbar and humanoid and hrpOnScreen and headOnScreen then
-                local bar = healthbars[p]
+                local bar = healthbars[target]
                 local heightHB = math.abs(hrpPos.Y - headPos.Y)
                 local widthHB = heightHB * 0.6
                 local boxLeftHB = hrpPos.X - widthHB/2
                 local boxTopHB = headPos.Y
 
-                local healthPercentage = humanoid.Health / humanoid.MaxHealth
-                local barHeight = heightHB * healthPercentage
-                local barColor = esp.healthbarcoloroverride or getColor(humanoid.Health, humanoid.MaxHealth)
+                local maxH = humanoid.MaxHealth
+                local hp = humanoid.Health
+                local healthPercentage = (maxH > 0) and (hp / maxH) or 0
+                local barHeight = heightHB * math.clamp(healthPercentage, 0, 1)
+                local barColor = esp.healthbarcoloroverride or getColor(hp, maxH)
 
                 bar.From = Vector2.new(boxLeftHB - 6, boxTopHB + heightHB - barHeight)
                 bar.To = Vector2.new(boxLeftHB - 6, boxTopHB + heightHB)
                 bar.Color = barColor
                 bar.Visible = true
-            elseif healthbars[p] then
-                healthbars[p].Visible = false
+            elseif healthbars[target] then
+                healthbars[target].Visible = false
             end
 
             -- CHAMS (Highlight)
             if esp.showchams then
-                local cham = chams[p]
+                local cham = chams[target]
                 if cham then
                     cham.Adornee = ch
                     cham.Enabled = true
                     cham.FillColor = esp.chamscolor or baseCol
                 end
-            elseif chams[p] then
-                chams[p].Enabled = false
+            elseif chams[target] then
+                chams[target].Enabled = false
             end
 
             -- 3D BOX
-            if esp.show3dbox and box3dLines[p] then
-                local lines = box3dLines[p]
+            if esp.show3dbox and box3dLines[target] then
+                local lines = box3dLines[target]
                 local size = hrp.Size * 1.5
                 local cf = hrp.CFrame
 
                 local offsets = {
-                    Vector3.new(-size.X/2,  size.Y/2, -size.Z/2), -- 1
-                    Vector3.new( size.X/2,  size.Y/2, -size.Z/2), -- 2
-                    Vector3.new( size.X/2,  size.Y/2,  size.Z/2), -- 3
-                    Vector3.new(-size.X/2,  size.Y/2,  size.Z/2), -- 4
-                    Vector3.new(-size.X/2, -size.Y/2, -size.Z/2), -- 5
-                    Vector3.new( size.X/2, -size.Y/2, -size.Z/2), -- 6
-                    Vector3.new( size.X/2, -size.Y/2,  size.Z/2), -- 7
-                    Vector3.new(-size.X/2, -size.Y/2,  size.Z/2), -- 8
+                    Vector3.new(-size.X/2,  size.Y/2, -size.Z/2),
+                    Vector3.new( size.X/2,  size.Y/2, -size.Z/2),
+                    Vector3.new( size.X/2,  size.Y/2,  size.Z/2),
+                    Vector3.new(-size.X/2,  size.Y/2,  size.Z/2),
+                    Vector3.new(-size.X/2, -size.Y/2, -size.Z/2),
+                    Vector3.new( size.X/2, -size.Y/2, -size.Z/2),
+                    Vector3.new( size.X/2, -size.Y/2,  size.Z/2),
+                    Vector3.new(-size.X/2, -size.Y/2,  size.Z/2),
                 }
 
                 local points2d = {}
@@ -528,9 +574,7 @@ return function()
                     local worldPos = (cf * CFrame.new(offsets[i])).Position
                     local v2, onScreen = cam:WorldToViewportPoint(worldPos)
                     points2d[i] = {Vector2.new(v2.X, v2.Y), onScreen}
-                    if onScreen then
-                        onscreenAny = true
-                    end
+                    if onScreen then onscreenAny = true end
                 end
 
                 if onscreenAny then
@@ -550,33 +594,19 @@ return function()
                         end
                     end
 
-                    -- top rectangle: 1-2-3-4
-                    setLine(1, 1, 2)
-                    setLine(2, 2, 3)
-                    setLine(3, 3, 4)
-                    setLine(4, 4, 1)
-
-                    -- bottom rectangle: 5-6-7-8
-                    setLine(5, 5, 6)
-                    setLine(6, 6, 7)
-                    setLine(7, 7, 8)
-                    setLine(8, 8, 5)
-
-                    -- vertical edges
-                    setLine(9, 1, 5)
-                    setLine(10, 2, 6)
-                    setLine(11, 3, 7)
-                    setLine(12, 4, 8)
+                    setLine(1, 1, 2); setLine(2, 2, 3); setLine(3, 3, 4); setLine(4, 4, 1)
+                    setLine(5, 5, 6); setLine(6, 6, 7); setLine(7, 7, 8); setLine(8, 8, 5)
+                    setLine(9, 1, 5); setLine(10, 2, 6); setLine(11, 3, 7); setLine(12, 4, 8)
                 else
                     for _, ln in ipairs(lines) do ln.Visible = false end
                 end
-            elseif box3dLines[p] then
-                for _, ln in ipairs(box3dLines[p]) do ln.Visible = false end
+            elseif box3dLines[target] then
+                for _, ln in ipairs(box3dLines[target]) do ln.Visible = false end
             end
 
             -- SKELETON
-            if esp.showskeleton and skeletonLines[p] then
-                local lines = skeletonLines[p]
+            if esp.showskeleton and skeletonLines[target] then
+                local lines = skeletonLines[target]
                 local joints = getJointPositions(ch)
 
                 local function proj(name)
@@ -587,11 +617,11 @@ return function()
                 end
 
                 local pairsDef = {
-                    {"Head", "Torso"},           -- 1
-                    {"Torso", "LeftArm"},        -- 2
-                    {"Torso", "RightArm"},       -- 3
-                    {"Torso", "LeftLeg"},        -- 4
-                    {"Torso", "RightLeg"},       -- 5
+                    {"Head", "Torso"},
+                    {"Torso", "LeftArm"},
+                    {"Torso", "RightArm"},
+                    {"Torso", "LeftLeg"},
+                    {"Torso", "RightLeg"},
                 }
 
                 local idx = 1
@@ -601,7 +631,7 @@ return function()
                     local p1, o1 = proj(pair[1])
                     local p2, o2 = proj(pair[2])
                     local ln = lines[idx]
-                    idx = idx + 1
+                    idx += 1
 
                     if p1 and p2 and (o1 or o2) then
                         ln.From = p1
@@ -616,8 +646,8 @@ return function()
                 for i = idx, #lines do
                     lines[i].Visible = false
                 end
-            elseif skeletonLines[p] then
-                for _, ln in ipairs(skeletonLines[p]) do ln.Visible = false end
+            elseif skeletonLines[target] then
+                for _, ln in ipairs(skeletonLines[target]) do ln.Visible = false end
             end
         end
     end)
@@ -628,18 +658,44 @@ return function()
 
     function esp:disable()
         self.active = false
-        for p in pairs(boxes) do
-            if boxes[p] then boxes[p].Visible = false end
-            if corners[p] then for _, ln in ipairs(corners[p]) do ln.Visible = false end end
-            if names[p] then names[p].Visible = false end
-            if tracers[p] then tracers[p].Visible = false end
-            if quads[p] then quads[p].Visible = false end
-            if healths[p] then healths[p].Visible = false end
-            if distances[p] then distances[p].Visible = false end
-            if chams[p] then chams[p].Enabled = false end
-            if healthbars[p] then healthbars[p].Visible = false end
-            if box3dLines[p] then for _, ln in ipairs(box3dLines[p]) do ln.Visible = false end end
-            if skeletonLines[p] then for _, ln in ipairs(skeletonLines[p]) do ln.Visible = false end end
+        for target in pairs(tracked) do
+            hideTarget(target)
+        end
+    end
+
+    -- Optional: change where targets come from
+    function esp:setContainer(container)
+        -- container = Players OR Folder/Model
+        local newContainer = container or players
+
+        -- cleanup old targets
+        for target in pairs(tracked) do
+            cleanupTarget(target)
+        end
+
+        esp.container = newContainer
+
+        -- seed targets
+        if isPlayerContainer() then
+            for _, p in ipairs(players:GetPlayers()) do
+                trackTarget(p)
+            end
+        else
+            for _, child in ipairs(esp.container:GetChildren()) do
+                trackTarget(child)
+            end
+        end
+
+        -- rehook listeners
+        if containerAddedConn then containerAddedConn:Disconnect(); containerAddedConn = nil end
+        if containerRemovedConn then containerRemovedConn:Disconnect(); containerRemovedConn = nil end
+
+        if isPlayerContainer() then
+            containerAddedConn = players.PlayerAdded:Connect(trackTarget)
+            containerRemovedConn = players.PlayerRemoving:Connect(untrackTarget) -- leave cleanup [web:2]
+        else
+            containerAddedConn = esp.container.ChildAdded:Connect(trackTarget)
+            containerRemovedConn = esp.container.ChildRemoved:Connect(untrackTarget)
         end
     end
 
@@ -681,12 +737,12 @@ return function()
     end
 
     function esp:clear()
-        for p in pairs(boxes) do
-            cleanupPlayer(p)
+        for target in pairs(tracked) do
+            cleanupTarget(target)
         end
-        boxes, names, tracers, quads, healths, distances, chams, healthbars,
-        corners, box3dLines, skeletonLines =
-            {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
+        boxes, names, tracers, quads, healths, distances, chams, healthbars = {}, {}, {}, {}, {}, {}, {}, {}
+        corners, box3dLines, skeletonLines = {}, {}, {}
+        tracked, conns = {}, {}
         self.active = false
     end
 
