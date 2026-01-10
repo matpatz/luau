@@ -2,6 +2,7 @@ return function()
     local get = (type(cloneref) == "function") and cloneref or function(x) return x end
     local players = get(game:GetService("Players"))
     local rs = get(game:GetService("RunService"))
+    local core = get(game:GetService("CoreGui")); local parent = Instance.new("Folder"); parent.Parent = core; parent.Name = tostring(math.random(1e9, 2e9))
     local ws = get(game:GetService("Workspace"))
     local cam = ws.CurrentCamera
     local lp = players.LocalPlayer
@@ -222,7 +223,7 @@ return function()
         highlight.OutlineTransparency = 1
         highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         highlight.Enabled = false
-        highlight.Parent = ws
+        highlight.Parent = parent
         chams[target] = highlight
     end
 
