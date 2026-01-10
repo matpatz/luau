@@ -10,9 +10,6 @@ return function()
     esp.active = false
     esp.maxdist = 2000
 
-    -- Target container:
-    -- default = Players (real players)
-    -- can be set to Folder/Model in workspace containing character Models
     esp.container = players
 
     -- 2D options
@@ -33,7 +30,6 @@ return function()
     esp.showskeleton = false
     esp.show3dbox = false
 
-    -- per element colors (default)
     esp.boxcolor = Color3.fromRGB(255, 255, 255)
     esp.cornercolor = Color3.fromRGB(255, 255, 255)
     esp.namecolor = Color3.fromRGB(255, 255, 255)
@@ -44,19 +40,17 @@ return function()
     esp.chamscolor = Color3.fromRGB(255, 255, 255)
     esp.healthbarcoloroverride = nil
 
-    -- sizing options
     esp.tracerThickness = 1
     esp.boxWidthScale = 0.6
     esp.boxHeightScale = 1
 
     local boxes, names, tracers, quads, healths, distances, chams, healthbars = {}, {}, {}, {}, {}, {}, {}, {}
-    local corners = {}       -- 8 corner lines per target
-    local box3dLines = {}    -- 12 lines per target
-    local skeletonLines = {} -- skeleton segments per target
-
-    -- FIX: track connections per target so they can be disconnected on cleanup
-    local tracked = {} -- tracked[target] = true
-    local conns = {}   -- conns[target] = { RBXScriptConnection... }
+    local corners = {}
+    local box3dLines = {}
+    local skeletonLines = {}
+p
+    local tracked = {}
+    local conns = {}
 
     local frameCount, uInterval = 0, 2
     local viewportSize = cam.ViewportSize
@@ -136,7 +130,6 @@ return function()
     end
 
     local function cleanupTarget(target)
-        -- disconnect per-target connections (prevents “stuck ESP” + leaks)
         local t = conns[target]
         if t then
             for _, c in ipairs(t) do
@@ -285,7 +278,6 @@ return function()
 
         conns[target] = conns[target] or {}
 
-        -- FIX: on respawn, hide (don’t destroy drawings)
         if isPlayerContainer() and target.CharacterRemoving then
             table.insert(conns[target], target.CharacterRemoving:Connect(function()
                 hideTarget(target)
@@ -303,7 +295,7 @@ return function()
 
         if isPlayerContainer() then
             containerAddedConn = players.PlayerAdded:Connect(trackTarget)
-            containerRemovedConn = players.PlayerRemoving:Connect(untrackTarget) -- correct leave cleanup [web:2]
+            containerRemovedConn = players.PlayerRemoving:Connect(untrackTarget)
         else
             containerAddedConn = esp.container.ChildAdded:Connect(trackTarget)
             containerRemovedConn = esp.container.ChildRemoved:Connect(untrackTarget)
@@ -332,7 +324,6 @@ return function()
         attachContainerListeners()
     end
 
-    -- init default container
     setContainer(players)
 
     local function getJointPositions(ch)
@@ -369,7 +360,6 @@ return function()
 
             local ch, hrp, head, humanoid = getparts(target)
 
-            -- FIX: don't cleanup on respawn; just hide until character exists again
             if not ch or not hrp or not head then
                 hideTarget(target)
                 continue
@@ -392,7 +382,6 @@ return function()
                 baseCol = gray
             end
 
-            -- BOX metrics
             local height, width, boxLeft, boxTop
             if (esp.showbox or esp.showcorners) and hrpOnScreen and headOnScreen then
                 height = math.abs(hrpPos.Y - headPos.Y) * (esp.boxHeightScale or 1)
@@ -412,7 +401,6 @@ return function()
                 b.Visible = false
             end
 
-            -- CORNER BOX
             if esp.showcorners and hrpOnScreen and headOnScreen and height and width then
                 local c = corners[target]
                 if c then
@@ -440,7 +428,7 @@ return function()
                 for _, ln in ipairs(corners[target]) do ln.Visible = false end
             end
 
-            -- NAME + DISTANCE
+            -- name + distance
             if (esp.showname or esp.showdistance) and headOnScreen then
                 local nameText, distanceText = "", ""
 
@@ -474,7 +462,7 @@ return function()
                 names[target].Visible = false
             end
 
-            -- TRACER
+            -- tracer
             if esp.showtracer and hrpOnScreen then
                 local tr = tracers[target]
                 tr.From = Vector2.new(viewportSize.X/2, viewportSize.Y)
@@ -486,7 +474,7 @@ return function()
                 tracers[target].Visible = false
             end
 
-            -- QUAD
+            -- quad
             if esp.showquad and hrpOnScreen and headOnScreen then
                 local q = quads[target]
                 local heightQ = math.abs(hrpPos.Y - headPos.Y)
@@ -503,7 +491,7 @@ return function()
                 quads[target].Visible = false
             end
 
-            -- HEALTH TEXT
+            -- health text
             if esp.showhealth and humanoid and headOnScreen then
                 local htxt = healths[target]
                 local healthText = math.floor(humanoid.Health) .. "/" .. math.floor(humanoid.MaxHealth)
@@ -516,7 +504,7 @@ return function()
                 healths[target].Visible = false
             end
 
-            -- HEALTH BAR
+            -- health bar
             if esp.showhealthbar and humanoid and hrpOnScreen and headOnScreen then
                 local bar = healthbars[target]
                 local heightHB = math.abs(hrpPos.Y - headPos.Y)
@@ -538,7 +526,7 @@ return function()
                 healthbars[target].Visible = false
             end
 
-            -- CHAMS (Highlight)
+            -- chams
             if esp.showchams then
                 local cham = chams[target]
                 if cham then
@@ -550,7 +538,7 @@ return function()
                 chams[target].Enabled = false
             end
 
-            -- 3D BOX
+            -- 3D box
             if esp.show3dbox and box3dLines[target] then
                 local lines = box3dLines[target]
                 local size = hrp.Size * 1.5
@@ -604,7 +592,7 @@ return function()
                 for _, ln in ipairs(box3dLines[target]) do ln.Visible = false end
             end
 
-            -- SKELETON
+            -- skeleton
             if esp.showskeleton and skeletonLines[target] then
                 local lines = skeletonLines[target]
                 local joints = getJointPositions(ch)
@@ -663,19 +651,15 @@ return function()
         end
     end
 
-    -- Optional: change where targets come from
     function esp:setContainer(container)
-        -- container = Players OR Folder/Model
         local newContainer = container or players
 
-        -- cleanup old targets
         for target in pairs(tracked) do
             cleanupTarget(target)
         end
 
         esp.container = newContainer
 
-        -- seed targets
         if isPlayerContainer() then
             for _, p in ipairs(players:GetPlayers()) do
                 trackTarget(p)
@@ -686,7 +670,6 @@ return function()
             end
         end
 
-        -- rehook listeners
         if containerAddedConn then containerAddedConn:Disconnect(); containerAddedConn = nil end
         if containerRemovedConn then containerRemovedConn:Disconnect(); containerRemovedConn = nil end
 
