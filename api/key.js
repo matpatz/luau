@@ -1,9 +1,8 @@
 import crypto from "crypto";
 
-const SHARED = process.env.SHARED_SECRET; // same as client SHARED
+const SHARED = process.env.sSecret;
 const NONCE_TTL_MS = 60_000;
 
-// simple in-memory replay cache (edge-safe enough for low volume)
 const seenNonces = new Map();
 
 function sha256(s) {
@@ -27,7 +26,6 @@ export default async function handler(req, res) {
 
   const { key, device, ts, nonce, sig } = req.body || {};
 
-  // basic shape checks
   if (
     typeof key !== "string" || key.length < 4 ||
     typeof device !== "string" ||
@@ -38,23 +36,18 @@ export default async function handler(req, res) {
     return res.status(400).json({ ok: false, error: "Bad request" });
   }
 
-  // timestamp window (±60s)
   if (Math.abs(now() - ts * 1000) > 60_000)
     return res.status(401).json({ ok: false, error: "Stale request" });
 
-  // replay protection
   if (seenNonces.has(nonce))
     return res.status(401).json({ ok: false, error: "Replay" });
 
   seenNonces.set(nonce, now());
   setTimeout(() => seenNonces.delete(nonce), NONCE_TTL_MS);
 
-  // verify client signature
   const expectSig = sign(key, device, ts, nonce);
   if (sig !== expectSig)
     return res.status(401).json({ ok: false, error: "Bad signature" });
-
-  // ---- Supabase logic ----
 
   const SUPABASE_URL = process.env.supabaseurl;
   const SERVICE_ROLE = process.env.supabaseService;
