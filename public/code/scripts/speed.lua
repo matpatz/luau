@@ -1,4 +1,4 @@
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 local Window = Rayfield:CreateWindow({
     Name = "Speedy",
@@ -10,76 +10,57 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false
 })
 
-local Tab = Window:CreateTab("Movement", 4483362458)
-Tab:CreateSection("Controls")
+local main = Window:CreateTab("Movement", 4483362458)
+main:CreateSection("Controls")
 
-local LocalPlayer = game:GetService("Players").LocalPlayer
-local RunService = game:GetService("RunService")
+local uis = game:GetService("UserInputService")
 
-local activeLoop = false
-
-Tab:CreateDropdown({
-    Name = "Mode",
-    Options = {"CFrame"}, -- Velocity + Humanoid
-    CurrentOption = "CFrame",
-    Callback = function()
-        if activeLoop then activeLoop:Disconnect() end
-        if LocalPlayer.Character then
-            local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-            if hrp and hum then
-                activeLoop = RunService.Heartbeat:Connect(function()
-                    local dir = hum.MoveDirection
-                    if dir.Magnitude > 0 then
-                        hrp.CFrame = hrp.CFrame + dir * (50 / 50)
-                    end
-                end)
-            end
-        end
-    end
-})
-
-Tab:CreateSlider({
+local speed = 50
+main:CreateSlider({
     Name = "Speed",
     Range = {0,200},
     Increment = 5,
-    Suffix = "Speed",
+    Suffix = " studs/s",
     CurrentValue = 50,
-    Callback = function(val)
-        if activeLoop then activeLoop:Disconnect() end
-        if LocalPlayer.Character then
-            local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-            if hrp and hum then
-                activeLoop = RunService.Heartbeat:Connect(function()
-                    local dir = hum.MoveDirection
-                    if dir.Magnitude > 0 then
-                        hrp.CFrame = hrp.CFrame + dir * (val / 50)
-                    end
-                end)
-            end
-        end
-    end
+    Callback = function(v)
+        speed = v
+    end,
 })
 
-Tab:CreateToggle({
+local moveConn
+main:CreateToggle({
     Name = "Enable",
     CurrentValue = false,
-    Callback = function(val)
-        if activeLoop then activeLoop:Disconnect() end
-        if val and LocalPlayer.Character then
-            local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-            if hrp and hum then
-                activeLoop = RunService.Heartbeat:Connect(function()
-                    local dir = hum.MoveDirection
-                    if dir.Magnitude > 0 then
-                        hrp.CFrame = hrp.CFrame + dir * (50 / 50)
-                    end
-                end)
-            end
+    Callback = function(enabled)
+        if moveConn then
+            moveConn:Disconnect()
+            moveConn = nil
         end
-    end
+
+        if not enabled then return end
+
+        moveConn = game:GetService("RunService").Heartbeat:Connect(function(dt)
+            local char = game:GetService("Players").LocalPlayer.Character
+            if not char then return end
+
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if not hrp then return end
+
+            local cam = workspace.CurrentCamera
+            local move = Vector3.zero
+
+            if uis:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
+            if uis:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
+            if uis:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
+            if uis:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
+
+            move = Vector3.new(move.X, 0, move.Z)
+
+            if move.Magnitude > 0 then
+                hrp.CFrame += move.Unit * speed * dt
+            end
+        end)
+    end,
 })
 
 Rayfield:LoadConfiguration()
