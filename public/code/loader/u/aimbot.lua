@@ -1,5 +1,5 @@
 local v = loadstring(game:HttpGet("https://website-iota-ivory-12.vercel.app/code/loader/u/vars.lua"))()
-local players. cam = v.players, v.workspace.CurrentCamera
+local players. cam = v.players, workspace.CurrentCamera
 
 local module = {}
 
