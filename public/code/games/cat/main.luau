@@ -107,35 +107,39 @@ main:CreateDivider()
 local event = window:CreateTab("Event")
 event:CreateLabel("Valentines")
 
-local oc, ocr = nil, false
-event:CreateToggle({
-    Name = "Open Chest",
-    CurrentValue = false,
-    Flag = "oc",
-    Callback = function(v)
-        ocr = v
+if fireproximityprompt then
+    local oc, ocr = nil, false
+    event:CreateToggle({
+        Name = "Open Chest",
+        CurrentValue = false,
+        Flag = "oc",
+        Callback = function(v)
+            ocr = v
 
-        if v then
-            oc = task.spawn(function()
-                while ocr and task.wait(2.4) do
-                    local chest = workspace["IslandAssets"]["Island"]["Ice_Chest"]["Meshes/chest_2_Cube"]
-                    if chest then hrp.CFrame = chest.CFrame; fireproximityprompt(chest["ProximityPrompt"]) else task.wait(1e2) end
-                end
-            end)
-        else
-            task.cancel(oc); oc = nil
-        end
-    end,
-})
+            if v then
+                oc = task.spawn(function()
+                    while ocr and task.wait(2.4) do
+                        local chest = workspace["IslandAssets"]["Island"]["Ice_Chest"]["Meshes/chest_2_Cube"]
+                        if chest then hrp.CFrame = chest.CFrame; fireproximityprompt(chest["ProximityPrompt"]) else task.wait(1e2) end
+                    end
+                end)
+            else
+                task.cancel(oc); oc = nil
+            end
+        end,
+    })
+end
 
 local function chearts()
-    for _, item in ipairs(workspace.CurrentChocolates:GetChildren()) do
-        hrp.CFrame = item:FindFirstChildWhichIsA("MeshPart").CFrame
-        
-        task.wait(.2)
+    if fireproximityprompt then
+        for _, item in ipairs(workspace.CurrentChocolates:GetChildren()) do
+            hrp.CFrame = item:FindFirstChildWhichIsA("MeshPart").CFrame
+            
+            task.wait(.2)
 
-        local pp = item:FindFirstChildWhichIsA("ProximityPrompt")
-        fireproximityprompt(pp)
+            local pp = item:FindFirstChildWhichIsA("ProximityPrompt")
+            fireproximityprompt(pp)
+        end
     end
 end
 
