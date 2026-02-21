@@ -1,16 +1,18 @@
 local v = loadstring(game:HttpGet("https://website-iota-ivory-12.vercel.app/code/loader/u/vars.lua"))()
-local players. cam = v.players, workspace.CurrentCamera; local lp = players["LocalPlayer"]
+
+local players, cam = v.players, workspace.CurrentCamera
+local lp = players.LocalPlayer
 
 local module = {}
 
 function module.gclosest(maxDist, teamcheck)
+    maxDist = maxDist or math.huge
+
     local cPlayer
     local cDist = maxDist * maxDist
 
     local centerX = cam.ViewportSize.X * 0.5
     local centerY = cam.ViewportSize.Y * 0.5
-
-    local lp = players.LocalPlayer
 
     for _, plr in ipairs(players:GetPlayers()) do
         if plr ~= lp then
