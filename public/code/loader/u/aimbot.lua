@@ -1,13 +1,15 @@
 local v = loadstring(game:HttpGet("https://website-iota-ivory-12.vercel.app/code/loader/u/vars.lua"))()
-local lp, cam = v.players.LocalPlayer, v.workspace.CurrentCamera
+local players. cam = v.players, v.workspace.CurrentCamera
 
 local module = {}
 
-local function isVisible(part) return part and part:IsDescendantOf(workspace) end
-
 function module.gclosest(maxDist, teamcheck)
-    local cPlayer, cDist = nil, maxDist*maxDist
-    local centerX, centerY = cam.ViewportSize.X*0.5, cam.ViewportSize.Y*0.5
+    local cPlayer
+    local cDist = maxDist * maxDist
+
+    local centerX = cam.ViewportSize.X * 0.5
+    local centerY = cam.ViewportSize.Y * 0.5
+
     local lp = players.LocalPlayer
 
     for _, plr in ipairs(players:GetPlayers()) do
@@ -15,13 +17,16 @@ function module.gclosest(maxDist, teamcheck)
             local char = plr.Character
             if char then
                 local root = char:FindFirstChild("HumanoidRootPart")
-                if root and root:IsDescendantOf(workspace) then
+                if root then
                     local screenPos, onScreen = cam:WorldToViewportPoint(root.Position)
                     if onScreen then
-                        local dx, dy = screenPos.X - centerX, screenPos.Y - centerY
+                        local dx = screenPos.X - centerX
+                        local dy = screenPos.Y - centerY
                         local dist = dx*dx + dy*dy
+
                         if dist < cDist then
-                            cPlayer, cDist = plr, dist
+                            cPlayer = plr
+                            cDist = dist
                         end
                     end
                 end
