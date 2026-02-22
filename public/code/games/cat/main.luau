@@ -105,6 +105,15 @@ main:CreateButton({
 main:CreateDivider()
 
 local event = window:CreateTab("Event")
+event:CreateLabel("Dragon Island")
+
+event:CreateButton({
+	Name = "Teleport to Island",
+	Callback = function()
+        hrp.CFrame = workspace["Clouds"]["68"].CFrame + Vector3.new(-20, 60, 0)
+    end,
+})
+
 event:CreateLabel("Valentines")
 
 if fireproximityprompt then
@@ -169,6 +178,63 @@ event:CreateButton({
 	Name = "Claim Hearts",
 	Callback = function()
         chearts()
+    end,
+})
+
+event:CreateLabel("Eruption")
+
+local function cvalc()
+    if not fireproximityprompt then return end
+
+    for _, item in ipairs(workspace.WeatherVisuals:GetChildren()) do
+        local fruit = item:FindFirstChild("VolcanicFruit")
+        if not fruit then
+            continue
+        end
+
+        local handle = fruit:FindFirstChildWhichIsA("MeshPart")
+        local prompt = fruit:FindFirstChildWhichIsA("ProximityPrompt")
+
+        if handle and prompt then
+            hrp.CFrame = handle.CFrame
+            task.wait(0.2)
+            fireproximityprompt(prompt)
+        end
+    end
+end
+
+event:CreateButton({
+	Name = "Claim Volcanic",
+	Callback = function()
+        cvalc()
+    end,
+})
+
+event:CreateLabel("Cosmic")
+
+local function cosmic()
+    if not fireproximityprompt then return end
+
+    for _, item in ipairs(workspace.WeatherVisuals:GetChildren()) do
+        local fruit = item:FindFirstChild("CosmicFruit")
+        if not fruit then continue end
+
+        local handle = fruit:FindFirstChildWhichIsA("MeshPart")
+        local prompt = fruit:FindFirstChildWhichIsA("ProximityPrompt")
+
+        if handle and prompt then
+            hrp.CFrame = handle.CFrame
+            task.wait(0.2)
+            fireproximityprompt(prompt)
+        end
+    end
+end
+
+
+event:CreateButton({
+	Name = "Claim Cosmic Fruit",
+	Callback = function()
+        cosmic()
     end,
 })
 
