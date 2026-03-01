@@ -72,7 +72,7 @@ main:CreateToggle({
         if v then
             af = task.spawn(function()
                 while afr and task.wait(4 + math.random()) do
-                    local item = rarest(); local ih = item["HumanoidRootPart"]
+                    local item = rarest(); local ih = item:FindFirstChildWhichIsA("MeshPart")
 
                     local dir = (ih.Position - hrp.Position)
                     if dir.Magnitude < 0.1 then
@@ -98,7 +98,7 @@ main:CreateToggle({
 main:CreateButton({
 	Name = "Teleport to best Animal",
 	Callback = function()
-        hrp.CFrame = rarest()["HumanoidRootPart"].CFrame
+        hrp.CFrame = rarest():FindFirstChildWhichIsA("MeshPart").CFrame
     end,
 })
 
@@ -114,6 +114,16 @@ event:CreateButton({
     end,
 })
 
+event:CreateLabel("Forgotten Depths")
+
+event:CreateButton({
+	Name = "Teleport to Island",
+	Callback = function()
+        hrp.CFrame = workspace["UnderwaterWorld"]["DadsyDev"]["HumanoidRootPart"].CFrame + Vector3.new(0, 0, -20)
+    end,
+})
+
+--[[
 event:CreateLabel("Valentines")
 
 if fireproximityprompt then
@@ -180,6 +190,7 @@ event:CreateButton({
         chearts()
     end,
 })
+--]]
 
 event:CreateLabel("Eruption")
 
