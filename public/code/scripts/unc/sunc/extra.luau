@@ -1,27 +1,35 @@
-local functions = functions or {} -- reuse previous table if exists
+local functions = {}
 local function add(name, func)
     functions[name] = func
 end
 
 -- Cache
 
+local stored = {}
 add("cache.invalidate", function(object)
-    print("[stub] cache.invalidate", object)
+    table.insert(stored, object)
 end)
 
 add("cache.iscached", function(object)
-    return false
+    return stored[object] ~= nil
 end)
 
-add("cache.replace", function(object, newobject)
-    print("[stub] cache.replace", object, newobject)
+add("cache.replace", function(object, new)
+    stored[object] = new
 end)
+
+local function t(item)
+    return typeof(item) == "Instance" -- true
+end
 
 add("cloneref", function(object)
+    if not t(object) then return end 
     return object
 end)
 
 add("compareinstances", function(a, b)
+    if not t(a) or not t(b) return end
+
     return a == b
 end)
 
