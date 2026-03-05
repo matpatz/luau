@@ -5,9 +5,11 @@ end
 
 -- Cache
 
+-- add : table.insert(stored, object)
+
 local stored = {}
 add("cache.invalidate", function(object)
-    table.insert(stored, object)
+    stored[object] = nil
 end)
 
 add("cache.iscached", function(object)
@@ -36,7 +38,7 @@ end)
 -- Closures
 
 add("checkcaller", function()
-    return false
+    return true -- iscclosure idk
 end)
 
 add("clonefunction", function(func)
