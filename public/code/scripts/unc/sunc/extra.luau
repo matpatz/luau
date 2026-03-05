@@ -624,8 +624,12 @@ add("getreg", function()
     return debug.getregistry and debug.getregistry() or {}
 end)
 
-add("getgenv", function()
-    return getfenv(0)
+add("getgc", function()
+    return collectgarbage("collect")
+end)
+
+add("getgc", function()
+    return collectgarbage("collect")
 end)
 
 add("getrenv", function()
