@@ -599,6 +599,8 @@ end)
 
 local scripts = {}
 add("getrunningscripts", function()
+    scripts = {}
+
     for _,v in ipairs(game:GetDescendants()) do
         if v:IsA("LocalScript") and v.Enabled then
             scripts[#scripts+1] = v
@@ -610,8 +612,22 @@ add("getrunningscripts", function()
     return scripts
 end)
 
+add("getscripts", function()
+    scripts = {}
+
+    for _,v in ipairs(game:GetDescendants()) do
+        if v:IsA("LocalScript") then
+            scripts[#scripts+1] = v
+        elseif v:IsA("ModuleScript") then
+            scripts[#scripts+1] = v
+        end
+    end
+
+    return scripts
+end)
+
+local modules = {}
 add("getloadedmodules", function()
-    local modules = {}
     for _,s in ipairs(getrunningscripts()) do
         if s.ClassName == "ModuleScript" then
             modules[#modules+1] = s
