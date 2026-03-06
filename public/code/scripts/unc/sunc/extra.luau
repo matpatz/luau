@@ -30,7 +30,7 @@ add("cloneref", function(object)
 end)
 
 add("compareinstances", function(a, b)
-    if not t(a) or not t(b) return end
+    if not t(a) or not t(b) then return end
 
     return a == b
 end)
@@ -50,7 +50,7 @@ add("getcallingscript", function()
 end)
 
 local ishooked = {}
-add("hookfunction", function(func, hook)
+add("isfunctionhooked", function(func, hook)
     return ishooked[func]
 end)
 
@@ -90,8 +90,81 @@ add("isexecutorclosure", function(func)
     return true
 end)
 
-add("loadstring", function(source)
-    do end
+local function vm(source, env)
+    env = env or {}
+
+    -- convert source to instructions
+    local instructions = {}
+
+    for token in source:gmatch("%S+") do
+        if tonumber(token) then
+            table.insert(instructions, {"PUSH", tonumber(token)})
+        elseif token == "true" then
+            table.insert(instructions, {"PUSH", true})
+        elseif token == "false" then
+            table.insert(instructions, {"PUSH", false})
+        elseif token == "nil" then
+            table.insert(instructions, {"PUSH", nil})
+        elseif token:match("^%a[%w_]*$") then
+            table.insert(instructions, {"LOAD", token})
+        elseif token == "+" then
+            table.insert(instructions, {"ADD"})
+        elseif token == "-" then
+            table.insert(instructions, {"SUB"})
+        elseif token == "*" then
+            table.insert(instructions, {"MUL"})
+        elseif token == "/" then
+            table.insert(instructions, {"DIV"})
+        elseif token == "return" then
+            table.insert(instructions, {"RET"})
+        else
+            error("Unsupported token: "..token)
+        end
+    end
+
+    local stack, ip = {}, 1
+    -- ip = instruction pointer
+
+    while ip <= #instructions do
+        local instr = instructions[ip]
+        local op = instr[1]
+        if op == "PUSH" then
+            table.insert(stack, instr[2])
+        elseif op == "LOAD" then
+            table.insert(stack, env[instr[2]])
+        elseif op == "ADD" then
+            local b = table.remove(stack)
+            local a = table.remove(stack)
+            table.insert(stack, a + b)
+        elseif op == "SUB" then
+            local b = table.remove(stack)
+            local a = table.remove(stack)
+            table.insert(stack, a - b)
+        elseif op == "MUL" then
+            local b = table.remove(stack)
+            local a = table.remove(stack)
+            table.insert(stack, a * b)
+        elseif op == "DIV" then
+            local b = table.remove(stack)
+            local a = table.remove(stack)
+            table.insert(stack, a / b)
+        elseif op == "RET" then
+            return table.remove(stack)
+        end
+        ip += 1
+    end
+
+    return table.remove(stack)
+end
+
+add("load", function(source)
+    return function(...)
+        local ok, res = pcall(vm, source, getgenv())
+        if not ok then
+            error(res)
+        end
+        return res
+    end
 end)
 
 add("newcclosure", function(func)
@@ -128,81 +201,82 @@ end)
 
 -- Crypt
 
--- Base64 encode/decode
-local b='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/' 
+local function bxor(left, right)
+    local result = 0
+    local bit = 1
 
-add("crypt.base64encode", function(data)
-    return ((data:gsub('.', function(x)
-        local r,binary='',x:byte()
-        for i=8,1,-1 do r=r..(binary%2^i-binary%2^(i-1)>0 and '1' or '0') end
-        return r
-    end)..'0000'):gsub('%d%d%d?%d?%d?%d?', function(x)
-        if #x < 6 then return '' end
-        local c=0
-        for i=1,6 do c=c + (x:sub(i,i)=='1' and 2^(6-i) or 0) end
-        return b:sub(c+1,c+1)
-    end)..({ '', '==', '=' })[#data%3+1])
+    while left > 0 or right > 0 do
+        -- lowest num
+        local leftBit = left % 2
+        local rightBit = right % 2
+
+        if leftBit ~= rightBit then
+            result = result + bit
+        end
+
+        -- shift right one bit
+        left = (left - leftBit) / 2
+        right = (right - rightBit) / 2
+
+        bit = bit * 2 -- next pos
+    end
+
+    return result
+end
+
+add("crypt.encrypt", function(data,key)
+    local out = {}
+    local klen = #key
+
+    for i=1,#data do
+        local d = string.byte(data,i)
+        local k = string.byte(key,((i-1)%klen)+1)
+        out[i] = string.char(bxor(d,k))
+    end
+
+    return table.concat(out)
 end)
 
-add("crypt.base64decode", function(data)
-    data = data:gsub('[^'..b..'=]', '')
-    return (data:gsub('.', function(x)
-        if x=='=' then return '' end
-        local r,f='',(b:find(x)-1)
-        for i=6,1,-1 do r=r..(f%2^i-f%2^(i-1)>0 and '1' or '0') end
-        return r
-    end):gsub('%d%d%d%d%d%d%d%d', function(x)
-        local c=0
-        for i=1,8 do c=c + (x:sub(i,i)=='1' and 2^(8-i) or 0) end
-        return string.char(c)
+add("crypt.decrypt", function(data,key)
+    local out = {}
+    local klen = #key
+
+    for i=1,#data do
+        local d = string.byte(data,i)
+        local k = string.byte(key,((i-1)%klen)+1)
+        out[i] = string.char(bxor(d,k))
+    end
+
+    return table.concat(out)
+end)
+
+add("crypt.hash", function(str)
+    local h = 0
+    for i=1,#str do
+        h = (h*31 + string.byte(str,i)) % 4294967296
+    end
+    return h
+end)
+
+add("crypt.random", function(len)
+    local t = {}
+    for i=1,len do
+        t[i] = string.char(math.random(0,255))
+    end
+    return table.concat(t)
+end)
+
+-- these arent yk real but i dont see why it shouldnt be implemented
+add("crypt.tohex", function(str)
+    return (str:gsub(".", function(c)
+        return string.format("%02x", string.byte(c))
     end))
 end)
 
--- Simple XOR encrypt/decrypt
-add("crypt.encrypt", function(data, key, iv, mode)
-    key = key or ""
-    iv = iv or ""
-    local out = {}
-    for i=1,#data do
-        local di = data:byte(i)
-        local ki = key:byte((i-1)%#key + 1)
-        out[i] = string.char(bit32.bxor(di, ki))
-    end
-    return table.concat(out), iv
-end)
-
-add("crypt.decrypt", function(data, key, iv, mode)
-    -- XOR decrypt is identical to encrypt
-    key = key or ""
-    local out = {}
-    for i=1,#data do
-        local di = data:byte(i)
-        local ki = key:byte((i-1)%#key + 1)
-        out[i] = string.char(bit32.bxor(di, ki))
-    end
-    return table.concat(out)
-end)
-
--- Generate bytes/key
-add("crypt.generatebytes", function(size)
-    local out = {}
-    for i=1,size do out[i] = string.char(math.random(0,255)) end
-    return table.concat(out)
-end)
-
-add("crypt.generatekey", function()
-    return crypt.generatebytes(32)
-end)
-
--- Hashing (simple Lua SHA-1 alternative using md5 if available, otherwise fallback)
-add("crypt.hash", function(data, algo)
-    algo = algo or "md5"
-    if algo:lower() == "md5" then
-        local md5 = game:GetService("HttpService"):GenerateGUID(false)
-        return md5:sub(1,#data) -- simple pseudo-hash fallback
-    else
-        return data -- fallback for unsupported algorithms
-    end
+add("crypt.fromhex", function(str)
+    return (str:gsub("%x%x", function(c)
+        return string.char(tonumber(c,16))
+    end))
 end)
 
 -- Debug
@@ -294,7 +368,6 @@ add("debug.getinfo", function(func)
     }
 end)
 
--- protos (cannot exist in luau without executor)
 add("debug.getproto", function()
     return nil
 end)
@@ -303,12 +376,333 @@ add("debug.getprotos", function()
     return {}
 end)
 
-
 -- Drawing
+
+local drawings, Drawing = {}, {}
+
+Drawing.Fonts = {
+    UI = 0,
+    System = 1,
+    Plex = 2,
+    Monospace = 3
+}
+
+local valid = {
+    Line = true,
+    Text = true,
+    Image = true,
+    Circle = true,
+    Square = true,
+    Quad = true,
+    Triangle = true
+}
+
+local function base()
+    return {
+        Visible = false,
+        ZIndex = 0,
+        Transparency = 1,
+        Color = Color3.new(1,1,1)
+    }
+end
+
+local function create(type)
+    local obj = base()
+    obj.__type = type
+
+    if type == "Line" then
+        obj.From = Vector2.zero
+        obj.To = Vector2.zero
+        obj.Thickness = 1
+    elseif type == "Text" then
+        obj.Text = ""
+        obj.TextBounds = Vector2.zero
+        obj.Font = 0
+        obj.Size = 13
+        obj.Position = Vector2.zero
+        obj.Center = false
+        obj.Outline = false
+        obj.OutlineColor = Color3.new(0,0,0)
+    elseif type == "Image" then
+        obj.Data = ""
+        obj.Size = Vector2.zero
+        obj.Position = Vector2.zero
+        obj.Rounding = 0
+    elseif type == "Circle" then
+        obj.NumSides = 20
+        obj.Radius = 0
+        obj.Position = Vector2.zero
+        obj.Thickness = 1
+        obj.Filled = false
+    elseif type == "Square" then
+        obj.Size = Vector2.zero
+        obj.Position = Vector2.zero
+        obj.Thickness = 1
+        obj.Filled = false
+    elseif type == "Quad" then
+        obj.PointA = Vector2.zero
+        obj.PointB = Vector2.zero
+        obj.PointC = Vector2.zero
+        obj.PointD = Vector2.zero
+        obj.Thickness = 1
+        obj.Filled = false
+    elseif type == "Triangle" then
+        obj.PointA = Vector2.zero
+        obj.PointB = Vector2.zero
+        obj.PointC = Vector2.zero
+        obj.Thickness = 1
+        obj.Filled = false
+    end
+
+    function obj:Destroy()
+        drawings[self] = nil
+    end
+
+    drawings[obj] = true
+
+    return obj
+end
+
+Drawing.new = function(type)
+    if not valid[type] then
+        error("invalid drawing type: "..tostring(type))
+    end
+
+    return create(type)
+end
+
+add("cleardrawcache", function()
+    for v in pairs(drawings) do
+        if v.Destroy then
+            v:Destroy()
+        end
+    end
+end)
+
+add("getrenderproperty", function(drawing, prop)
+    return drawing[prop]
+end)
+
+add("setrenderproperty", function(drawing, prop, val)
+    drawing[prop] = val
+end)
+
+add("isrenderobj", function(obj)
+    return drawings[obj] ~= nil
+end)
+
+-- File System
+
+local function normalize(path)
+    path = tostring(path or "")
+    path = path:gsub("\\","/")
+    path = path:gsub("^/","")
+    return path
+end
+
+local function parent(path)
+    return path:match("(.+)/[^/]+$") or ""
+end
+
+local fs_files = {}; local fs_folders = {[""] = true}
+add("writefile", function(path, data)
+    path = normalize(path)
+    fs_files[path] = tostring(data or "")
+    fs_folders[parent(path)] = true
+end)
+
+add("appendfile", function(path, data)
+    path = normalize(path)
+    fs_files[path] = (fs_files[path] or "") .. tostring(data or "")
+    fs_folders[parent(path)] = true
+end)
+
+add("readfile", function(path)
+    path = normalize(path)
+    if fs_files[path] == nil then
+        error("file does not exist")
+    end
+    return fs_files[path]
+end)
+
+add("isfile", function(path)
+    path = normalize(path)
+    return fs_files[path] ~= nil
+end)
+
+add("makefolder", function(path)
+    path = normalize(path)
+    fs_folders[path] = true
+end)
+
+add("isfolder", function(path)
+    path = normalize(path)
+    return fs_folders[path] == true
+end)
+
+add("listfiles", function(path)
+    path = normalize(path)
+    local out = {}
+
+    for f,_ in pairs(fs_files) do
+        if f:sub(1,#path) == path then
+            table.insert(out, f)
+        end
+    end
+
+    for f,_ in pairs(fs_folders) do
+        if f ~= "" and f:sub(1,#path) == path then
+            table.insert(out, f)
+        end
+    end
+
+    return out
+end)
+
+add("delfile", function(path)
+    path = normalize(path)
+    fs_files[path] = nil
+end)
+
+add("delfolder", function(path)
+    path = normalize(path)
+
+    for f,_ in pairs(fs_files) do
+        if f:sub(1,#path) == path then
+            fs_files[f] = nil
+        end
+    end
+
+    for f,_ in pairs(fs_folders) do
+        if f:sub(1,#path) == path then
+            fs_folders[f] = nil
+        end
+    end
+end)
+
+add("loadfile", function(path, chunkname)
+    local ok, src = pcall(readfile, path)
+    if not ok then
+        return nil, src
+    end
+
+    local fn, err = loadstring(src, chunkname or path)
+    if not fn then
+        return nil, err
+    end
+
+    setfenv(fn, getgenv())
+    return fn
+end)
+
+add("dofile", function(path)
+    local fn, err = loadfile(path)
+    if not fn then
+        error(err)
+    end
+
+    task.spawn(fn)
+end)
 
 -- Input
 
+local vim = game:GetService("VirtualInputManager")
+local uis = game:GetService("UserInputService")
+
+add("isrbxactive", function()
+    return uis.WindowFocused
+end)
+
+add("mouse1press", function()
+    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, true, game, 0)
+end)
+
+add("mouse1release", function()
+    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, false, game, 0)
+end)
+
+add("mouse1click", function()
+    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, true, game, 0)
+    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, false, game, 0)
+end)
+
+add("mouse2click", function()
+    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 1, true, game, 0)
+    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 1, false, game, 0)
+end)
+
+add("mouse2release", function()
+    vim:SendMouseButtonEvent(0, 0, 1, false, game, 0)
+end)
+
+add("mousemoveabs", function(x, y)
+    vim:SendMouseMoveEvent(x, y, game)
+end)
+
+add("mousemoverel", function(x, y)
+    local pos = uis:GetMouseLocation()
+    vim:SendMouseMoveEvent(pos.X + x, pos.Y + y, game)
+end)
+
+add("mousescroll", function(pixels)
+    vim:SendMouseWheelEvent(0, 0, pixels > 0, game)
+end)
+
 -- Instance
+
+add("fireclickdetector", function()
+    do end
+end)
+
+add("firetouchintrest", function()
+    do end
+end)
+
+add("isnewworkowner", function(part)
+    do end
+end)
+
+add("getcallbackvalue", function(obj, property)
+    do end
+end)
+
+add("fireproximityprompt", function(prompt)
+    do end
+end)
+
+add("getconnections", function(signal)
+    do end
+end)
+
+add("getconnection", function(signal)
+    do end
+end)
+
+add("firesignal", function(signal)
+    do end
+end)
+
+add("getcustomasset", function(path)
+    do end
+end)
+
+local ugc = game:GetService("UGCValidationService")
+
+add("gethiddenproperty", function(object, property)
+    return ugc:GetPropertyValue(object, property)
+end)
+
+add("sethiddenproperty", function(object, property, value)
+    
+end)
+
+add("getconnections", function(signal)
+    do end
+end)
+
+add("setsimulationradius", function(simrad, maxsimrad)
+    do end
+end)
 
 add("gethui", function()
     return cloneref(game:GetService("CoreGui"))["RobloxGui"]
@@ -354,43 +748,140 @@ add("isscriptable", function(obj, prop)
     return nil
 end)
 
+add("setscriptable", function(object, property, value)
+    do end
+end)
+
+add("setrbxclipboard", function(data)
+    do end
+end)
+
+add("getrendersteppedlist", function()
+    do end
+end)
+
+add("replicatesignal", function(data)
+    do end
+end)
+
+-- Metatable
+
+add("getrawmetatable", function(object)
+    if type(object) ~= "table" and typeof(object) ~= "Instance" then
+        return nil
+    end
+
+    local mt = getmetatable(object)
+
+    if type(mt) == "table" and mt.__metatable ~= nil then
+        local copy = {}
+        for k,v in pairs(mt) do
+            copy[k] = v
+        end
+        copy.__metatable = nil
+        return copy
+    end
+
+    return mt
+end)
+
+add("setrawmetatable", function(object, mt)
+    if type(object) ~= "table" and typeof(object) ~= "Instance" then
+        return
+    end
+
+    local old = getmetatable(object)
+
+    if type(old) == "table" then
+        old.__metatable = nil
+    end
+
+    setmetatable(object, mt)
+end)
+
+add("hookmetamethod", function(object, method, hook)
+    local mt = getrawmetatable(object)
+
+    if not mt then
+        error("no metatable")
+    end
+
+    local old = mt[method]
+
+    mt[method] = function(...)
+        return hook(old, ...)
+    end
+
+    return function(...)
+        return old(...)
+    end
+end)
+
+local namecallmethod = nil
+add("getnamecallmethod", function()
+    return namecallmethod
+end)
+
+add("setnamecallmethod", function(method)
+    namecallmethod = method
+end)
+
+local readonly_tbl = setmetatable({}, {__mode = "k"})
+add("isreadonly", function(object)
+    return readonly_tbl[object] == true
+end)
+
+add("setreadonly", function(object, readonly)
+    if readonly then
+        readonly_tbl[object] = true
+    else
+        readonly_tbl[object] = nil
+    end
+end)
+
+add("makewriteable", function(object)
+    readonly_tbl[object] = nil
+end)
+
+add("makereadonly", function(object)
+    readonly_tbl[object] = true
+end)
+
 -- Misc
 
 add("identifyexecutor", function()
     return "Potassium", "1.0"
 end)
 
--- not actually lz4
+-- RLE Compression not lz4
 add("lz4compress", function(data)
-    -- run length
-    local out = {}
-    local count = 1
-    for i = 2,#data+1 do
-        if data:sub(i,i) == data:sub(i-1,i-1) then
-            count = count + 1
-        else
-            if count > 1 then
-                table.insert(out, string.char(count))
-            end
-            table.insert(out, data:sub(i-1,i-1))
-            count = 1
+    local out, i = {}, 1
+    while i <= #data do
+        local char = data:sub(i, i)
+        local count = 1
+        while i + count <= #data and data:sub(i + count, i + count) == char and count < 255 do
+            count += 1
         end
+        if count > 1 then
+            out[#out+1] = string.char(count)
+        end
+        out[#out+1] = char
+        i += count
     end
     return table.concat(out)
 end)
 
-add("lz4decompress", function(data, size)
-    local out = {}
-    local i = 1
+add("lz4decompress", function(data)
+    local out, i = {}, 1
     while i <= #data do
         local byte = data:byte(i)
-        if byte >= 2 then -- count marker
-            local char = data:sub(i+1,i+1)
-            table.insert(out, string.rep(char, byte))
-            i = i + 2
+        -- should avoid printing ASCII
+        if byte > 127 and i + 1 <= #data then
+            out[#out+1] = string.rep(data:sub(i + 1, i + 1), byte - 128)
+            i += 2
         else
-            table.insert(out, data:sub(i,i))
-            i = i + 1
+            out[#out+1] = data:sub(i, i)
+            i += 1
         end
     end
     return table.concat(out)
@@ -444,7 +935,7 @@ add("messagebox", function(text, caption, flags)
     close.Font = Enum.Font.SourceSansBold
     close.TextSize = 16
     close.BackgroundColor3 = Color3.fromRGB(255,255,255)
-    close.BackgroundTransparency = 1
+    close.BackgroundTransparency = 0.8
     close.TextColor3 = Color3.fromRGB(0,0,0)
     close.Parent = window
 
@@ -517,16 +1008,9 @@ end)
 
 add("request", function(options)
     options = options or {}
-    local url = options.Url or ""
+    local url    = options.Url or ""
     local method = (options.Method or "GET"):upper()
-    local headers = options.Headers or {}
-    local body = options.Body or ""
-
-    local response = {
-        StatusCode = 0,
-        Body = "",
-        Headers = {},
-    }
+    local body   = options.Body or ""
 
     local success, result = pcall(function()
         if method == "GET" then
@@ -534,19 +1018,15 @@ add("request", function(options)
         elseif method == "POST" then
             return game:HttpPost(url, body, Enum.HttpContentType.ApplicationUrlEncoded)
         else
-            error("Unsupported method: "..method)
+            error("Unsupported method: " .. method)
         end
     end)
 
-    if success then
-        response.StatusCode = 200
-        response.Body = result
-    else
-        response.StatusCode = 500
-        response.Body = tostring(result)
-    end
-
-    return response
+    return {
+        StatusCode = success and 200 or 500,
+        Body       = success and result or tostring(result),
+        Headers    = {},
+    }
 end)
 
 add("getinternalparent", function(instance)
@@ -556,6 +1036,8 @@ end)
 add("setinternalparent", function(instance, newparent)
     instance.Parent = newparent
 end)
+
+-- return game:GetFastFlag(gsub(fflag, "FFlag", ""))
 
 local s = settings()
 add("getfflag", function(fflag)
@@ -638,10 +1120,6 @@ end)
 
 add("getreg", function()
     return debug.getregistry and debug.getregistry() or {}
-end)
-
-add("getgc", function()
-    return collectgarbage("collect")
 end)
 
 add("getgc", function()
