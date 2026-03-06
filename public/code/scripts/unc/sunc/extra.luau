@@ -21,16 +21,16 @@ add("cache.replace", function(object, new)
 end)
 
 local function t(item)
-    return typeof(item) == "Instance" -- true
+    return typeof(item) ~= "Instance" -- false
 end
 
 add("cloneref", function(object)
-    if not t(object) then return end 
+    if t(object) then return end 
     return object
 end)
 
 add("compareinstances", function(a, b)
-    if not t(a) or not t(b) then return end
+    if t(a) or t(b) then return end
 
     return a == b
 end)
@@ -1209,30 +1209,37 @@ add("getsenv", function(scr)
     end
 end)
 
+local function test()
+  if pcall(function()
+      return game.CoreGui
+  end) then
+      return 7
+  end
+  
+  if pcall(function()
+      return game:GetService("LogService"):GetLogHistory()
+  end) then
+      return 6
+  end
+  
+  if pcall(function()
+      return game:GetService("Players").LocalPlayer
+  end) then
+      return 5
+  end
+  
+  return 2
+end
+
 local thread_identity = 1
 add("getthreadidentity", function()
-    -- if not defualt then i dont fucking know im going to bed
-    thread_identity ~= 1 and thread_identity = thread_identity
+  local out = test()
 
-    if pcall(function()
-        return game.CoreGui
-    end) then
-        return 7
-    end
-
-    if pcall(function()
-        return game:GetService("LogService"):GetLogHistory()
-    end) then
-        return 6
-    end
-
-    if pcall(function()
-        return game:GetService("Players").LocalPlayer
-    end) then
-        return 5
-    end
-
-    return 2
+  if thread_identity == 1 then -- defualt so not changed by sethidden
+    out = test()
+  else -- sethidden was used so override real answer
+    out = thread_identity
+  end
 end)
 
 add("setthreadidentity", function(identity)
@@ -1241,8 +1248,12 @@ end)
 
 -- Actors
 
+local function create()
+  return Instance.new("BindableEvent")
+end
+
 add("create_comm_channel", function()
-    local be = Instance.new("BindableEvent")
+    local be = create()
     return math.random(1,99999), be
 end)
 
@@ -1272,7 +1283,7 @@ end)
 
 for name, func in pairs(functions) do
     local parts = {}
-    for part in name:gmatch("[^%.]+") do
+    for part in name do
         table.insert(parts, part)
     end
 
