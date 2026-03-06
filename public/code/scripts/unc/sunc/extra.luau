@@ -1252,13 +1252,19 @@ local function create()
   return Instance.new("BindableEvent")
 end
 
+local ids = {}
 add("create_comm_channel", function()
-    local be = create()
-    return math.random(1,99999), be
+    local num, int = math.random(1,99999), create()
+    table.insert(ids, {id = num, instance = int})
+    
+    return num, int
 end)
 
 add("get_comm_channel", function(id)
-    return Instance.new("BindableEvent")
+    local i = ids["nums"].id
+    if not i then return end
+
+    return ids["instance"]
 end)
 
 add("run_on_actor", function(actor, scriptStr, ...)
@@ -1270,7 +1276,11 @@ add("getactors", function()
 end)
 
 add("is_parallel", function()
-    return false
+    getthreadidentity < 8 then
+      return false
+    else
+        true
+    end
 end)
 
 add("run_on_thread", function(thread, scriptStr, ...)
