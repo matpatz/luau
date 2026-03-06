@@ -650,16 +650,42 @@ end)
 
 -- Instance
 
-add("fireclickdetector", function()
-    do end
+
+local lp = game:GetService("Players")["LocalPlayer"]
+local char = lp["Character"]
+local hrp = char["HumanoidRootPart"]
+
+add("fireclickdetector", function(cd, distance)
+    if typeof(cd) ~= "Instance" or not cd:IsA("ClickDetector") then return end
+    
+    local old = hrp.CFrame
+    if cd.Parent and distance ~= 0 then
+        hrp.CFrame = cd.Parent.CFrame
+    end
+
+    cd.MaxActivationDistance = math.huge
+    cd:InputHoldBegin()
+    cd:InputHoldEnd()
+
+    hrp.CFrame = old
 end)
 
-add("firetouchintrest", function()
-    do end
+add("firetouchinterest", function(part, state)
+    if typeof(part) ~= "Instance" or not part:IsA("BasePart") then return end
+
+    if state == 0 then
+        hrp.CFrame = part.CFrame
+    else
+        hrp.CFrame = hrp.CFrame
+    end
 end)
 
-add("isnewworkowner", function(part)
-    do end
+add("isnetworkowner", function(part)
+    if typeof(part) ~= "Instance" or not part:IsA("BasePart") then
+        return false
+    end
+
+    return part:GetNetworkOwner() == lp
 end)
 
 add("getcallbackvalue", function(obj, property)
@@ -667,23 +693,64 @@ add("getcallbackvalue", function(obj, property)
 end)
 
 add("fireproximityprompt", function(prompt)
-    do end
+    if typeof(prompt) ~= "Instance" or not prompt:IsA("ProximityPrompt") then
+        return
+    end
+
+    local old = prompt.HoldDuration
+    prompt.HoldDuration = 0
+
+    prompt:InputHoldBegin()
+    prompt:InputHoldEnd()
+
+    prompt.HoldDuration = old
+end)
+
+-- no way shit works
+local stored = setmetatable({}, {__mode = "k"}); local old
+old = hookfunction(getrawmetatable(game).__index, function(self, key)
+    local v = old(self, key)
+
+    if typeof(v) == "RBXScriptSignal" then
+        stored[v] = stored[v] or {}
+    end
+
+    return v
 end)
 
 add("getconnections", function(signal)
-    do end
+    return stored[signal] or {}
 end)
 
 add("getconnection", function(signal)
-    do end
+    local t = stored[signal]
+    return t and t[1]
 end)
 
-add("firesignal", function(signal)
-    do end
+add("firesignal", function(signal, ...)
+    local t = stored[signal]
+    if not t then return end
+
+    for _, conn in ipairs(t) do
+        if conn.Function then
+            task.spawn(conn.Function, ...)
+        end
+    end
 end)
 
 add("getcustomasset", function(path)
-    do end
+    if not isfile(path) then
+        error("file does not exist: "..tostring(path))
+    end
+
+    local name = path:match("[^/\\]+$")
+    local new = "content/" .. name
+
+    if not isfile(new) then
+        writefile(new, readfile(path))
+    end
+
+    return "rbxasset://" .. new
 end)
 
 local ugc = game:GetService("UGCValidationService")
@@ -693,15 +760,12 @@ add("gethiddenproperty", function(object, property)
 end)
 
 add("sethiddenproperty", function(object, property, value)
-    
-end)
-
-add("getconnections", function(signal)
-    do end
+    return ugc:SetPropertyValue(object, property, value)
 end)
 
 add("setsimulationradius", function(simrad, maxsimrad)
-    do end
+    sethiddenproperty(lp, "SimulationRadius", simrad)
+    sethiddenproperty(lp, "MaxSimulationRadius", maxsimrad or simrad)
 end)
 
 add("gethui", function()
@@ -1145,9 +1209,30 @@ add("getsenv", function(scr)
     end
 end)
 
-local thread_identity = 8
+local thread_identity = 1
 add("getthreadidentity", function()
-    return thread_identity
+    -- if not defualt then i dont fucking know im going to bed
+    thread_identity ~= 1 and thread_identity = thread_identity
+
+    if pcall(function()
+        return game.CoreGui
+    end) then
+        return 7
+    end
+
+    if pcall(function()
+        return game:GetService("LogService"):GetLogHistory()
+    end) then
+        return 6
+    end
+
+    if pcall(function()
+        return game:GetService("Players").LocalPlayer
+    end) then
+        return 5
+    end
+
+    return 2
 end)
 
 add("setthreadidentity", function(identity)
