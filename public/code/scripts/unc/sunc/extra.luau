@@ -378,117 +378,208 @@ end)
 
 -- Drawing
 
-local drawings, Drawing = {}, {}
+local Drawing = {
+	Fonts = {
+	    UI = 0,
+	    System = 1,
+	    Plex = 2,
+	    Monospace = 3,
+    },
+	new = function(Type)
+        local Object = Create("Frame", {
+            Visible = true,
+            Size = UDim2_fromOffset(0, 0),
+            BackgroundColor3 = Color3.new(0, 0, 0),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            ZIndex = 1,
+            Parent = UI
+        });
 
-Drawing.Fonts = {
-    UI = 0,
-    System = 1,
-    Plex = 2,
-    Monospace = 3
-}
+        local self = {
+            Visible = Object.Visible,
+            Color = Object.BackgroundColor3,
+            Transparency = 1,
+            ZIndex = Object.ZIndex,
+            Remove = function() Object:Destroy() end
+        }
 
-local valid = {
-    Line = true,
-    Text = true,
-    Image = true,
-    Circle = true,
-    Square = true,
-    Quad = true,
-    Triangle = true
-}
+        self.Destroy = self.Remove
 
-local function base()
-    return {
-        Visible = false,
-        ZIndex = 0,
-        Transparency = 1,
-        Color = Color3.new(1,1,1)
-    }
-end
+        local function Construct(Update, Defaults, Default, Readonly)
+            Readonly = Readonly or {}
+            local function inlined()
+                if not Default then
+                    Object.Visible = self.Visible
+                    Object.BackgroundColor3 = self.Color
+                    Object.BackgroundTransparency = 1 - self.Transparency
+                    Object.ZIndex = clamp(self.ZIndex, -B, B)
+                end
 
-local function create(type)
-    local obj = base()
-    obj.__type = type
+                Update()
+            end
 
-    if type == "Line" then
-        obj.From = Vector2.zero
-        obj.To = Vector2.zero
-        obj.Thickness = 1
-    elseif type == "Text" then
-        obj.Text = ""
-        obj.TextBounds = Vector2.zero
-        obj.Font = 0
-        obj.Size = 13
-        obj.Position = Vector2.zero
-        obj.Center = false
-        obj.Outline = false
-        obj.OutlineColor = Color3.new(0,0,0)
-    elseif type == "Image" then
-        obj.Data = ""
-        obj.Size = Vector2.zero
-        obj.Position = Vector2.zero
-        obj.Rounding = 0
-    elseif type == "Circle" then
-        obj.NumSides = 20
-        obj.Radius = 0
-        obj.Position = Vector2.zero
-        obj.Thickness = 1
-        obj.Filled = false
-    elseif type == "Square" then
-        obj.Size = Vector2.zero
-        obj.Position = Vector2.zero
-        obj.Thickness = 1
-        obj.Filled = false
-    elseif type == "Quad" then
-        obj.PointA = Vector2.zero
-        obj.PointB = Vector2.zero
-        obj.PointC = Vector2.zero
-        obj.PointD = Vector2.zero
-        obj.Thickness = 1
-        obj.Filled = false
-    elseif type == "Triangle" then
-        obj.PointA = Vector2.zero
-        obj.PointB = Vector2.zero
-        obj.PointC = Vector2.zero
-        obj.Thickness = 1
-        obj.Filled = false
-    end
+            for i, v in next, Defaults do
+                self[i] = v
+            end
 
-    function obj:Destroy()
-        drawings[self] = nil
-    end
+            local proxy = newproxy(true)
+            local mt = getmetatable(proxy)
 
-    drawings[obj] = true
+            mt.__index = function(_, b)
+                return self[b]
+            end
+            mt.__newindex = function(_, Key, Value)
+                if tfind(Readonly, Key) then
+                    return;
+                end
+                self[Key] = Value
+                inlined()
+            end
+            mt.__metatable = "This metatable is protected."
 
-    return obj
-end
+            tinsert(DrawingCache, {proxy=proxy, instance = Object})
 
-Drawing.new = function(type)
-    if not valid[type] then
-        error("invalid drawing type: "..tostring(type))
-    end
-
-    return create(type)
-end
-
-add("cleardrawcache", function()
-    for v in pairs(drawings) do
-        if v.Destroy then
-            v:Destroy()
+            return proxy
         end
+
+        --* Line
+
+		if Type == 'Line' then
+			return Construct(function()
+                local from, to = self.From, self.To
+                local dX, dY = to.X - from.X, to.Y - from.Y
+
+                Object.Size = UDim2_fromOffset(sqrt(dX ^ 2 + dY ^ 2), self.Thickness)
+                Object.Position = UDim2_fromOffset(from.X, from.Y)
+                Object.Rotation = deg(atan2(dY, dX))
+            end, {
+                Thickness = 1,
+                From = Vector2.zero,
+                To = Vector2.zero
+            })
+		elseif Type == 'Square' then
+			local Stroke = Create("UIStroke", {
+                Parent = Object,
+                Color = self.Color,
+                Enabled = true,
+                Thickness = 1
+            })
+
+			return Construct(function()
+				Object.Size = UDim2.new(0, self.Size.X, 0, self.Size.Y)
+				Object.Position = UDim2.new(0, self.Position.X, 0, self.Position.Y)
+    
+				Stroke.Enabled = self.Filled
+				Stroke.Color = self.Color
+                Stroke.Thickness = self.Thickness
+			end, {
+                Size = Vector2.zero,
+                Position = Vector2.zero,
+
+                Filled = false,
+                Thickness = 1,
+                Transparency = 0
+            })
+		elseif Type == 'Circle' then
+			local Stroke = Create("UIStroke", {
+                Parent = Object,
+                Color = self.Color,
+                Enabled = true
+            })
+			Create("UICorner", {
+                Parent = Object,
+                CornerRadius = UDim.new(1, 0)
+            })
+
+			return Construct(function()
+					Object.Size = UDim2.fromScale(self.Radius, self.Radius)
+					Object.Position = UDim2.fromScale(self.Position.X, self.Position.Y)
+
+					Stroke.Enabled = not self.Filled
+    
+					Stroke.Color = self.Color
+                    Stroke.Thickness = self.Thickness
+			end, {
+                Thickness = 1,
+                NumSides = 0,
+                Radius = 1,
+
+                Filled = false,
+
+                Position = Vector2.zero
+            })
+		elseif Type == 'Text' then
+            Object:Destroy()
+			Object = Create("TextLabel", {
+                Parent = UI,
+                Visible = self.Visible,
+                Size = UDim2.fromOffset(0, 0),
+                BackgroundColor3 = self.Color,
+                BackgroundTransparency = 1 - self.Transparency,
+                BorderSizePixel = 0,
+                TextStrokeColor3 = self.Color,
+                TextStrokeTransparency = 1,
+                TextSize = self.Size,
+                TextWrapped = false
+            })
+
+			return Construct(function()
+					Object.Size = UDim2.fromOffset(self.Size * 3, self.Size / 2)
+					Object.Position = UDim2.fromOffset(self.Position.X, self.Position.Y)
+					Object.Text = self.Text
+
+					Object.Font = Fonts[self.Font]
+					Object.TextColor3 = self.Color
+					Object.BackgroundTransparency = 1 - self.Transparency
+
+					if self.Center then
+						Object.TextXAlignment = Enum.TextXAlignment.Center
+						Object.TextYAlignment = Enum.TextYAlignment.Center
+					else
+						Object.TextXAlignment = Enum.TextXAlignment.Left
+						Object.TextYAlignment = Enum.TextYAlignment.Top
+					end
+
+					Object.TextStrokeTransparency = self.Outline and 0 or 1
+					Object.TextStrokeColor3 = self.OutlineColor
+                    self.TextBounds = Object.TextBounds
+			end, {
+                Text = '',
+                Size = 0,
+                Center = false,
+                Outline = false,
+                OutlineColor = self.Color,
+                Position = Vector2.zero,
+                Font = 3
+            }, true, {"TextBounds"})
+		end
+end}
+
+add("isrenderobj", function(a, b)
+    for _, object in next, DrawingCache do
+		if object.proxy == a then
+			return true
+		end
+	end
+    return false
+end)
+
+add("cleardrawcache", function(a, b)
+    for _, Object in next, DrawingCache do
+        Object.instance:Destroy()
     end
 end)
 
-add("getrenderproperty", function(drawing, prop)
-    return drawing[prop]
+add("getrenderproperty", function(a, b)
+    assert(isrenderobj(a), "Invalid argument #1 to 'getrenderproperty', render object expected, got " .. typeof(a))
+    return a[b]
 end)
 
-add("setrenderproperty", function(drawing, prop, val)
-    drawing[prop] = val
-end)
+add("setrenderproperty", function(a, b, c)
+    assert(isrenderobj(a), "Invalid argument #1 to 'setrenderproperty', render object expected, got " .. typeof(a))
 
-add("isrenderobj", function(obj)
-    return drawings[obj] ~= nil
+    a[b] = c
 end)
 
 -- File System
