@@ -122,14 +122,11 @@ export default async function handler(req, res) {
             return json({ error: "cooldown", retry_after: retryAfter })
         }
 
-        // Update last_guess immediately to prevent spam
-        await setUser(username, { last_guess: new Date() })
-
         if (guess === state.code) {
             const payout = state.jackpot
             user.balance += payout
             user.wins += 1
-            await setUser(username, { balance: user.balance, wins: user.wins, last_guess: new Date() })
+            await setUser(username, { balance: user.balance, wins: user.wins, wrong: user.wrong, last_guess: new Date() })
 
             const code = generateCode()
             await supabase.from("powerball").update({ code, jackpot: BASE_JACKPOT, updated_at: new Date() }).eq("id", 1)
@@ -147,7 +144,7 @@ export default async function handler(req, res) {
 
         const newJackpot = state.jackpot + FAIL_INCREASE
         user.wrong += 1
-        await setUser(username, { wrong: user.wrong, last_guess: new Date() })
+        await setUser(username, { balance: user.balance, wins: user.wins, wrong: user.wrong, last_guess: new Date() })
         await supabase.from("powerball").update({ jackpot: newJackpot }).eq("id", 1)
 
         return json({
