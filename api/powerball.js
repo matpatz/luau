@@ -68,5 +68,9 @@ export default async function handler(req, res) {
   const newJackpot = state.jackpot + FAIL_INCREASE;
   await supabase.from("powerball").update({ jackpot: newJackpot }).eq("id", 1);
 
-  return res.json({ valid: false, jackpot: newJackpot });
+  return new Response(JSON.stringify({ error: "invalid request" }), {
+    status: 400,
+    headers: { "Content-Type": "application/json" }
+  });
+  
 }
