@@ -981,25 +981,25 @@ add("setnamecallmethod", function(method)
     namecallmethod = method
 end)
 
-local readonly_tbl = setmetatable({}, {__mode = "k"})
 add("isreadonly", function(object)
     return readonly_tbl[object] == true
 end)
 
 add("setreadonly", function(object, readonly)
-    if readonly then
-        readonly_tbl[object] = true
-    else
-        readonly_tbl[object] = nil
+    if typeof(object) == "table" then
+      table.freeze(object)
     end
 end)
 
 add("makewriteable", function(object)
-    readonly_tbl[object] = nil
+    if typeof(object) == "table" then
+      object = table.clone(object) -- not good uh maybe just literlly save files when setreadonlying them
+      return object -- not how it works
+    end
 end)
 
 add("makereadonly", function(object)
-    readonly_tbl[object] = true
+    setreadonly(object, true)
 end)
 
 -- Misc
@@ -1196,11 +1196,11 @@ end)
 
 local s = settings()
 add("getfflag", function(fflag)
-    return s:GetFFlag(fflag)
+    return game:GetFastFlag(gsub(fflag, "FFlag", value))
 end)
 
 add("setfflag", function(fflag, value)
-    s:SetFFlag(fflag, value)
+    game:SetFastFlag(gsub(fflag, "FFlag", value)
 end)
 
 add("setclipboard", function(text)
