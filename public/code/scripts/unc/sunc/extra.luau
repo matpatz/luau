@@ -236,7 +236,6 @@ add("crypt.decrypt", function(data, key)
     return table.concat(out)
 end)
 
--- crypt.hash with multi-algo support
 add("crypt.hash", function(str, algorithm)
     assert(type(str) == "string", "expected string, got " .. type(str))
     algorithm = (algorithm or "djb2"):lower()
@@ -297,7 +296,16 @@ add("crypt.random", function(len)
     return table.concat(t)
 end)
 
--- crypt.hmac reusing crypt.hash
+add("crypt.rstring", function(len)
+    len = len or 16
+    local chars, str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", {}
+    for i = 1, len do
+        local idx = math.random(1, #chars)
+        str[i] = chars:sub(idx, idx)
+    end
+    return table.concat(str)
+end)
+
 add("crypt.hmac", function(data, key, algorithm)
     assert(type(data) == "string", "expected string for data, got " .. type(data))
     assert(type(key) == "string", "expected string for key, got " .. type(key))
@@ -1553,6 +1561,17 @@ add("isrequired", function(module)
     return false
 end)
 
+add("getdeletedactors", function()
+    local del_actors = {}
+
+    for _, item in ipairs(getnilinstances())
+        if item:IsA("Actor") then
+            table.insert(del_actors, item)
+        end
+    end
+    return del_actors
+end)
+
 local trgr, trgc = {}, {}
 
 local function track(obj)
@@ -1622,8 +1641,7 @@ add("getrenv", function()
     return renv
 end)
 
-add("getenv", function(obj)
-    assert(type(obj) == "function" or type(obj) == "number", "expected function or number, got " .. type(obj))
+add("gettenv", function(obj)
     return getfenv(obj)
 end)
 
@@ -1659,6 +1677,19 @@ end)
 add("setthreadidentity", function(identity)
     assert(type(identity) == "number", "expected number, got " .. type(identity))
     thread_identity = identity
+end)
+
+add("setidentity", function(identity)
+    assert(type(identity) == "number", "expected number, got " .. type(identity))
+    setthreadidentity(identity)
+end)
+
+add("getidentity", function()
+    return getthreadidentity()
+end)
+
+add("printidentity", function()
+   print("Current identity is", getthreadidentit())
 end)
 
 -- Actors
