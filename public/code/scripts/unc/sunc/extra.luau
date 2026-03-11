@@ -52,7 +52,7 @@ add("clonefunction", function(func)
 end)
 
 add("getcallingscript", function()
-    return debug.traceback() -- PEA .. string.rep("K", 12)
+    return Instance.new("LocalScript", workspace) -- PEA .. string.rep("K", 12)
 end)
 
 local tback_ignore = setmetatable({}, {__mode = "k"})
@@ -236,13 +236,55 @@ add("crypt.decrypt", function(data, key)
     return table.concat(out)
 end)
 
-add("crypt.hash", function(str)
+-- crypt.hash with multi-algo support
+add("crypt.hash", function(str, algorithm)
     assert(type(str) == "string", "expected string, got " .. type(str))
-    local h = 0
-    for i = 1, #str do
-        h = (h * 31 + string.byte(str, i)) % 4294967296
+    algorithm = (algorithm or "djb2"):lower()
+
+    if algorithm == "djb2" then
+        local h = 5381
+        for i = 1, #str do h = (h * 33 + str:byte(i)) % 4294967296 end
+        return string.format("%08x", h)
+
+    elseif algorithm == "fnv1a" then
+        local h = 2166136261
+        for i = 1, #str do h = bxor(h, str:byte(i)) * 16777619 % 4294967296 end
+        return string.format("%08x", h)
+
+    elseif algorithm == "sdbm" then
+        local h = 0
+        for i = 1, #str do h = (str:byte(i) + h * 65599) % 4294967296 end
+        return string.format("%08x", h)
+
+    elseif algorithm == "adler32" then
+        local a, b = 1, 0
+        for i = 1, #str do
+            a = (a + str:byte(i)) % 65521
+            b = (b + a) % 65521
+        end
+        return string.format("%08x", b * 65536 + a)
+
+    elseif algorithm == "crc32" then
+        local crc = 0xFFFFFFFF
+        for i = 1, #str do
+            crc = bxor(crc, str:byte(i))
+            for _ = 1, 8 do
+                crc = (crc % 2 == 1) and bxor(math.floor(crc / 2), 0xEDB88320) or math.floor(crc / 2)
+            end
+        end
+        return string.format("%08x", bxor(crc, 0xFFFFFFFF))
+
+    elseif algorithm == "murmur2" then
+        local m, h = 0x5BD1E995, #str * 0x5BD1E995 % 4294967296
+        for i = 1, #str do
+            h = bxor(h, str:byte(i) * m % 4294967296)
+            h = (h * m) % 4294967296
+        end
+        return string.format("%08x", bxor(bxor(h, math.floor(h / 65536)), m) % 4294967296)
+
+    else
+        error("unsupported algorithm: " .. algorithm)
     end
-    return h
 end)
 
 add("crypt.random", function(len)
@@ -253,6 +295,25 @@ add("crypt.random", function(len)
         t[i] = string.char(math.random(0, 255))
     end
     return table.concat(t)
+end)
+
+-- crypt.hmac reusing crypt.hash
+add("crypt.hmac", function(data, key, algorithm)
+    assert(type(data) == "string", "expected string for data, got " .. type(data))
+    assert(type(key) == "string", "expected string for key, got " .. type(key))
+    assert(type(algorithm) == "string", "expected string for algorithm, got " .. type(algorithm))
+
+    local blockSize = 64
+    if #key > blockSize then key = crypt.hash(key, algorithm) end
+
+    local ipad, opad = {}, {}
+    for i = 1, blockSize do
+        local b = key:byte(i) or 0
+        ipad[i] = string.char(bxor(b, 0x36))
+        opad[i] = string.char(bxor(b, 0x5C))
+    end
+
+    return crypt.tohex(crypt.hash(table.concat(opad) .. crypt.hash(table.concat(ipad) .. data, algorithm), algorithm))
 end)
 
 add("crypt.tohex", function(str)
@@ -268,6 +329,101 @@ add("crypt.fromhex", function(str)
     return (str:gsub("%x%x", function(c)
         return string.char(tonumber(c, 16))
     end))
+end)
+
+add("crypt.lz4", function(data, step)
+    assert(type(data) == "string", "data must be string")
+
+    local out
+    if step == true then -- encrypt
+        out = lz4compress(data)
+    else
+        out = lz4decompress(data)
+    end
+    return out
+end)
+
+-- Oth
+
+local hooks = {}
+local hook_threads, og_threads = setmetatable({}, {__mode = "k"}), setmetatable({}, {__mode = "k"})
+
+add("oth.hook", function(target, hookfn)
+    assert(type(target) == "function", "target must be function")
+    assert(type(hookfn) == "function", "hook must be function")
+
+    hooks[target] = hooks[target] or {}
+
+    local original = target
+
+    local callback = function(...)
+        return original(...)
+    end
+
+    local function wrapper(...)
+        local caller = coroutine.running()
+
+        local co = coroutine.create(function(...)
+            local current = coroutine.running()
+            hook_threads[current] = true
+            og_threads[current] = caller
+
+            return hookfn(...)
+        end)
+
+        local ok, result = coroutine.resume(co, ...)
+        if not ok then
+            error(result)
+        end
+
+        return result
+    end
+
+    table.insert(hooks[target], {
+        hook = hookfn,
+        wrapper = wrapper,
+        callback = callback
+    })
+
+    return callback
+end)
+
+add("oth.unhook", function(target, hook_or_callback)
+    local list = hooks[target]
+    if not list then
+        return false
+    end
+
+    for i,v in ipairs(list) do
+        if v.hook == hook_or_callback or v.callback == hook_or_callback or hook_or_callback == nil then
+            table.remove(list, i)
+
+            if #list == 0 then
+                hooks[target] = nil
+            end
+
+            return true
+        end
+    end
+
+    return false
+end)
+
+add("oth.get_root_callback", function(target)
+    local list = hooks[target]
+    if not list or #list == 0 then
+        return target
+    end
+
+    return list[1].callback
+end)
+
+add("oth.is_hook_thread", function()
+    return hook_threads[coroutine.running()] == true
+end)
+
+add("oth.get_original_thread", function()
+    return og_threads[coroutine.running()]
 end)
 
 -- Debug
@@ -314,7 +470,7 @@ add("debug.getupvalue", function(func, index)
     assert(type(index) == "number", "expected number for index, got " .. type(index))
     local u = upvalues[func]
     if not u or u[index] == nil then
-        error("upvalue does not exist at index " .. index)
+        return nil  -- out of range, just return nil like standard Lua
     end
     return u[index]
 end)
@@ -425,23 +581,17 @@ end)
 add("debug.getcallstack", function()
     local stack = {}
     local level = 1
-
     while true do
-        local info = debug.info(level + 1, "snlf")
-        if not info then
-            break
-        end
-
-        stack[#stack+1] = {
+        local info = debug.getinfo(level + 1)  -- use native, not the overridden one
+        if not info then break end
+        stack[#stack + 1] = {
             func = info.func,
             name = info.name,
             source = info.short_src,
             line = info.currentline
         }
-
-        level = level + 1
+        level += 1
     end
-
     return stack
 end)
 
@@ -930,8 +1080,7 @@ add("setsimulationradius", function(simrad, maxsimrad)
     sethiddenproperty(lp, "MaxSimulationRadius", maxsimrad or simrad)
 end)
 
-add("setsimulationradius", function(simrad, maxsimrad)
-    assert(type(simrad) == "number", "expected number for simrad, got " .. type(simrad))
+add("getsimulationradius", function()
     return lp.SimulationRadius
 end)
 
@@ -948,7 +1097,6 @@ add("getinstances", function()
 end)
 
 local objs = {}
-
 for _,v in ipairs(game:GetDescendants()) do
     objs[v] = true
 end
@@ -975,23 +1123,36 @@ add("getnilinstance", function(search)
     end
 end)
 
-task.spawn(function()
-    game.DescendantAdded:Connect(function(obj)
-        if isScript(obj, true) then
-            scripts[#scripts + 1] = obj
+local function isScript(obj, includem) -- ~Script
+    local a = false
+    if includem then
+        if obj:IsA("LocalScript") or obj:IsA("ModuleScript") then
+            a = true
         end
-        objs[obj] = true
-    end)
+    else
+        if obj:IsA("LocalScript") then
+            a = true
+        end
+    end
+    return a
+end
 
-    game.DescendantRemoving:Connect(function(obj)
-        objs[obj] = nil
-        for i, v in ipairs(scripts) do
-            if v == obj then
-                table.remove(scripts, i)
-                break
-            end
+local scripts = {}
+game.DescendantAdded:Connect(function(obj)
+    if isScript(obj, true) then
+        scripts[#scripts + 1] = obj
+    end
+    objs[obj] = true
+end)
+
+game.DescendantRemoving:Connect(function(obj)
+    objs[obj] = nil
+    for i, v in ipairs(scripts) do
+        if v == obj then
+            table.remove(scripts, i)
+            break
         end
-    end)
+    end
 end)
 
 add("isscriptable", function(obj, prop)
@@ -1340,10 +1501,6 @@ add("getscriptclosure", function(scr)
     end
 end)
 
-add("getscripthash", function(scr)
-    do end
-end)
-
 add("getscriptbytecode", function(item)
     assert(typeof(item) == "Instance", "expected Instance, got " .. typeof(item))
     return decompile(item)
@@ -1354,21 +1511,6 @@ add("getscripthash", function(item)
     return crypt.hash(getscriptbytecode(item))
 end)
 
-local function isScript(obj, includem) -- ~Script
-    local a = false
-    if includem then
-        if obj:IsA("LocalScript") or obj:IsA("ModuleScript") then
-            a = true
-        end
-    else
-        if obj:IsA("LocalScript") then
-            a = true
-        end
-    end
-    return a
-end
-
-local scripts = {}
 for _, v in ipairs(game:GetDescendants()) do
     if isScript(v, true) then
         scripts[#scripts + 1] = v
@@ -1400,8 +1542,8 @@ add("getloadedmodules", function()
 end)
 
 add("isrequired", function(module)
-    assert(module:IsA("ModuleScript"), "expected a ModuleScript")
-    
+    assert(typeof(module) == "Instance" and module:IsA("ModuleScript"), "expected ModuleScript, got " .. typeof(module))
+
     local loaded = getloadedmodules()
     for _, item in ipairs(loaded) do
         if item == module then
@@ -1422,6 +1564,7 @@ local function track(obj)
 end
 
 local function sr(root, seen)
+    if root == nil then return end
     seen = seen or {}
     if seen[root] then return end
     seen[root] = true
@@ -1438,8 +1581,8 @@ local function sr(root, seen)
         track(root)
         local i = 1
         while true do
-            local name, val = debug.getupvalue(root, i)
-            if not name then break end
+            local ok, name, val = pcall(debug.getupvalue, root, i)
+            if not ok or not name then break end
             sr(val, seen)
             i += 1
         end
@@ -1474,7 +1617,7 @@ add("filtergc", function(filter)
     return results
 end)
 
-local renv = {DockWidgetPluginGuiInfo,warn,tostring,gcinfo,os,tick,userdata: 0xfac72ec2323a2144,task,getfenv,debug,NumberSequence,assert,rawlen,wait,Color3,Enum,Delay,OverlapParams,Path2DControlPoint,SecurityCapabilities,userdata: 0x0be4acdd038da174,_G,AdReward,UserSettings,shared,Faces,error,coroutine,string,NumberRange,buffer,PhysicalProperties,Instance,printidentity,PluginManager,FloatCurveKey,delay,Ray,NumberSequenceKeypoint,Version,Vector2,newproxy,Game,Content,spawn,rawget,stats,xpcall,ColorSequence,Vector2int16,Workspace,print,SharedTable,typeof,UDim2,RaycastParams,unpack,TweenInfo,loadstring,require,Vector3,pairs,Vector3int16,setmetatable,elapsedTime,pcall,bit32,DateTime,ipairs,table,workspace,version,Region3int16,collectgarbage,game,getmetatable,Spawn,UDim,Region3,utf8,_VERSION,CFrame,rawset,PathWaypoint,CellId,Font,PluginDrag,settings,rawequal,math,CatalogSearchParams,Random,ValueCurveKey,ypcall,type,next,ElapsedTime,select,tonumber,Stats,Wait,time,Rect,BrickColor,setfenv,vector,Axes,ColorSequenceKeypoint,RotationCurveKey}
+local renv = {DockWidgetPluginGuiInfo,warn,tostring,gcinfo,os,tick,task,getfenv,debug,NumberSequence,assert,rawlen,wait,Color3,Enum,Delay,OverlapParams,Path2DControlPoint,SecurityCapabilities,_G,AdReward,UserSettings,shared,Faces,error,coroutine,string,NumberRange,buffer,PhysicalProperties,Instance,printidentity,PluginManager,FloatCurveKey,delay,Ray,NumberSequenceKeypoint,Version,Vector2,newproxy,Game,Content,spawn,rawget,stats,xpcall,ColorSequence,Vector2int16,Workspace,print,SharedTable,typeof,UDim2,RaycastParams,unpack,TweenInfo,loadstring,require,Vector3,pairs,Vector3int16,setmetatable,elapsedTime,pcall,bit32,DateTime,ipairs,table,workspace,version,Region3int16,collectgarbage,game,getmetatable,Spawn,UDim,Region3,utf8,_VERSION,CFrame,rawset,PathWaypoint,CellId,Font,PluginDrag,settings,rawequal,math,CatalogSearchParams,Random,ValueCurveKey,ypcall,type,next,ElapsedTime,select,tonumber,Stats,Wait,time,Rect,BrickColor,setfenv,vector,Axes,ColorSequenceKeypoint,RotationCurveKey}
 add("getrenv", function()
     return renv
 end)
