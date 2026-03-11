@@ -52,7 +52,7 @@ add("clonefunction", function(func)
 end)
 
 add("getcallingscript", function()
-    return nil
+    return debug.traceback() -- PEA .. string.rep("K", 12)
 end)
 
 local tback_ignore = setmetatable({}, {__mode = "k"})
@@ -127,9 +127,27 @@ add("loadstring", function(source, chunkname, mode, env)
     return fn
 end)
 
+local cclosures = setmetatable({}, {__mode = "k"})
+
 add("newcclosure", function(func)
     assert(type(func) == "function", "expected function, got " .. type(func))
-    return func
+
+    local wrapper = function(...)
+        local args = table.pack(...)
+        local co = coroutine.create(function()
+            return func(table.unpack(args, 1, args.n))
+        end)
+
+        local ok, res = coroutine.resume(co)
+        if not ok then
+            error(res, 2)
+        end
+
+        return res
+    end
+
+    cclosures[wrapper] = true
+    return wrapper
 end)
 
 -- Rconsole
@@ -912,6 +930,11 @@ add("setsimulationradius", function(simrad, maxsimrad)
     sethiddenproperty(lp, "MaxSimulationRadius", maxsimrad or simrad)
 end)
 
+add("setsimulationradius", function(simrad, maxsimrad)
+    assert(type(simrad) == "number", "expected number for simrad, got " .. type(simrad))
+    return lp.SimulationRadius
+end)
+
 add("gethui", function()
     return cloneref(game:GetService("CoreGui")).RobloxGui
 end)
@@ -924,15 +947,51 @@ add("getinstances", function()
     return t
 end)
 
-local nilinstances = {}
+local objs = {}
+
+for _,v in ipairs(game:GetDescendants()) do
+    objs[v] = true
+end
+
 add("getnilinstances", function()
-    local t = {}
-    for _, v in ipairs(nilinstances) do
-        if v.Parent == nil then
-            t[#t + 1] = v
+    local nils = {}
+
+    for obj in pairs(objs) do
+        if obj.Parent == nil then
+            table.insert(nils, obj)
         end
     end
-    return t
+
+    return nils
+end)
+
+add("getnilinstance", function(search)
+    assert(typeof(search) == "Instance", "expected Instance")
+
+    for _, item in ipairs(getnilinstances()) do
+        if item == search then
+            return item
+        end
+    end
+end)
+
+task.spawn(function()
+    game.DescendantAdded:Connect(function(obj)
+        if isScript(obj, true) then
+            scripts[#scripts + 1] = obj
+        end
+        objs[obj] = true
+    end)
+
+    game.DescendantRemoving:Connect(function(obj)
+        objs[obj] = nil
+        for i, v in ipairs(scripts) do
+            if v == obj then
+                table.remove(scripts, i)
+                break
+            end
+        end
+    end)
 end)
 
 add("isscriptable", function(obj, prop)
@@ -1281,6 +1340,10 @@ add("getscriptclosure", function(scr)
     end
 end)
 
+add("getscripthash", function(scr)
+    do end
+end)
+
 add("getscriptbytecode", function(item)
     assert(typeof(item) == "Instance", "expected Instance, got " .. typeof(item))
     return decompile(item)
@@ -1291,52 +1354,129 @@ add("getscripthash", function(item)
     return crypt.hash(getscriptbytecode(item))
 end)
 
-local scripts = {}
-add("getrunningscripts", function()
-    scripts = {}
-    for _, v in ipairs(game:GetDescendants()) do
-        if v:IsA("LocalScript") and v.Enabled then
-            scripts[#scripts + 1] = v
-        elseif v:IsA("ModuleScript") then
-            scripts[#scripts + 1] = v
+local function isScript(obj, includem) -- ~Script
+    local a = false
+    if includem then
+        if obj:IsA("LocalScript") or obj:IsA("ModuleScript") then
+            a = true
+        end
+    else
+        if obj:IsA("LocalScript") then
+            a = true
         end
     end
-    return scripts
+    return a
+end
+
+local scripts = {}
+for _, v in ipairs(game:GetDescendants()) do
+    if isScript(v, true) then
+        scripts[#scripts + 1] = v
+    end
+end
+
+add("getrunningscripts", function()
+    local out = {}
+    for _, item in ipairs(scripts) do
+        if isScript(item, false) then
+            out[#out + 1] = item
+        end
+    end
+    return out
 end)
 
 add("getscripts", function()
-    scripts = {}
-    for _, v in ipairs(game:GetDescendants()) do
-        if v:IsA("LocalScript") then
-            scripts[#scripts + 1] = v
-        elseif v:IsA("ModuleScript") then
-            scripts[#scripts + 1] = v
-        end
-    end
     return scripts
 end)
 
-local modules = {}
 add("getloadedmodules", function()
-    modules = {}
-    for _, s in ipairs(getrunningscripts()) do
-        if s.ClassName == "ModuleScript" then
+    local modules = {}
+    for _, s in ipairs(scripts) do
+        if s:IsA("ModuleScript") then
             modules[#modules + 1] = s
         end
     end
     return modules
 end)
 
+add("isrequired", function(module)
+    assert(module:IsA("ModuleScript"), "expected a ModuleScript")
+    
+    local loaded = getloadedmodules()
+    for _, item in ipairs(loaded) do
+        if item == module then
+            return true
+        end
+    end
+    return false
+end)
+
+local trgr, trgc = {}, {}
+
+local function track(obj)
+    if type(obj) == "table" or type(obj) == "function" or type(obj) == "thread" or type(obj) == "userdata" then
+        trgr[#trgr + 1] = obj
+        trgc[#trgc + 1] = obj
+    end
+    return obj
+end
+
+local function sr(root, seen)
+    seen = seen or {}
+    if seen[root] then return end
+    seen[root] = true
+
+    if type(root) == "table" then
+        track(root)
+        for k,v in pairs(root) do
+            sr(k, seen)
+            sr(v, seen)
+        end
+        local mt = getmetatable(root)
+        if mt then sr(mt, seen) end
+    elseif type(root) == "function" then
+        track(root)
+        local i = 1
+        while true do
+            local name, val = debug.getupvalue(root, i)
+            if not name then break end
+            sr(val, seen)
+            i += 1
+        end
+    elseif type(root) == "thread" or type(root) == "userdata" then
+        track(root)
+    end
+end
+
+sr(getgenv())
+
 add("getreg", function()
-    return debug.getregistry and debug.getregistry() or {}
+    return trgr
 end)
 
 add("getgc", function()
-    return collectgarbage("collect")
+    return trgc
 end)
 
+add("filtergc", function(filter)
+    local results = {}
+    for _, obj in ipairs(trgc) do
+        if type(filter) == "string" then
+            if type(obj) == filter then
+                results[#results + 1] = obj
+            end
+        elseif type(filter) == "function" then
+            if filter(obj) then
+                results[#results + 1] = obj
+            end
+        end
+    end
+    return results
+end)
+
+local renv = {DockWidgetPluginGuiInfo,warn,tostring,gcinfo,os,tick,userdata: 0xfac72ec2323a2144,task,getfenv,debug,NumberSequence,assert,rawlen,wait,Color3,Enum,Delay,OverlapParams,Path2DControlPoint,SecurityCapabilities,userdata: 0x0be4acdd038da174,_G,AdReward,UserSettings,shared,Faces,error,coroutine,string,NumberRange,buffer,PhysicalProperties,Instance,printidentity,PluginManager,FloatCurveKey,delay,Ray,NumberSequenceKeypoint,Version,Vector2,newproxy,Game,Content,spawn,rawget,stats,xpcall,ColorSequence,Vector2int16,Workspace,print,SharedTable,typeof,UDim2,RaycastParams,unpack,TweenInfo,loadstring,require,Vector3,pairs,Vector3int16,setmetatable,elapsedTime,pcall,bit32,DateTime,ipairs,table,workspace,version,Region3int16,collectgarbage,game,getmetatable,Spawn,UDim,Region3,utf8,_VERSION,CFrame,rawset,PathWaypoint,CellId,Font,PluginDrag,settings,rawequal,math,CatalogSearchParams,Random,ValueCurveKey,ypcall,type,next,ElapsedTime,select,tonumber,Stats,Wait,time,Rect,BrickColor,setfenv,vector,Axes,ColorSequenceKeypoint,RotationCurveKey}
 add("getrenv", function()
-    return getfenv(0)
+    return renv
 end)
 
 add("getenv", function(obj)
