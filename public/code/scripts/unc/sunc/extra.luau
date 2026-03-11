@@ -1122,8 +1122,7 @@ add("getnilinstances", function()
 end)
 
 add("getnilinstance", function(search)
-    assert(typeof(search) == "Instance", "expected Instance")
-
+    -- search = string
     for _, item in ipairs(getnilinstances()) do
         if item == search then
             return item
@@ -1564,7 +1563,7 @@ end)
 add("getdeletedactors", function()
     local del_actors = {}
 
-    for _, item in ipairs(getnilinstances())
+    for _, item in ipairs(getnilinstances()) do
         if item:IsA("Actor") then
             table.insert(del_actors, item)
         end
