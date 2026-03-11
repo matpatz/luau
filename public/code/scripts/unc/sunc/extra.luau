@@ -605,6 +605,188 @@ end)
 
 -- Drawing
 
+local DrawingCache = {}
+
+local function getViewport()
+    return workspace.CurrentCamera.ViewportSize
+end
+
+local BASE_PROPS = {"Visible", "ZIndex", "Transparency", "Color"}
+
+local function applyBase(obj, self)
+    obj.Visible = self.Visible
+    obj.ZIndex = math.clamp(self.ZIndex, -2^31, 2^31)
+    obj.BackgroundTransparency = 1 - self.Transparency
+    obj.BackgroundColor3 = self.Color
+end
+
+local function makeProxy(self, update, readonly)
+    readonly = readonly or {}
+    local proxy = newproxy(true)
+    local mt = getmetatable(proxy)
+
+    mt.__index = function(_, k)
+        return self[k]
+    end
+
+    mt.__newindex = function(_, k, v)
+        for _, r in ipairs(readonly) do
+            if r == k then return end
+        end
+        self[k] = v
+        update()
+    end
+
+    mt.__tostring = function()
+        return "Drawing"
+    end
+
+    mt.__metatable = "This metatable is protected."
+    return proxy
+end
+
+local types = {}
+
+types.Line = function(self, Object)
+    local function update()
+        local from, to = self.From, self.To
+        local dx, dy = to.X - from.X, to.Y - from.Y
+        local len = math.sqrt(dx^2 + dy^2)
+        Object.Size = UDim2.fromOffset(len, self.Thickness)
+        Object.Position = UDim2.fromOffset(from.X, from.Y)
+        Object.Rotation = math.deg(math.atan2(dy, dx))
+        Object.BackgroundColor3 = self.Color
+        Object.Visible = self.Visible
+        Object.ZIndex = math.clamp(self.ZIndex, -2^31, 2^31)
+    end
+
+    self.From = Vector2.zero
+    self.To = Vector2.zero
+    self.Thickness = 1
+    self.Color = Color3.new(1, 1, 1)
+    self.Visible = true
+    self.ZIndex = 1
+    self.Transparency = 1
+
+    return makeProxy(self, update)
+end
+
+types.Square = function(self, Object)
+    local stroke = Instance.new("UIStroke", Object)
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+    local function update()
+        applyBase(Object, self)
+        Object.Size = UDim2.fromOffset(self.Size.X, self.Size.Y)
+        Object.Position = UDim2.fromOffset(self.Position.X, self.Position.Y)
+        if self.Filled then
+            Object.BackgroundTransparency = 0
+            stroke.Enabled = false
+        else
+            Object.BackgroundTransparency = 1
+            stroke.Enabled = true
+            stroke.Color = self.Color
+            stroke.Thickness = self.Thickness
+        end
+    end
+
+    self.Size = Vector2.zero
+    self.Position = Vector2.zero
+    self.Color = Color3.new(1, 1, 1)
+    self.Filled = false
+    self.Thickness = 1
+    self.Visible = true
+    self.ZIndex = 1
+    self.Transparency = 1
+
+    return makeProxy(self, update)
+end
+
+types.Circle = function(self, Object)
+    Instance.new("UICorner", Object).CornerRadius = UDim.new(1, 0)
+    local stroke = Instance.new("UIStroke", Object)
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+    local function update()
+        local d = self.Radius * 2
+        Object.Size = UDim2.fromOffset(d, d)
+        Object.Position = UDim2.fromOffset(
+            self.Position.X - self.Radius,
+            self.Position.Y - self.Radius
+        )
+        Object.Visible = self.Visible
+        Object.ZIndex = math.clamp(self.ZIndex, -2^31, 2^31)
+        if self.Filled then
+            Object.BackgroundTransparency = 1 - self.Transparency
+            Object.BackgroundColor3 = self.Color
+            stroke.Enabled = false
+        else
+            Object.BackgroundTransparency = 1
+            stroke.Enabled = true
+            stroke.Color = self.Color
+            stroke.Thickness = self.Thickness
+        end
+    end
+
+    self.Radius = 1
+    self.Position = Vector2.zero
+    self.Color = Color3.new(1, 1, 1)
+    self.Filled = false
+    self.Thickness = 1
+    self.Visible = true
+    self.ZIndex = 1
+    self.Transparency = 1
+    self.NumSides = 0 -- stub, UICorner handles it
+
+    return makeProxy(self, update)
+end
+
+types.Text = function(self, Object)
+    Object:Destroy()
+    Object = Instance.new("TextLabel", UI)
+    Object.BackgroundTransparency = 1
+    Object.BorderSizePixel = 0
+    Object.TextWrapped = false
+    Object.RichText = false
+
+    local function update()
+        Object.Visible = self.Visible
+        Object.ZIndex = math.clamp(self.ZIndex, -2^31, 2^31)
+        Object.Text = self.Text
+        Object.TextSize = self.Size
+        Object.TextColor3 = self.Color
+        Object.BackgroundTransparency = 1 - self.Transparency
+        Object.Position = UDim2.fromOffset(self.Position.X, self.Position.Y)
+        Object.Size = UDim2.fromOffset(self.Size * #self.Text * 0.6, self.Size)
+        Object.Font = ({
+            [0] = Enum.Font.GothamMedium,
+            [1] = Enum.Font.SourceSans,
+            [2] = Enum.Font.Code,
+            [3] = Enum.Font.RobotoMono,
+        })[self.Font] or Enum.Font.GothamMedium
+        Object.TextXAlignment = self.Center and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left
+        Object.TextYAlignment = self.Center and Enum.TextYAlignment.Center or Enum.TextYAlignment.Top
+        Object.TextStrokeTransparency = self.Outline and 0 or 1
+        Object.TextStrokeColor3 = self.OutlineColor
+        self.TextBounds = Object.TextBounds
+    end
+
+    self.Text = ""
+    self.Size = 12
+    self.Font = 3
+    self.Color = Color3.new(1, 1, 1)
+    self.Center = false
+    self.Outline = false
+    self.OutlineColor = Color3.new(0, 0, 0)
+    self.Position = Vector2.zero
+    self.Visible = true
+    self.ZIndex = 1
+    self.Transparency = 1
+    self.TextBounds = Vector2.zero
+
+    return makeProxy(self, update, {"TextBounds"})
+end
+
 local Drawing = {
     Fonts = {
         UI = 0,
@@ -612,192 +794,55 @@ local Drawing = {
         Plex = 2,
         Monospace = 3,
     },
+
     new = function(Type)
         assert(type(Type) == "string", "expected string for Type, got " .. type(Type))
-        local validTypes = {Line = true, Square = true, Circle = true, Text = true}
-        assert(validTypes[Type], "invalid drawing type: " .. Type)
+        assert(types[Type], "invalid drawing type: " .. Type)
 
-        local Object = Create("Frame", {
-            Visible = true,
-            Size = UDim2_fromOffset(0, 0),
-            BackgroundColor3 = Color3.new(0, 0, 0),
-            BackgroundTransparency = 1,
-            BorderSizePixel = 0,
-            ZIndex = 1,
-            Parent = UI
-        })
+        local Object = Instance.new("Frame")
+        Object.BorderSizePixel = 0
+        Object.BackgroundTransparency = 1
+        Object.ZIndex = 1
+        Object.Size = UDim2.fromOffset(0, 0)
+        Object.Parent = UI
 
         local self = {
-            Visible = Object.Visible,
-            Color = Object.BackgroundColor3,
-            Transparency = 1,
-            ZIndex = Object.ZIndex,
-            Remove = function() Object:Destroy() end
+            Remove = function() Object:Destroy() end,
         }
-
         self.Destroy = self.Remove
 
-        local function Construct(Update, Defaults, Default, Readonly)
-            Readonly = Readonly or {}
-            local function inlined()
-                if not Default then
-                    Object.Visible = self.Visible
-                    Object.BackgroundColor3 = self.Color
-                    Object.BackgroundTransparency = 1 - self.Transparency
-                    Object.ZIndex = clamp(self.ZIndex, -B, B)
-                end
-                Update()
-            end
-
-            for i, v in next, Defaults do
-                self[i] = v
-            end
-
-            local proxy = newproxy(true)
-            local mt = getmetatable(proxy)
-
-            mt.__index = function(_, b)
-                return self[b]
-            end
-            mt.__newindex = function(_, Key, Value)
-                if tfind(Readonly, Key) then return end
-                self[Key] = Value
-                inlined()
-            end
-            mt.__metatable = "This metatable is protected."
-
-            tinsert(DrawingCache, {proxy = proxy, instance = Object})
-
-            return proxy
-        end
-
-        if Type == "Line" then
-            return Construct(function()
-                local from, to = self.From, self.To
-                local dX, dY = to.X - from.X, to.Y - from.Y
-                Object.Size = UDim2_fromOffset(sqrt(dX ^ 2 + dY ^ 2), self.Thickness)
-                Object.Position = UDim2_fromOffset(from.X, from.Y)
-                Object.Rotation = deg(atan2(dY, dX))
-            end, {
-                Thickness = 1,
-                From = Vector2.zero,
-                To = Vector2.zero
-            })
-        elseif Type == "Square" then
-            local Stroke = Create("UIStroke", {
-                Parent = Object,
-                Color = self.Color,
-                Enabled = true,
-                Thickness = 1
-            })
-
-            return Construct(function()
-                Object.Size = UDim2.new(0, self.Size.X, 0, self.Size.Y)
-                Object.Position = UDim2.new(0, self.Position.X, 0, self.Position.Y)
-                Stroke.Enabled = self.Filled
-                Stroke.Color = self.Color
-                Stroke.Thickness = self.Thickness
-            end, {
-                Size = Vector2.zero,
-                Position = Vector2.zero,
-                Filled = false,
-                Thickness = 1,
-                Transparency = 0
-            })
-        elseif Type == "Circle" then
-            local Stroke = Create("UIStroke", {
-                Parent = Object,
-                Color = self.Color,
-                Enabled = true
-            })
-            Create("UICorner", {
-                Parent = Object,
-                CornerRadius = UDim.new(1, 0)
-            })
-
-            return Construct(function()
-                Object.Size = UDim2.fromScale(self.Radius, self.Radius)
-                Object.Position = UDim2.fromScale(self.Position.X, self.Position.Y)
-                Stroke.Enabled = not self.Filled
-                Stroke.Color = self.Color
-                Stroke.Thickness = self.Thickness
-            end, {
-                Thickness = 1,
-                NumSides = 0,
-                Radius = 1,
-                Filled = false,
-                Position = Vector2.zero
-            })
-        elseif Type == "Text" then
-            Object:Destroy()
-            Object = Create("TextLabel", {
-                Parent = UI,
-                Visible = self.Visible,
-                Size = UDim2.fromOffset(0, 0),
-                BackgroundColor3 = self.Color,
-                BackgroundTransparency = 1 - self.Transparency,
-                BorderSizePixel = 0,
-                TextStrokeColor3 = self.Color,
-                TextStrokeTransparency = 1,
-                TextSize = self.Size,
-                TextWrapped = false
-            })
-
-            return Construct(function()
-                Object.Size = UDim2.fromOffset(self.Size * 3, self.Size / 2)
-                Object.Position = UDim2.fromOffset(self.Position.X, self.Position.Y)
-                Object.Text = self.Text
-                Object.Font = Fonts[self.Font]
-                Object.TextColor3 = self.Color
-                Object.BackgroundTransparency = 1 - self.Transparency
-
-                if self.Center then
-                    Object.TextXAlignment = Enum.TextXAlignment.Center
-                    Object.TextYAlignment = Enum.TextYAlignment.Center
-                else
-                    Object.TextXAlignment = Enum.TextXAlignment.Left
-                    Object.TextYAlignment = Enum.TextYAlignment.Top
-                end
-
-                Object.TextStrokeTransparency = self.Outline and 0 or 1
-                Object.TextStrokeColor3 = self.OutlineColor
-                self.TextBounds = Object.TextBounds
-            end, {
-                Text = "",
-                Size = 0,
-                Center = false,
-                Outline = false,
-                OutlineColor = self.Color,
-                Position = Vector2.zero,
-                Font = 3
-            }, true, {"TextBounds"})
-        end
+        local proxy = types[Type](self, Object)
+        table.insert(DrawingCache, {proxy = proxy, instance = Object})
+        return proxy
     end
 }
 
+if getgenv()["Drawing"] == nil then
+    getgenv().Drawing = Drawing
+end
+
 add("isrenderobj", function(a)
-    for _, object in next, DrawingCache do
-        if object.proxy == a then
-            return true
-        end
+    for _, obj in ipairs(DrawingCache) do
+        if obj.proxy == a then return true end
     end
     return false
 end)
 
 add("cleardrawcache", function()
-    for _, Object in next, DrawingCache do
-        Object.instance:Destroy()
+    for _, obj in ipairs(DrawingCache) do
+        obj.instance:Destroy()
     end
+    table.clear(DrawingCache)
 end)
 
 add("getrenderproperty", function(a, b)
-    assert(isrenderobj(a), "Invalid argument #1 to 'getrenderproperty', render object expected, got " .. type(a))
+    assert(isrenderobj(a), "expected render object, got " .. type(a))
     assert(type(b) == "string", "expected string for property, got " .. type(b))
     return a[b]
 end)
 
 add("setrenderproperty", function(a, b, c)
-    assert(isrenderobj(a), "Invalid argument #1 to 'setrenderproperty', render object expected, got " .. typeof(a))
+    assert(isrenderobj(a), "expected render object, got " .. type(a))
     assert(type(b) == "string", "expected string for property, got " .. type(b))
     a[b] = c
 end)
