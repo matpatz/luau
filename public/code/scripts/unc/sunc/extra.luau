@@ -399,6 +399,76 @@ crypt.hash = function(str, algorithm)
         return string.format("%08x%08x%08x%08x%08x%08x%08x%08x",
             H0,H1,H2,H3,H4,H5,H6,H7
         )
+    elseif algorithm == "sha1" then
+        local h0 = 0x67452301
+        local h1 = 0xEFCDAB89
+        local h2 = 0x98BADCFE
+        local h3 = 0x10325476
+        local h4 = 0xC3D2E1F0
+
+        local msg = str
+        local bitLen = #msg * 8
+
+        msg = msg .. "\128"
+        while (#msg % 64) ~= 56 do
+            msg = msg .. "\0"
+        end
+
+        for i = 7,0,-1 do
+            msg = msg .. string.char(band(rshift(bitLen,i*8),255))
+        end
+
+        for i = 1,#msg,64 do
+            local w = {}
+
+            for j = 0,15 do
+                local a,b,c,d = msg:byte(i+j*4,i+j*4+3)
+                w[j] = lshift(a,24) + lshift(b,16) + lshift(c,8) + d
+            end
+
+            for j = 16,79 do
+                w[j] = lrotate(bxor(w[j-3], w[j-8], w[j-14], w[j-16]),1)
+            end
+
+            local a = h0
+            local b = h1
+            local c = h2
+            local d = h3
+            local e = h4
+
+            for j = 0,79 do
+                local f, k
+
+                if j <= 19 then
+                    f = bor(band(b,c), band(bnot(b),d))
+                    k = 0x5A827999
+                elseif j <= 39 then
+                    f = bxor(b,c,d)
+                    k = 0x6ED9EBA1
+                elseif j <= 59 then
+                    f = bor(bor(band(b,c), band(b,d)), band(c,d))
+                    k = 0x8F1BBCDC
+                else
+                    f = bxor(b,c,d)
+                    k = 0xCA62C1D6
+                end
+
+                local temp = (lrotate(a,5) + f + e + k + w[j]) % 4294967296
+                e = d
+                d = c
+                c = lrotate(b,30)
+                b = a
+                a = temp
+            end
+
+            h0 = (h0 + a) % 4294967296
+            h1 = (h1 + b) % 4294967296
+            h2 = (h2 + c) % 4294967296
+            h3 = (h3 + d) % 4294967296
+            h4 = (h4 + e) % 4294967296
+        end
+
+        return string.format("%08x%08x%08x%08x%08x", h0,h1,h2,h3,h4)
     else
         error("unsupported algorithm: " .. algorithm)
     end
@@ -1869,19 +1939,29 @@ add("getsenv", function(scr)
 end)
 
 local function test()
-    if pcall(function() return game.CoreGui end) then
-        return 7
+    local function try(f)
+        return function()
+            return select(1, pcall(f))
+        end
     end
 
-    if pcall(function() return game:GetService("LogService"):GetLogHistory() end) then
-        return 6
+    local checks = {
+        try(function() return game.Name end),
+        try(function() return game:GetService("CoreGui").Name end),
+        try(function() return game.DataCost end),
+        try(function() return Instance.new("Player") end),
+        try(function() return game:GetService("CorePackages").Name end),
+        try(function() return Instance.new("SurfaceAppearance") end),
+        try(function() Instance.new("MeshPart").MeshId = "" end)
+    }
+
+    for i, v in ipairs(checks) do
+        if not v() then
+            return i - 1
+        end
     end
 
-    if pcall(function() return game:GetService("Players").LocalPlayer end) then
-        return 5
-    end
-
-    return 2
+    return #checks
 end
 
 local thread_identity = 1
@@ -1908,6 +1988,10 @@ end)
 
 add("getthreadcontext", function()
     return getthreadidentity()
+end)
+
+add("identity", function() -- just added this for testing
+   return getthreadidentity()
 end)
 
 add("printidentity", function()
