@@ -789,17 +789,21 @@ end
 debug_lib.getcallstack = function()
     local stack = {}
     local level = 1
+
     while true do
-        local info = debug.getinfo(level + 1)
-        if not info then break end
+        local ok, info = pcall(debug.getinfo, level + 1)
+        if not ok or not info then break end
+
         stack[#stack + 1] = {
             func = info.func,
             name = info.name,
             source = info.short_src,
             line = info.currentline
         }
+
         level += 1
     end
+
     return stack
 end
 
