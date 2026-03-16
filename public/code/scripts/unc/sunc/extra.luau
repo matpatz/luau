@@ -273,6 +273,20 @@ end
 
 crypt.decrypt = crypt.encrypt -- <<>> = sourcey
 
+crypt.generatebytes = function(len)
+    assert(type(len) == "number", "expected number, got " .. type(len))
+    assert(len > 0, "length must be greater than 0")
+    local t = {}
+    for i = 1, len do
+        t[i] = string.char(math.random(0, 255))
+    end
+    return table.concat(t)
+end
+
+crypt.generatekey = function()
+    return crypt.base64encode(crypt.generatebytes(32))
+end
+
 -- none of these are algos the normal hash function provides
 crypt.hash = function(str, algorithm)
     algorithm = (algorithm or "djb2"):lower()
@@ -481,13 +495,7 @@ crypt.hash = function(str, algorithm)
 end
 
 crypt.random = function(len)
-    assert(type(len) == "number", "expected number, got " .. type(len))
-    assert(len > 0, "length must be greater than 0")
-    local t = {}
-    for i = 1, len do
-        t[i] = string.char(math.random(0, 255))
-    end
-    return table.concat(t)
+    return crypt.generatebytes(len)
 end
 
 crypt.rstring = function(len)
@@ -1774,6 +1782,16 @@ end)
 
 add("getfpscap", function()
     return fps
+end)
+
+-- Encoding -- useless
+
+add("base64encode", function(data)
+    return crypt.base64encode(data)
+end)
+
+add("base64decode", function(data)
+    return crypt.base64decode(data)
 end)
 
 -- Scripts
