@@ -3,6 +3,14 @@ local function add(name, func)
     functions[name] = func
 end
 
+local getgenv; local envs = {getgenv, _G, getfenv}
+for _, item in ipairs(envs) do
+    if item ~= nil then
+        getgenv = item
+        break
+    end
+end
+
 -- Cache
 
 local stored = {}
@@ -113,8 +121,6 @@ add("isexecutorclosure", function(func)
 end)
 
 add("loadstring", function(source, chunkname, mode, env)
-    assert(type(source) == "string", "bad argument #1 to load (string expected)")
-
     local index = 1
 
     local function reader()
