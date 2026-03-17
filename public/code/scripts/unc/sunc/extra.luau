@@ -48,7 +48,7 @@ end)
 
 add("checkcaller", function()
     local info = debug.info(getgenv, 'slnaf')
-    return debug.info(1, 'slnaf')==info
+    return debug.info(1, 'slnaf') == info
 end)
 
 add("clonefunction", function(func)
@@ -102,6 +102,13 @@ add("iscclosure", function(func)
     return debug.info(func, "s") == "[C]"
 end)
 
+add("newlclosure", function(func) -- maybe setinfo LMAO
+    local newfunc = function()
+        func()
+    end
+    return newfunc
+end)
+
 add("islclosure", function(func)
     if type(func) ~= "function" then
         return false
@@ -121,6 +128,8 @@ add("isexecutorclosure", function(func)
     return false
 end)
 
+-- loadstring("print('hello')") -- is technically functional but it is not because of loadstring
+    -- just let ir run itself 
 add("loadstring", function(source, chunkname, mode, env)
     local index = 1
 
@@ -143,6 +152,7 @@ end)
 
 local cclosures = setmetatable({}, {__mode = "k"})
 
+local custom_closures = {}
 add("newcclosure", function(func)
     assert(type(func) == "function", "expected function, got " .. type(func))
 
@@ -161,7 +171,12 @@ add("newcclosure", function(func)
     end
 
     cclosures[wrapper] = true
+    custom_closures[func] = true
     return wrapper
+end)
+
+add("isnewcclosure", function(func)
+    return custom_closures[func]
 end)
 
 -- Rconsole
@@ -1543,6 +1558,8 @@ end)
 add("getcallbackvalue", function(obj, property)
     assert(typeof(obj) == "Instance", "expected Instance, got " .. typeof(obj))
     assert(type(property) == "string", "expected string for property, got " .. type(property))
+
+    -- hookmetamethod -- this is so shit ahahahahahhfewfuewufhweiuhf
 end)
 
 add("fireproximityprompt", function(prompt)
@@ -1598,13 +1615,17 @@ end)
 
 local ugc = game:GetService("UGCValidationService")
 
+add("getproperties", function()
+    return table.create()
+end)
+
 add("gethiddenproperty", function(object, property)
     assert(typeof(object) == "Instance", "expected Instance, got " .. typeof(object))
     assert(type(property) == "string", "expected string for property, got " .. type(property))
     return ugc:GetPropertyValue(object, property)
 end)
 
-add("gethiddenpropertys", function(object, property)
+add("gethiddenproperties", function(object, property)
     assert(typeof(object) == "Instance", "expected Instance, got " .. typeof(object))
     return table.create()
 end)
@@ -2085,6 +2106,11 @@ add("getscriptclosure", function(scr)
     return function(...)
         return require(scr)(...)
     end
+end)
+
+-- could hookmetamethod it or some shit
+add("getscriptfromthread", function()
+    return Instance.new("LocalScript", nil)
 end)
 
 add("getscriptbytecode", function(item)
