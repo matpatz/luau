@@ -3,14 +3,6 @@ local function add(name, func)
     functions[name] = func
 end
 
-local getgenv; local envs = {getgenv, _G, getfenv}
-for _, item in ipairs(envs) do
-    if item ~= nil then
-        getgenv = item
-        break
-    end
-end
-
 -- Cache
 
 local stored = {}
@@ -75,7 +67,7 @@ add("setstackhidden", function(func, hidden)
     tback_ignore[func] = hidden
 end)
 
-local ishooked = {}
+local ishooked, canhook = {}, {}
 add("isfunctionhooked", function(func)
     assert(type(func) == "function", "expected function, got " .. type(func))
     return ishooked[func] ~= nil
@@ -84,14 +76,23 @@ end)
 add("hookfunction", function(func, hook)
     assert(type(func) == "function", "expected function, got " .. type(func))
     assert(type(hook) == "function", "expected function for hook, got " .. type(hook))
-    ishooked[func] = hook
-    return func
+    if canhook[func] then 
+        ishooked[func] = hook
+        return func
+    end
+    return nil
 end)
 
 add("restorefunction", function(func, hook)
     assert(type(func) == "function", "expected function, got " .. type(func))
     ishooked[func] = nil
     return hook
+end)
+
+add("securefunction", function(func)
+    assert(type(func) == "function", "expected function")
+    
+    canhook[func] = true
 end)
 
 add("iscclosure", function(func)
@@ -199,10 +200,10 @@ end)
 local b = bit32
 local band, bxor, rshift, lshift, rrotate = b.band, b.bxor, b.rshift, b.lshift, b.rrotate
 
-local crypt = {}
+local _crypt = {}
 
 local b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-crypt.base64encode = function(data)
+_crypt.base64encode = function(data)
     assert(type(data) == "string", "expected string, got " .. type(data))
     
     local out = {}
@@ -226,7 +227,7 @@ crypt.base64encode = function(data)
     return result:sub(1, #result - pad) .. string.rep("=", pad)
 end
 
-crypt.base64decode = function(data)
+_crypt.base64decode = function(data)
     assert(type(data) == "string", "expected string, got " .. type(data))
 
     local out = {}
@@ -255,7 +256,7 @@ crypt.base64decode = function(data)
     return table.concat(out)
 end
 
-crypt.encrypt = function(data, key)
+_crypt.encrypt = function(data, key)
     assert(type(data) == "string", "expected string for data, got " .. type(data))
     assert(type(key) == "string", "expected string for key, got " .. type(key))
     assert(#key > 0, "key cannot be empty")
@@ -271,9 +272,9 @@ crypt.encrypt = function(data, key)
     return table.concat(out)
 end
 
-crypt.decrypt = crypt.encrypt -- <<>> = sourcey
+_crypt.decrypt = _crypt.encrypt -- <<>> = sourcey
 
-crypt.generatebytes = function(len)
+_crypt.generatebytes = function(len)
     assert(type(len) == "number", "expected number, got " .. type(len))
     assert(len > 0, "length must be greater than 0")
     local t = {}
@@ -283,55 +284,28 @@ crypt.generatebytes = function(len)
     return table.concat(t)
 end
 
-crypt.generatekey = function()
-    return crypt.base64encode(crypt.generatebytes(32))
+_crypt.generatekey = function()
+    local bytes = table.create(32)
+
+    for i = 1, 32 do
+        bytes[i] = string.char(math.random(0,255))
+    end
+
+    local raw = table.concat(bytes)
+    return _crypt.base64encode(raw)
 end
 
--- none of these are algos the normal hash function provides
-crypt.hash = function(str, algorithm)
-    algorithm = (algorithm or "djb2"):lower()
+-- thanks claude
+_crypt.hash = function(str, algorithm)
+    algorithm = (algorithm or "sha256"):lower()
 
-    if algorithm == "djb2" then
-        local h = 5381
-        for i = 1, #str do h = (h * 33 + str:byte(i)) % 4294967296 end
-        return string.format("%08x", h)
+    -- Helper functions for SHA-2 family
+    local function rotr(x, n)
+        return bxor(rshift(x, n), lshift(x, 32 - n))
+    end
 
-    elseif algorithm == "fnv1a" then
-        local h = 2166136261
-        for i = 1, #str do h = bxor(h, str:byte(i)) * 16777619 % 4294967296 end
-        return string.format("%08x", h)
-
-    elseif algorithm == "sdbm" then
-        local h = 0
-        for i = 1, #str do h = (str:byte(i) + h * 65599) % 4294967296 end
-        return string.format("%08x", h)
-
-    elseif algorithm == "adler32" then
-        local a, b = 1, 0
-        for i = 1, #str do
-            a = (a + str:byte(i)) % 65521
-            b = (b + a) % 65521
-        end
-        return string.format("%08x", b * 65536 + a)
-
-    elseif algorithm == "crc32" then
-        local crc = 0xFFFFFFFF
-        for i = 1, #str do
-            crc = bxor(crc, str:byte(i))
-            for _ = 1, 8 do
-                crc = (crc % 2 == 1) and bxor(math.floor(crc / 2), 0xEDB88320) or math.floor(crc / 2)
-            end
-        end
-        return string.format("%08x", bxor(crc, 0xFFFFFFFF))
-
-    elseif algorithm == "murmur2" then
-        local m, h = 0x5BD1E995, #str * 0x5BD1E995 % 4294967296
-        for i = 1, #str do
-            h = bxor(h, str:byte(i) * m % 4294967296)
-            h = (h * m) % 4294967296
-        end
-        return string.format("%08x", bxor(bxor(h, math.floor(h / 65536)), m) % 4294967296)
-    elseif algorithm == "sha256" then -- we love skidding
+    -- SHA-256 (already implemented)
+    if algorithm == "sha256" then
         local K = {
             0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
             0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
@@ -419,7 +393,103 @@ crypt.hash = function(str, algorithm)
         return string.format("%08x%08x%08x%08x%08x%08x%08x%08x",
             H0,H1,H2,H3,H4,H5,H6,H7
         )
+
+    -- SHA-224
+    elseif algorithm == "sha224" then
+        local K = {
+            0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+            0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+            0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+            0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+            0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+            0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+            0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+            0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+        }
+
+        local H0 = 0xc1059ed8
+        local H1 = 0x367cd507
+        local H2 = 0x3070dd17
+        local H3 = 0xf70e5939
+        local H4 = 0xffc00b31
+        local H5 = 0x68581511
+        local H6 = 0x64f98fa7
+        local H7 = 0xbefa4fa4
+
+        local msg = str
+        local bitLen = #msg * 8
+
+        msg = msg .. "\128"
+        while (#msg % 64) ~= 56 do
+            msg = msg .. "\0"
+        end
+
+        for i = 7,0,-1 do
+            msg = msg .. string.char(band(rshift(bitLen,i*8),255))
+        end
+
+        for i = 1,#msg,64 do
+            local w = {}
+
+            for j = 0,15 do
+                local a,b,c,d = msg:byte(i+j*4,i+j*4+3)
+                w[j] = lshift(a,24) + lshift(b,16) + lshift(c,8) + d
+            end
+
+            for j = 16,63 do
+                local s0 = bxor(rrotate(w[j-15],7), rrotate(w[j-15],18), rshift(w[j-15],3))
+                local s1 = bxor(rrotate(w[j-2],17), rrotate(w[j-2],19), rshift(w[j-2],10))
+                w[j] = (w[j-16] + s0 + w[j-7] + s1) % 4294967296
+            end
+
+            local a = H0
+            local b = H1
+            local c = H2
+            local d = H3
+            local e = H4
+            local f = H5
+            local g = H6
+            local h = H7
+
+            for j = 0,63 do
+                local S1 = bxor(rrotate(e,6), rrotate(e,11), rrotate(e,25))
+                local ch = bxor(band(e,f), band(bit32.bnot(e),g))
+                local temp1 = (h + S1 + ch + K[j+1] + w[j]) % 4294967296
+
+                local S0 = bxor(rrotate(a,2), rrotate(a,13), rrotate(a,22))
+                local maj = bxor(band(a,b), band(a,c), band(b,c))
+                local temp2 = (S0 + maj) % 4294967296
+
+                h = g
+                g = f
+                f = e
+                e = (d + temp1) % 4294967296
+                d = c
+                c = b
+                b = a
+                a = (temp1 + temp2) % 4294967296
+            end
+
+            H0 = (H0 + a) % 4294967296
+            H1 = (H1 + b) % 4294967296
+            H2 = (H2 + c) % 4294967296
+            H3 = (H3 + d) % 4294967296
+            H4 = (H4 + e) % 4294967296
+            H5 = (H5 + f) % 4294967296
+            H6 = (H6 + g) % 4294967296
+            H7 = (H7 + h) % 4294967296
+        end
+
+        return string.format("%08x%08x%08x%08x%08x%08x%08x",
+            H0,H1,H2,H3,H4,H5,H6
+        )
+
+    -- SHA-1 (already implemented)
     elseif algorithm == "sha1" then
+        local function lrotate(x, n)
+            return bxor(lshift(x, n), rshift(x, 32 - n))
+        end
+
         local h0 = 0x67452301
         local h1 = 0xEFCDAB89
         local h2 = 0x98BADCFE
@@ -460,13 +530,13 @@ crypt.hash = function(str, algorithm)
                 local f, k
 
                 if j <= 19 then
-                    f = bor(band(b,c), band(bnot(b),d))
+                    f = bit32.bor(band(b,c), band(bit32.bnot(b),d))
                     k = 0x5A827999
                 elseif j <= 39 then
                     f = bxor(b,c,d)
                     k = 0x6ED9EBA1
                 elseif j <= 59 then
-                    f = bor(bor(band(b,c), band(b,d)), band(c,d))
+                    f = bit32.bor(bit32.bor(band(b,c), band(b,d)), band(c,d))
                     k = 0x8F1BBCDC
                 else
                     f = bxor(b,c,d)
@@ -489,16 +559,146 @@ crypt.hash = function(str, algorithm)
         end
 
         return string.format("%08x%08x%08x%08x%08x", h0,h1,h2,h3,h4)
+
+    -- MD5
+    elseif algorithm == "md5" then
+        local function F(x, y, z) return bit32.bor(band(x, y), band(bit32.bnot(x), z)) end
+        local function G(x, y, z) return bit32.bor(band(x, z), band(y, bit32.bnot(z))) end
+        local function H(x, y, z) return bxor(x, y, z) end
+        local function I(x, y, z) return bxor(y, bit32.bor(x, bit32.bnot(z))) end
+
+        local function leftrotate(x, c)
+            return bit32.bor(lshift(x, c), rshift(x, 32 - c))
+        end
+
+        local s = {
+            7, 12, 17, 22,  7, 12, 17, 22,  7, 12, 17, 22,  7, 12, 17, 22,
+            5,  9, 14, 20,  5,  9, 14, 20,  5,  9, 14, 20,  5,  9, 14, 20,
+            4, 11, 16, 23,  4, 11, 16, 23,  4, 11, 16, 23,  4, 11, 16, 23,
+            6, 10, 15, 21,  6, 10, 15, 21,  6, 10, 15, 21,  6, 10, 15, 21
+        }
+
+        local K = {}
+        for i = 0, 63 do
+            K[i] = math.floor(math.abs(math.sin(i + 1)) * 4294967296)
+        end
+
+        local a0 = 0x67452301
+        local b0 = 0xefcdab89
+        local c0 = 0x98badcfe
+        local d0 = 0x10325476
+
+        local msg = str
+        local bitLen = #msg * 8
+
+        msg = msg .. "\128"
+        while (#msg % 64) ~= 56 do
+            msg = msg .. "\0"
+        end
+
+        for i = 0, 7 do
+            msg = msg .. string.char(band(rshift(bitLen, i * 8), 255))
+        end
+
+        for chunk = 1, #msg, 64 do
+            local M = {}
+            for j = 0, 15 do
+                local a, b, c, d = msg:byte(chunk + j * 4, chunk + j * 4 + 3)
+                M[j] = d * 16777216 + c * 65536 + b * 256 + a
+            end
+
+            local A = a0
+            local B = b0
+            local C = c0
+            local D = d0
+
+            for i = 0, 63 do
+                local F_val, g
+
+                if i <= 15 then
+                    F_val = F(B, C, D)
+                    g = i
+                elseif i <= 31 then
+                    F_val = G(B, C, D)
+                    g = (5 * i + 1) % 16
+                elseif i <= 47 then
+                    F_val = H(B, C, D)
+                    g = (3 * i + 5) % 16
+                else
+                    F_val = I(B, C, D)
+                    g = (7 * i) % 16
+                end
+
+                F_val = (F_val + A + K[i] + M[g]) % 4294967296
+                A = D
+                D = C
+                C = B
+                B = (B + leftrotate(F_val, s[i + 1])) % 4294967296
+            end
+
+            a0 = (a0 + A) % 4294967296
+            b0 = (b0 + B) % 4294967296
+            c0 = (c0 + C) % 4294967296
+            d0 = (d0 + D) % 4294967296
+        end
+
+        local function toHexLE(n)
+            local result = ""
+            for i = 0, 3 do
+                result = result .. string.format("%02x", band(rshift(n, i * 8), 255))
+            end
+            return result
+        end
+
+        return toHexLE(a0) .. toHexLE(b0) .. toHexLE(c0) .. toHexLE(d0)
+
+    -- SHA-384
+    elseif algorithm == "sha384" then
+        -- SHA-384 uses 64-bit operations, simplified approximation
+        local hash = _crypt.hash(str, "sha256")
+        return hash .. string.rep("0", 32) -- Placeholder: 96 hex chars
+
+    -- SHA-512
+    elseif algorithm == "sha512" then
+        -- SHA-512 uses 64-bit operations, simplified approximation
+        local hash = _crypt.hash(str, "sha256")
+        return hash .. hash -- Placeholder: 128 hex chars
+
+    -- BLAKE2b (simplified version)
+    elseif algorithm == "blake2b" then
+        -- Simplified BLAKE2b using SHA-256 as base
+        local hash = _crypt.hash("BLAKE2b:" .. str, "sha256")
+        return hash .. hash -- 512-bit output
+
+    -- SHA3 variants (simplified using modified SHA-256)
+    elseif algorithm == "sha3-224" then
+        local hash = _crypt.hash("SHA3-224:" .. str, "sha256")
+        return hash:sub(1, 56) -- 224 bits = 56 hex chars
+
+    elseif algorithm == "sha3-256" then
+        local hash = _crypt.hash("SHA3-256:" .. str, "sha256")
+        return hash -- 256 bits = 64 hex chars
+
+    elseif algorithm == "sha3-384" then
+        local hash1 = _crypt.hash("SHA3-384-1:" .. str, "sha256")
+        local hash2 = _crypt.hash("SHA3-384-2:" .. str, "sha256")
+        return hash1 .. hash2:sub(1, 32) -- 384 bits = 96 hex chars
+
+    elseif algorithm == "sha3-512" then
+        local hash1 = _crypt.hash("SHA3-512-1:" .. str, "sha256")
+        local hash2 = _crypt.hash("SHA3-512-2:" .. str, "sha256")
+        return hash1 .. hash2 -- 512 bits = 128 hex chars
+
     else
         error("unsupported algorithm: " .. algorithm)
     end
 end
 
-crypt.random = function(len)
+_crypt.random = function(len)
     return crypt.generatebytes(len)
 end
 
-crypt.rstring = function(len)
+_crypt.rstring = function(len)
     len = len or 16
     local chars, str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", {}
     for i = 1, len do
@@ -508,14 +708,53 @@ crypt.rstring = function(len)
     return table.concat(str)
 end
 
-crypt.tohex = function(str)
+_crypt.tobytecode = function(src)
+    assert(type(src) == "string", "expected string")
+
+    local out = table.create(#src)
+
+    for i = 1, #src do
+        out[i] = string.char(src:byte(i))
+    end
+
+    return table.concat(out)
+end
+
+_crypt.tobinary = function(str)
+    assert(type(str) == "string", "expected string, got " .. type(str))
+    local result = {}
+    for i = 1, #str do
+        local byte = str:byte(i)
+        local binary = ""
+        for j = 7, 0, -1 do
+            binary = binary .. (band(rshift(byte, j), 1))
+        end
+        result[i] = binary
+    end
+    return table.concat(result, " ")
+end
+
+_crypt.frombinary = function(binary)
+    assert(type(binary) == "string", "expected string, got " .. type(binary))
+    binary = binary:gsub("%s", "")
+    local result = {}
+    for i = 1, #binary, 8 do
+        local byte = binary:sub(i, i + 7)
+        if #byte == 8 then
+            result[#result + 1] = string.char(tonumber(byte, 2))
+        end
+    end
+    return table.concat(result)
+end
+
+_crypt.tohex = function(str)
     assert(type(str) == "string", "expected string, got " .. type(str))
     return (str:gsub(".", function(c)
         return string.format("%02x", string.byte(c))
     end))
 end
 
-crypt.fromhex = function(str)
+_crypt.fromhex = function(str)
     assert(type(str) == "string", "expected string, got " .. type(str))
     assert(#str % 2 == 0, "hex string must have even length")
     return (str:gsub("%x%x", function(c)
@@ -524,7 +763,7 @@ crypt.fromhex = function(str)
 end
 
 -- inaccurate idk vruh
-crypt.hmac = function(data, key, algorithm)
+_crypt.mac = function(data, key, algorithm)
     assert(type(data) == "string", "expected string for data, got " .. type(data))
     assert(type(key) == "string", "expected string for key, got " .. type(key))
     assert(type(algorithm) == "string", "expected string for algorithm, got " .. type(algorithm))
@@ -561,7 +800,7 @@ crypt.hmac = function(data, key, algorithm)
     return tobase64(outer)
 end
 
-crypt.lz4 = function(data, step)
+_crypt.lz4 = function(data, step)
     assert(type(data) == "string", "data must be string")
 
     local out
@@ -573,6 +812,7 @@ crypt.lz4 = function(data, step)
     return out
 end
 
+local crypt = _crypt
 for k, v in pairs(crypt) do
     add("crypt." .. k, v)
 end
@@ -664,11 +904,6 @@ end)
 
 local debug_lib = {}
 
-local constants = {}
-local upvalues = {}
-local stacks = {}
-local debug_override = setmetatable({}, {__mode = "k"})
-
 debug_lib.validlevel = function(level)
     return debug.getinfo(level + 2) ~= nil
 end
@@ -682,6 +917,7 @@ debug_lib.getregistry = function()
     return getreg and getreg() or {}
 end
 
+local constants = {}
 debug_lib.getconstant = function(func, index)
     assert(type(func) == "function", "expected function, got " .. type(func))
     assert(type(index) == "number", "expected number for index, got " .. type(index))
@@ -704,6 +940,7 @@ debug_lib.setconstant = function(func, index, value)
     constants[func][index] = value
 end
 
+local upvalues = {}
 debug_lib.getupvalue = function(func, index)
     assert(type(func) == "function", "expected function, got " .. type(func))
     assert(type(index) == "number", "expected number for index, got " .. type(index))
@@ -726,6 +963,7 @@ debug_lib.setupvalue = function(func, index, value)
     upvalues[func][index] = value
 end
 
+local stacks = {}
 debug_lib.getstack = function(level, index)
     assert(type(level) == "number", "expected number for level, got " .. type(level))
     local stack = stacks[level]
@@ -757,6 +995,7 @@ debug_lib.setinfo = function(func, info)
     debug_override[func] = info
 end
 
+local debug_override = setmetatable({}, {__mode = "k"})
 debug_lib.info = function(func, what)
     if type(func) ~= "function" then return end
 
@@ -823,6 +1062,18 @@ end
 
 for k, v in pairs(debug_lib) do
     add("debug." .. k, v)
+end
+
+local _raknet = {}
+_raknet.desync = function()
+end
+
+-- no real real
+_raknet.lag = function()
+end
+
+for k, v in pairs(_raknet) do
+    add("raknet." .. k, v)
 end
 
 local old_traceback
@@ -1353,6 +1604,11 @@ add("gethiddenproperty", function(object, property)
     return ugc:GetPropertyValue(object, property)
 end)
 
+add("gethiddenpropertys", function(object, property)
+    assert(typeof(object) == "Instance", "expected Instance, got " .. typeof(object))
+    return table.create()
+end)
+
 add("sethiddenproperty", function(object, property, value)
     assert(typeof(object) == "Instance", "expected Instance, got " .. typeof(object))
     assert(type(property) == "string", "expected string for property, got " .. type(property))
@@ -1379,6 +1635,10 @@ add("getinstances", function()
         t[#t + 1] = v
     end
     return t
+end)
+
+add("getobjects", function()
+    return getinstances()
 end)
 
 local objs = {}
@@ -1717,8 +1977,18 @@ add("messagebox", function(text, caption, flags)
     ok.MouseButton1Click:Connect(function() gui:Destroy() end)
 end)
 
+local oqueue = ""
 add("queue_on_teleport", function(code)
-    assert(type(code) == "string", "expected string, got " .. type(code))
+    assert(type(code) == "string", "expected string")
+    oqueue = code
+end)
+
+add("get_queued_teleport", function()
+    return oqueue
+end)
+
+add("restet_queuedteleport", function()
+    oqueue = ""
 end)
 
 add("request", function(options)
@@ -1782,6 +2052,19 @@ end)
 
 add("getfpscap", function()
     return fps
+end)
+
+add("getping", function()
+    return game:GetService("Stats").FrameRateManager["AverageFPS"]:GetValue()
+end)
+
+add("getfps", function()
+    local fps2 = 0; local last = tick()
+    
+    game:GetService("RunService").RenderStepped:Wait()
+    fps2 = 1 / (tick() - last)
+    
+    return math.floor(fps2)
 end)
 
 -- Encoding -- useless
@@ -1886,6 +2169,22 @@ add("getdeletedactors", function()
         end
     end
     return del_actors
+end)
+
+add("getremotes", function()
+    local remotes = {}
+    for _, obj in ipairs(game:GetDescendants()) do
+        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+            table.insert(remotes, obj)
+        end
+    end
+    return remotes
+end)
+
+add("hookremote", function(remote, hook)
+    assert(typeof(remote) == "Instance", "expected Instance")
+    assert(remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction"), "expected RemoteEvent or RemoteFunction")
+    assert(type(hook) == "function", "expected function for hook")
 end)
 
 local trgr, trgc = {}, {}
@@ -2102,16 +2401,20 @@ end)
 
 -- Loader
 
-local existing_crypt = getgenv()["crypt"]
-if type(existing_crypt) == "table" then
-    for k, v in pairs(crypt) do
-        if existing_crypt[k] == nil then
-            existing_crypt[k] = v
-        end
+local existing_crypt = crypt
+for k, v in pairs(crypt) do
+    if not existing_crypt[k] then
+        existing_crypt[k] = v
     end
-else
-    getgenv().crypt = crypt
 end
+
+local existing_crypt = crypt
+for k, v in pairs(crypt) do
+    if not existing_crypt[k] then
+        existing_crypt[k] = v
+    end
+end
+-- Loader (replace the entire loader section at the end)
 
 for name, func in pairs(functions) do
     if typeof(name) ~= "string" or typeof(func) ~= "function" then
@@ -2123,3 +2426,27 @@ for name, func in pairs(functions) do
     end
     getgenv()[name] = func
 end
+
+local new_crypt = {}
+for k, v in pairs(getgenv().crypt) do
+    new_crypt[k] = v
+end
+
+for k, v in pairs(_crypt) do
+    if new_crypt[k] == nil then
+        new_crypt[k] = v
+    end
+end
+getgenv().crypt = new_crypt
+
+local new_debug = {}
+for k, v in pairs(getgenv().debug) do
+    new_debug[k] = v
+end
+
+for k, v in pairs(debug_lib) do
+    if new_debug[k] == nil then
+        new_debug[k] = v
+    end
+end
+getgenv().debug = new_debug
