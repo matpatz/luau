@@ -131,11 +131,12 @@ end)
 -- it isnt persay impossible to implement loadstring but i just dont rlly want to soooo you get a fake bum version for bums
 
 if not isfile("load") then
-    local load = game:HttpGet("https://gist.githubusercontent.com/Rerumu/ecaf1de2f2b31d0fa91b9bac8e1e15d8/raw/8d124e32201c5fcec04f9ea7d5e22f7cf583ecbf/luau_in_luau.lua")()
+    local load = game:HttpGet("https://website-iota-ivory-12.vercel.app/code/scripts/unc/sunc/extra/load.luau")
     writefile("load", load)
 end
 
-add("loadstring", function(source, chunkname, mode, env)
+-- currently crashes eherhrhreeherh
+add("load", function(source, chunkname, mode, env)
     loadfile("load"); local load = getgenv().load
     load(source)
 end)
