@@ -1075,22 +1075,6 @@ debug_lib.getcallstack = function()
     return stack
 end
 
-for k, v in pairs(debug_lib) do
-    add("debug." .. k, v)
-end
-
-local _raknet = {}
-_raknet.desync = function()
-end
-
--- no real real
-_raknet.lag = function()
-end
-
-for k, v in pairs(_raknet) do
-    add("raknet." .. k, v)
-end
-
 local old_traceback
 old_traceback = hookfunction(debug.traceback, function(...)
     local tb = old_traceback(...)
@@ -1104,6 +1088,97 @@ old_traceback = hookfunction(debug.traceback, function(...)
 
     return tb
 end)
+
+for k, v in pairs(debug_lib) do
+    add("debug." .. k, v)
+end
+
+-- Raknet
+
+local _raknet = {}
+_raknet.desync = function()
+end
+
+-- no real real
+_raknet.lag = function()
+end
+
+for k, v in pairs(_raknet) do
+    add("raknet." .. k, v)
+end
+
+-- Helper -- this is like a module?? idk useless anyway
+
+local _helper = {}
+
+_helper.chunkify = function(input, chunk_size)
+    chunk_size = chunk_size or 2
+    local result = {}
+
+    local function process(value)
+        local valueType = type(value)
+
+        if valueType == "string" then
+            for i = 1, #value, chunk_size do
+                table.insert(result, value:sub(i, i + chunk_size - 1))
+            end
+
+        elseif valueType == "number" then
+            local str = tostring(value)
+            for i = 1, #str, chunk_size do
+                table.insert(result, str:sub(i, i + chunk_size - 1))
+            end
+
+        elseif valueType == "boolean" or valueType == "function" then
+            table.insert(result, value)
+
+        elseif valueType == "table" then
+            for _, nested in ipairs(value) do
+                process(nested)
+            end
+
+        else
+            table.insert(result, value)
+        end
+    end
+
+    for _, v in ipairs(input) do
+        process(v)
+    end
+
+    return table.concat(result, "")
+end
+
+_helper.unchunk = function(chunks)
+    local result = {}
+    for _, chunk in ipairs(chunks) do
+        if type(chunk) == "string" then
+            table.insert(result, chunk)
+        elseif type(chunk) == "number" or type(chunk) == "boolean" then
+            table.insert(result, tostring(chunk))
+        end
+    end
+    return table.concat(result)
+end
+
+_helper.fromtable = function(data)
+    -- expects a table
+    return table.unpack(data)
+end
+
+-- for tables
+_helper.tostring = function(data)
+    local result = {}
+    for k, v in pairs(data) do
+        result[k] = tostring(v)
+    end
+    return result
+end
+
+for k, v in pairs(_helper) do
+    add("helper." .. k, v)
+end
+getgenv().helper = _helper -- no executor has this so who cares
 
 -- Drawing
 
@@ -2223,29 +2298,47 @@ local function track(obj)
     return obj
 end
 
+-- random error idk
+local function nan(value) return type(value) == "number" and value ~= value end
 local function sr(root, seen)
-    if root == nil then return end
+    if root == nil or nan(root) then return end
+
     seen = seen or {}
     if seen[root] then return end
     seen[root] = true
 
     if type(root) == "table" then
         track(root)
-        for k,v in pairs(root) do
-            sr(k, seen)
-            sr(v, seen)
+
+        for key, value in pairs(root) do
+            if not nan(key) then
+                sr(key, seen)
+            end
+            if not nan(value) then
+                sr(value, seen)
+            end
         end
-        local mt = getmetatable(root)
-        if mt then sr(mt, seen) end
+
+        local metatable = getmetatable(root)
+        if metatable then
+            sr(metatable, seen)
+        end
+
     elseif type(root) == "function" then
         track(root)
-        local i = 1
+
+        local index = 1
         while true do
-            local ok, name, val = pcall(debug.getupvalue, root, i)
-            if not ok or not name then break end
-            sr(val, seen)
-            i += 1
+            local success, name, upvalue = pcall(debug.getupvalue, root, index)
+            if not success or not name then break end
+
+            if not nan(upvalue) then
+                sr(upvalue, seen)
+            end
+
+            index += 1
         end
+
     elseif type(root) == "thread" or type(root) == "userdata" then
         track(root)
     end
@@ -2440,7 +2533,6 @@ for k, v in pairs(crypt) do
         existing_crypt[k] = v
     end
 end
--- Loader (replace the entire loader section at the end)
 
 for name, func in pairs(functions) do
     if typeof(name) ~= "string" or typeof(func) ~= "function" then
@@ -2475,4 +2567,4 @@ for k, v in pairs(debug_lib) do
         new_debug[k] = v
     end
 end
-getgenv().debug = new_debug
+getgenv().debug = new_debug                                                                          
