@@ -143,11 +143,14 @@ add("load", function(source, chunkname, mode, env)
     end
     execute(source)()
 end)
+add("execute", function(source, chunkname, mode, env)
+    load(source, chunkname, mode, env)
+end)
 
 local cclosures = setmetatable({}, {__mode = "k"})
 
 local custom_closures = {}
-add("newcclosure", function(func)
+add("newcclosure", function(func) -- for half decent iscclosure it will return false
     assert(type(func) == "function", "expected function, got " .. type(func))
 
     local wrapper = function(...)
@@ -1093,23 +1096,21 @@ local rs = game:GetService("RunService")
 
 local _raknet = {}
 _raknet.desync = function(v)
-    setfflag('NextGenReplicatorEnabledWrite4', v)
+    setfflag('NextGenReplicatorEnabledWrite4', v) -- patched a while ago btw
 end
 
 -- so this only lags yourself uhh idk i havent seen any docs on raknet .lag prolly doesnt exist
 _raknet.lag = function()
     local accum = 0
     rs.Heartbeat:Connect(function(dt)
-        accum += dt
+        accum += 0.1 or dt
 
         if accum >= 0.1 then
             accum = 0
 
             local sum = 0
-            for i = 1, 1e7 do
-                local i = i * 12
-                print(i)
-                sum += math.random(math.sqrt(i), math.sqrt(i))
+            for i = 1, 1e2 do
+                getgc()
             end
         end
     end)
@@ -1193,9 +1194,10 @@ end
 -- print(helper.search(t, 3, true, { type = "number" }))
     -- returns "3 3"
 
+-- chat should we pull up wit regex
 _helper.search = function(tbl, looking_for, nested, filter)
     assert(type(tbl) == "table", "bad argument #1 (table expected)")
-    assert(looking_for == nil or true, "bad argument #2") -- basically optional
+    assert(looking_for == nil or true, "bad argument #2")
     assert(nested == nil or type(nested) == "boolean", "bad argument #3 (boolean expected)")
     assert(filter == nil or type(filter) == "table", "bad argument #4 (table expected)")
     assert(not filter or not filter.type or type(filter.type) == "string", "filter.type must be a string")
