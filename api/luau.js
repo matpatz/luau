@@ -25,7 +25,8 @@ export default async function handler(req, res) {
     writeFileSync(tempFile, code);
 
     const result = await new Promise((resolve, reject) => {
-      const process = spawn('lune', ['run', tempFile]);
+      // Use npx to run the locally installed lune
+      const process = spawn('npx', ['lune', 'run', tempFile]);
       
       let stdout = '';
       let stderr = '';
