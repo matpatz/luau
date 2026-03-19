@@ -128,17 +128,20 @@ add("isexecutorclosure", function(func)
     return false
 end)
 
--- it isnt persay impossible to implement loadstring but i just dont rlly want to soooo you get a fake bum version for bums
+-- it isnt persay impossible to implement loadstring but i just dont rlly want to soooo you get a bad version
+-- anyway thanks to this guy https://scriptblox.com/script/Universal-Script-luau-VM-execution-77330
 
-if not isfile("load") then
-    local load = game:HttpGet("https://website-iota-ivory-12.vercel.app/code/scripts/unc/sunc/extra/load.luau")
-    writefile("load", load)
+local executeable, compiler
+if loadstring then
+    executeable = loadstring(game:HttpGet("https://pastebin.com/raw/BAPvjpyn"))()
+    compiler = loadstring(game:HttpGet("https://pastebin.com/raw/aggszsUg"))()
 end
 
--- currently crashes eherhrhreeherh
 add("load", function(source, chunkname, mode, env)
-    loadfile("load"); local load = getgenv().load
-    load(source)
+    local function execute(x)
+        return executeable(compiler(x, "dl"), getfenv(2))
+    end
+    execute(source)()
 end)
 
 local cclosures = setmetatable({}, {__mode = "k"})
@@ -1086,12 +1089,30 @@ end
 
 -- Raknet
 
+local rs = game:GetService("RunService")
+
 local _raknet = {}
-_raknet.desync = function()
+_raknet.desync = function(v)
+    setfflag('NextGenReplicatorEnabledWrite4', v)
 end
 
--- no real real
+-- so this only lags yourself uhh idk i havent seen any docs on raknet .lag prolly doesnt exist
 _raknet.lag = function()
+    local accum = 0
+    rs.Heartbeat:Connect(function(dt)
+        accum += dt
+
+        if accum >= 0.1 then
+            accum = 0
+
+            local sum = 0
+            for i = 1, 1e7 do
+                local i = i * 12
+                print(i)
+                sum += math.random(math.sqrt(i), math.sqrt(i))
+            end
+        end
+    end)
 end
 
 for k, v in pairs(_raknet) do
@@ -1166,6 +1187,43 @@ _helper.tabledata = function(data)
     end
 
     return result
+end
+
+-- local t = {"string", "pango", 3, "rango"}
+-- print(helper.search(t, 3, true, { type = "number" }))
+    -- returns "3 3"
+
+_helper.search = function(tbl, looking_for, nested, filter)
+    assert(type(tbl) == "table", "bad argument #1 (table expected)")
+    assert(looking_for == nil or true, "bad argument #2") -- basically optional
+    assert(nested == nil or type(nested) == "boolean", "bad argument #3 (boolean expected)")
+    assert(filter == nil or type(filter) == "table", "bad argument #4 (table expected)")
+    assert(not filter or not filter.type or type(filter.type) == "string", "filter.type must be a string")
+
+    for k, v in pairs(tbl) do
+        local match = true
+
+        if looking_for ~= nil then
+            match = (v == looking_for)
+        end
+
+        if filter and filter.type then
+            match = match and (type(v) == filter.type)
+        end
+
+        if match then
+            return k, v
+        end
+
+        if nested and type(v) == "table" then
+            local foundK, foundV = _helper.search(v, looking_for, true, filter)
+            if foundK ~= nil then
+                return foundK, foundV
+            end
+        end
+    end
+
+    return nil, "Item could not be found"
 end
 
 local function set(data, func)
@@ -2167,7 +2225,7 @@ end)
 add("getfps", function()
     local fps2 = 0; local last = tick()
     
-    game:GetService("RunService").RenderStepped:Wait()
+    rs.RenderStepped:Wait()
     fps2 = 1 / (tick() - last)
     
     return math.floor(fps2)
