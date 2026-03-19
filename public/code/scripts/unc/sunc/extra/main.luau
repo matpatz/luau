@@ -824,6 +824,18 @@ _crypt.lz4 = function(data, step)
     return out
 end
 
+_crypt.rle = function(data, step)
+    assert(type(data) == "string", "data must be string")
+
+    local out
+    if step == true then -- encrypt
+        out = rlecompress(data)
+    else
+        out = rledecompress(data)
+    end
+    return out
+end
+
 local crypt = _crypt
 for k, v in pairs(crypt) do
     add("crypt." .. k, v)
@@ -1110,7 +1122,7 @@ _raknet.lag = function()
 
             local sum = 0
             for i = 1, 1e2 do
-                getgc()
+                
             end
         end
     end)
@@ -2000,8 +2012,118 @@ add("get_hwid", function()
     return gethwid()
 end)
 
--- RLE Compression (not lz4)
-add("lz4compress", function(data)
+-- we LOVE claude
+add("lz4compress"), function(data)
+    assert(type(data) == "string", "data must be string")
+    
+    if #data == 0 then return "" end
+    
+    local output = {}
+    local pos = 1
+    local anchor = 1
+    
+    -- Hash table for finding matches
+    local hash_table = {}
+    local function hash(p)
+        if p + 3 > #data then return 0 end
+        local a, b, c, d = data:byte(p, p + 3)
+        return ((a * 256 + b) * 256 + c) * 256 + d
+    end
+    
+    while pos <= #data do
+        local best_len = 0
+        local best_offset = 0
+        
+        -- Find match
+        local h = hash(pos)
+        if h ~= 0 and hash_table[h] then
+            local match_pos = hash_table[h]
+            if match_pos < pos then
+                local len = 0
+                while pos + len <= #data and 
+                      match_pos + len <= #data and 
+                      data:byte(pos + len) == data:byte(match_pos + len) and
+                      len < 255 do
+                    len = len + 1
+                end
+                
+                if len >= 4 then
+                    best_len = len
+                    best_offset = pos - match_pos
+                end
+            end
+        end
+        
+        hash_table[h] = pos
+        
+        if best_len >= 4 then
+            -- Output literal run
+            local literal_len = pos - anchor
+            if literal_len > 0 then
+                output[#output + 1] = string.char(literal_len)
+                output[#output + 1] = data:sub(anchor, pos - 1)
+            end
+            
+            -- Output match
+            output[#output + 1] = string.char(0xFF) -- Match marker
+            output[#output + 1] = string.char(best_len)
+            output[#output + 1] = string.char(math.floor(best_offset / 256))
+            output[#output + 1] = string.char(best_offset % 256)
+            
+            pos = pos + best_len
+            anchor = pos
+        else
+            pos = pos + 1
+        end
+    end
+    
+    if anchor <= #data then
+        local literal_len = #data - anchor + 1
+        output[#output + 1] = string.char(literal_len)
+        output[#output + 1] = data:sub(anchor)
+    end
+    
+    return table.concat(output)
+end)
+
+add("lz4decompress", function(data)
+    assert(type(data) == "string", "data must be string")
+    
+    if #data == 0 then return "" end
+    
+    local output = {}
+    local pos = 1
+    
+    while pos <= #data do
+        local token = data:byte(pos)
+        pos = pos + 1
+        
+        if token == 0xFF then
+            if pos + 3 > #data then break end
+            
+            local match_len = data:byte(pos)
+            local offset = data:byte(pos + 1) * 256 + data:byte(pos + 2)
+            pos = pos + 3
+            
+            local out_pos = #table.concat(output)
+            local match_start = out_pos - offset + 1
+            
+            for i = 1, match_len do
+                output[#output + 1] = output[match_start + i - 1]
+            end
+        else
+            local literal_len = token
+            if pos + literal_len - 1 > #data then break end
+            
+            output[#output + 1] = data:sub(pos, pos + literal_len - 1)
+            pos = pos + literal_len
+        end
+    end
+    
+    return table.concat(output)
+end)
+
+add("rlecompress", function(data)
     assert(type(data) == "string", "expected string, got " .. type(data))
     local out, i = {}, 1
     while i <= #data do
@@ -2019,7 +2141,7 @@ add("lz4compress", function(data)
     return table.concat(out)
 end)
 
-add("lz4decompress", function(data)
+add("rledecompress", function(data)
     assert(type(data) == "string", "expected string, got " .. type(data))
     local out, i = {}, 1
     while i <= #data do
