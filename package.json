@@ -4,9 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "vercel dev",
-    "start": "vercel dev"
+    "start": "vercel dev",
+    "lune": "lune run",
+    "build": "lune build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.46.0"
+  },
+  "devDependencies": {
+    "lune": "^0.8.0"
   }
 }
