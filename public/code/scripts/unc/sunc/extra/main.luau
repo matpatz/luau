@@ -7,8 +7,11 @@ local function dead(...)
     do end
 end
 
-getgenv = getgenv and getgenv or getfenv
-loadstring = loadstring and loadstring or dead()
+local valid_env = game and getgenv
+local is_decent = hookfunction and loadstring
+
+getgenv = valid_env and getgenv or getfenv
+loadstring = is_decent and loadstring or dead()
 
 -- Cache
 
@@ -137,9 +140,9 @@ end)
 
 -- it isnt persay impossible to implement loadstring but i just dont rlly want to soooo you get a bad version
 -- anyway thanks to this guy https://scriptblox.com/script/Universal-Script-luau-VM-execution-77330
-
+              
 local executeable, compiler
-if loadstring then
+if decent then
     executeable = loadstring(game:HttpGet("https://pastebin.com/raw/BAPvjpyn"))()
     compiler = loadstring(game:HttpGet("https://pastebin.com/raw/aggszsUg"))()
 end
@@ -1113,7 +1116,7 @@ end
 
 -- Raknet
 
-if game and setfflag then                      
+if decent and setfflag then                      
   local rs = game:GetService("RunService")
   
   local _raknet = {}
@@ -1637,7 +1640,7 @@ end)
 
 -- Input
 
-if game then
+if valid_env then
     local vim = game:GetService("VirtualInputManager")
     local uis = game:GetService("UserInputService")
     
@@ -1689,7 +1692,7 @@ if game then
 end
                                   
 -- Instance
-
+                                  
 local lp = game:GetService("Players").LocalPlayer
 local char = lp.Character
 local hrp = char.HumanoidRootPart
@@ -1815,10 +1818,11 @@ add("getsimulationradius", function()
     return lp.SimulationRadius
 end)
 
-add("gethui", function()
-    return cloneref(game:GetService("CoreGui")).RobloxGui
-end)
-
+if valid_env then
+  add("gethui", function()
+      return cloneref(game:GetService("CoreGui")).RobloxGui
+  end)
+end
 add("getinstances", function()
     local t = {game}
     for _, v in ipairs(game:GetDescendants()) do
