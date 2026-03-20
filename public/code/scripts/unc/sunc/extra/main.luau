@@ -3,6 +3,13 @@ local function add(name, func)
     functions[name] = func
 end
 
+local function dead(...)
+    do end
+end
+
+getgenv = getgenv and getgenv or getfenv
+loadstring = loadstring and loadstring or dead()
+
 -- Cache
 
 local stored = {}
@@ -1084,54 +1091,57 @@ debug_lib.getcallstack = function()
     return stack
 end
 
-local old_traceback
-old_traceback = hookfunction(debug.traceback, function(...)
-    local tb = old_traceback(...)
-
-    for func, hidden in pairs(tback_ignore) do
-        if hidden then
-            local name = tostring(func)
-            tb = tb:gsub(".-"..name..".-\n", "")
+if hookfunction then
+    local old_traceback
+    old_traceback = hookfunction(debug.traceback, function(...)
+        local tb = old_traceback(...)
+    
+        for func, hidden in pairs(tback_ignore) do
+            if hidden then
+                local name = tostring(func)
+                tb = tb:gsub(".-"..name..".-\n", "")
+            end
         end
-    end
-
-    return tb
-end)
-
+    
+        return tb
+    end)
+end
+                                  
 for k, v in pairs(debug_lib) do
     add("debug." .. k, v)
 end
 
 -- Raknet
 
-local rs = game:GetService("RunService")
-
-local _raknet = {}
-_raknet.desync = function(v)
-    setfflag('NextGenReplicatorEnabledWrite4', v) -- patched a while ago btw
+if game and setfflag then                      
+  local rs = game:GetService("RunService")
+  
+  local _raknet = {}
+  _raknet.desync = function(v)
+      setfflag('NextGenReplicatorEnabledWrite4', v) -- patched a while ago btw
+  end
+  
+  -- so this only lags yourself uhh idk i havent seen any docs on raknet .lag prolly doesnt exist
+  _raknet.lag = function()
+      local accum = 0
+      rs.Heartbeat:Connect(function(dt)
+          accum += 0.1 or dt
+  
+          if accum >= 0.1 then
+              accum = 0
+  
+              local sum = 0
+              for i = 1, 1e2 do
+                  
+              end
+          end
+      end)
+  end
+                                  
+  for k, v in pairs(_raknet) do
+      add("raknet." .. k, v)
+  end
 end
-
--- so this only lags yourself uhh idk i havent seen any docs on raknet .lag prolly doesnt exist
-_raknet.lag = function()
-    local accum = 0
-    rs.Heartbeat:Connect(function(dt)
-        accum += 0.1 or dt
-
-        if accum >= 0.1 then
-            accum = 0
-
-            local sum = 0
-            for i = 1, 1e2 do
-                
-            end
-        end
-    end)
-end
-
-for k, v in pairs(_raknet) do
-    add("raknet." .. k, v)
-end
-
 -- Helper -- this is like a module?? idk useless anyway
 
 local _helper = {}
@@ -1627,55 +1637,57 @@ end)
 
 -- Input
 
-local vim = game:GetService("VirtualInputManager")
-local uis = game:GetService("UserInputService")
-
-local mouse = uis:GetMouseLocation()
-
-add("isrbxactive", function()
-    return uis.WindowFocused
-end)
-
-add("mouse1press", function()
-    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, true, game, 0)
-end)
-
-add("mouse1release", function()
-    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, false, game, 0)
-end)
-
-add("mouse1click", function()
-    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, true, game, 0)
-    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, false, game, 0)
-end)
-
-add("mouse2click", function()
-    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 1, true, game, 0)
-    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 1, false, game, 0)
-end)
-
-add("mouse2release", function()
-    vim:SendMouseButtonEvent(0, 0, 1, false, game, 0)
-end)
-
-add("mousemoveabs", function(x, y)
-    assert(type(x) == "number", "expected number for x, got " .. type(x))
-    assert(type(y) == "number", "expected number for y, got " .. type(y))
-    vim:SendMouseMoveEvent(x, y, game)
-end)
-
-add("mousemoverel", function(x, y)
-    assert(type(x) == "number", "expected number for x, got " .. type(x))
-    assert(type(y) == "number", "expected number for y, got " .. type(y))
-    local pos = uis:GetMouseLocation()
-    vim:SendMouseMoveEvent(pos.X + x, pos.Y + y, game)
-end)
-
-add("mousescroll", function(pixels)
-    assert(type(pixels) == "number", "expected number for pixels, got " .. type(pixels))
-    vim:SendMouseWheelEvent(0, 0, pixels > 0, game)
-end)
-
+if game then
+    local vim = game:GetService("VirtualInputManager")
+    local uis = game:GetService("UserInputService")
+    
+    local mouse = uis:GetMouseLocation()
+    
+    add("isrbxactive", function()
+        return uis.WindowFocused
+    end)
+    
+    add("mouse1press", function()
+        vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, true, game, 0)
+    end)
+    
+    add("mouse1release", function()
+        vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, false, game, 0)
+    end)
+    
+    add("mouse1click", function()
+        vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, true, game, 0)
+        vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, false, game, 0)
+    end)
+    
+    add("mouse2click", function()
+        vim:SendMouseButtonEvent(mouse.X, mouse.Y, 1, true, game, 0)
+        vim:SendMouseButtonEvent(mouse.X, mouse.Y, 1, false, game, 0)
+    end)
+    
+    add("mouse2release", function()
+        vim:SendMouseButtonEvent(0, 0, 1, false, game, 0)
+    end)
+    
+    add("mousemoveabs", function(x, y)
+        assert(type(x) == "number", "expected number for x, got " .. type(x))
+        assert(type(y) == "number", "expected number for y, got " .. type(y))
+        vim:SendMouseMoveEvent(x, y, game)
+    end)
+    
+    add("mousemoverel", function(x, y)
+        assert(type(x) == "number", "expected number for x, got " .. type(x))
+        assert(type(y) == "number", "expected number for y, got " .. type(y))
+        local pos = uis:GetMouseLocation()
+        vim:SendMouseMoveEvent(pos.X + x, pos.Y + y, game)
+    end)
+    
+    add("mousescroll", function(pixels)
+        assert(type(pixels) == "number", "expected number for pixels, got " .. type(pixels))
+        vim:SendMouseWheelEvent(0, 0, pixels > 0, game)
+    end)
+end
+                                  
 -- Instance
 
 local lp = game:GetService("Players").LocalPlayer
@@ -2013,7 +2025,7 @@ add("get_hwid", function()
 end)
 
 -- we LOVE claude
-add("lz4compress"), function(data)
+add("lz4compress", function(data)
     assert(type(data) == "string", "data must be string")
     
     if #data == 0 then return "" end
