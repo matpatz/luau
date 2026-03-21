@@ -3,16 +3,6 @@ local function add(name, func)
     functions[name] = func
 end
 
-local function dead(...)
-    do end
-end
-
-local valid_env = game and getgenv
-local is_decent = hookfunction and loadstring
-
-getgenv = valid_env and getgenv or getfenv
-loadstring = is_decent and loadstring or dead()
-
 -- Cache
 
 local stored = {}
@@ -140,9 +130,9 @@ end)
 
 -- it isnt persay impossible to implement loadstring but i just dont rlly want to soooo you get a bad version
 -- anyway thanks to this guy https://scriptblox.com/script/Universal-Script-luau-VM-execution-77330
-              
+
 local executeable, compiler
-if decent then
+if loadstring then
     executeable = loadstring(game:HttpGet("https://pastebin.com/raw/BAPvjpyn"))()
     compiler = loadstring(game:HttpGet("https://pastebin.com/raw/aggszsUg"))()
 end
@@ -729,6 +719,15 @@ _crypt.rstring = function(len)
     end
     return table.concat(str)
 end
+_crypt.rstring = function(len)
+    len = len or 16
+    local chars, str = "0123456789", {}
+    for i = 1, len do
+        local idx = math.random(1, #chars)
+        str[i] = chars:sub(idx, idx)
+    end
+    return table.concat(str)
+end
 
 _crypt.tobytecode = function(src)
     assert(type(src) == "string", "expected string")
@@ -1094,57 +1093,54 @@ debug_lib.getcallstack = function()
     return stack
 end
 
-if hookfunction then
-    local old_traceback
-    old_traceback = hookfunction(debug.traceback, function(...)
-        local tb = old_traceback(...)
-    
-        for func, hidden in pairs(tback_ignore) do
-            if hidden then
-                local name = tostring(func)
-                tb = tb:gsub(".-"..name..".-\n", "")
-            end
+local old_traceback
+old_traceback = hookfunction(debug.traceback, function(...)
+    local tb = old_traceback(...)
+
+    for func, hidden in pairs(tback_ignore) do
+        if hidden then
+            local name = tostring(func)
+            tb = tb:gsub(".-"..name..".-\n", "")
         end
-    
-        return tb
-    end)
-end
-                                  
+    end
+
+    return tb
+end)
+
 for k, v in pairs(debug_lib) do
     add("debug." .. k, v)
 end
 
 -- Raknet
 
-if decent and setfflag then                      
-  local rs = game:GetService("RunService")
-  
-  local _raknet = {}
-  _raknet.desync = function(v)
-      setfflag('NextGenReplicatorEnabledWrite4', v) -- patched a while ago btw
-  end
-  
-  -- so this only lags yourself uhh idk i havent seen any docs on raknet .lag prolly doesnt exist
-  _raknet.lag = function()
-      local accum = 0
-      rs.Heartbeat:Connect(function(dt)
-          accum += 0.1 or dt
-  
-          if accum >= 0.1 then
-              accum = 0
-  
-              local sum = 0
-              for i = 1, 1e2 do
-                  
-              end
-          end
-      end)
-  end
-                                  
-  for k, v in pairs(_raknet) do
-      add("raknet." .. k, v)
-  end
+local rs = game:GetService("RunService")
+
+local _raknet = {}
+_raknet.desync = function(v)
+    setfflag('NextGenReplicatorEnabledWrite4', v) -- patched a while ago btw
 end
+
+-- so this only lags yourself uhh idk i havent seen any docs on raknet .lag prolly doesnt exist
+_raknet.lag = function()
+    local accum = 0
+    rs.Heartbeat:Connect(function(dt)
+        accum += 0.1 or dt
+
+        if accum >= 0.1 then
+            accum = 0
+
+            local sum = 0
+            for i = 1, 1e2 do
+                
+            end
+        end
+    end)
+end
+
+for k, v in pairs(_raknet) do
+    add("raknet." .. k, v)
+end
+
 -- Helper -- this is like a module?? idk useless anyway
 
 local _helper = {}
@@ -1640,59 +1636,76 @@ end)
 
 -- Input
 
-if valid_env then
-    local vim = game:GetService("VirtualInputManager")
-    local uis = game:GetService("UserInputService")
-    
-    local mouse = uis:GetMouseLocation()
-    
-    add("isrbxactive", function()
-        return uis.WindowFocused
+local vim = game:GetService("VirtualInputManager")
+local uis = game:GetService("UserInputService")
+
+local mouse = uis:GetMouseLocation()
+
+add("isrbxactive", function()
+    return uis.WindowFocused
+end)
+
+local function c()
+    local t = table.create(1e1, _crypt.random(math..random() * 10))
+    table.sort(t, function(a, b)
+        return a < b -- ascending
     end)
-    
-    add("mouse1press", function()
-        vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, true, game, 0)
-    end)
-    
-    add("mouse1release", function()
-        vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, false, game, 0)
-    end)
-    
-    add("mouse1click", function()
-        vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, true, game, 0)
-        vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, false, game, 0)
-    end)
-    
-    add("mouse2click", function()
-        vim:SendMouseButtonEvent(mouse.X, mouse.Y, 1, true, game, 0)
-        vim:SendMouseButtonEvent(mouse.X, mouse.Y, 1, false, game, 0)
-    end)
-    
-    add("mouse2release", function()
-        vim:SendMouseButtonEvent(0, 0, 1, false, game, 0)
-    end)
-    
-    add("mousemoveabs", function(x, y)
-        assert(type(x) == "number", "expected number for x, got " .. type(x))
-        assert(type(y) == "number", "expected number for y, got " .. type(y))
-        vim:SendMouseMoveEvent(x, y, game)
-    end)
-    
-    add("mousemoverel", function(x, y)
-        assert(type(x) == "number", "expected number for x, got " .. type(x))
-        assert(type(y) == "number", "expected number for y, got " .. type(y))
-        local pos = uis:GetMouseLocation()
-        vim:SendMouseMoveEvent(pos.X + x, pos.Y + y, game)
-    end)
-    
-    add("mousescroll", function(pixels)
-        assert(type(pixels) == "number", "expected number for pixels, got " .. type(pixels))
-        vim:SendMouseWheelEvent(0, 0, pixels > 0, game)
-    end)
+
+    c()
 end
-                                  
+
+add("crash", function()
+    crash()
+end)
+add("closerbx", function()
+    crash()
+end)
+add("closeroblox", function()
+    crash()
+end)
+
+add("mouse1press", function()
+    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, true, game, 0)
+end)
+
+add("mouse1release", function()
+    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, false, game, 0)
+end)
+
+add("mouse1click", function()
+    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, true, game, 0)
+    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, false, game, 0)
+end)
+
+add("mouse2click", function()
+    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 1, true, game, 0)
+    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 1, false, game, 0)
+end)
+
+add("mouse2release", function()
+    vim:SendMouseButtonEvent(0, 0, 1, false, game, 0)
+end)
+
+add("mousemoveabs", function(x, y)
+    assert(type(x) == "number", "expected number for x, got " .. type(x))
+    assert(type(y) == "number", "expected number for y, got " .. type(y))
+    vim:SendMouseMoveEvent(x, y, game)
+end)
+
+add("mousemoverel", function(x, y)
+    assert(type(x) == "number", "expected number for x, got " .. type(x))
+    assert(type(y) == "number", "expected number for y, got " .. type(y))
+    local pos = uis:GetMouseLocation()
+    vim:SendMouseMoveEvent(pos.X + x, pos.Y + y, game)
+end)
+
+add("mousescroll", function(pixels)
+    assert(type(pixels) == "number", "expected number for pixels, got " .. type(pixels))
+    vim:SendMouseWheelEvent(0, 0, pixels > 0, game)
+end)
+
 -- Instance
-                                  
+
 local lp = game:GetService("Players").LocalPlayer
 local char = lp.Character
 local hrp = char.HumanoidRootPart
@@ -1786,9 +1799,11 @@ add("getcustomasset", function(path)
 end)
 
 local ugc = game:GetService("UGCValidationService")
+local reflect = game:GetService("ReflectionService")
 
-add("getproperties", function()
-    return table.create()
+add("getproperties", function(class)
+    local allCapabilities = SecurityCapabilities.new(table.unpack(Enum.SecurityCapability:GetEnumItems()))
+    return reflect:GetPropertiesOfClass(class, { Security = allCapabilities })
 end)
 
 add("gethiddenproperty", function(object, property)
@@ -1818,11 +1833,10 @@ add("getsimulationradius", function()
     return lp.SimulationRadius
 end)
 
-if valid_env then
-  add("gethui", function()
-      return cloneref(game:GetService("CoreGui")).RobloxGui
-  end)
-end
+add("gethui", function()
+    return cloneref(game:GetService("CoreGui")).RobloxGui
+end)
+
 add("getinstances", function()
     local t = {game}
     for _, v in ipairs(game:GetDescendants()) do
