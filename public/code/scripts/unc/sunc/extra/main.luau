@@ -4,7 +4,8 @@
     --[[
     potassium.pro ,
     volt.bz ,
-    sunc.su .
+    sunc.su ,
+    https://v3rm.net/threads/release-raknet-implementation.15622/ -- thanks vez
 
     --]]
     -- not used but potentially useful
@@ -188,6 +189,12 @@ add("newcclosure", function(func) -- for half decent iscclosure it will return f
 
     cclosures[wrapper] = true
     custom_closures[func] = true
+
+    debug_override[wrapper] = {
+        source = "[C]",
+        short_src = "[C]",
+    }
+
     return wrapper
 end)
 
@@ -1190,35 +1197,134 @@ for k, v in pairs(debug_lib) do
 end
 getgenv().debug = new_debug
 
--- Raknet
+-- rnet
+-- apparently this exists or something
 
-local rs = game:GetService("RunService")
+local _rnet = {}
 
-local _raknet = {}
-_raknet.desync = function(v)
-    setfflag('NextGenReplicatorEnabledWrite4', v) -- patched a while ago btw
+_rnet.send = function(data)
+    -- no clue lmao
 end
 
--- so this only lags yourself uhh idk i havent seen any docs on raknet .lag prolly doesnt exist
-_raknet.lag = function()
-    local accum = 0
-    rs.Heartbeat:Connect(function(dt)
-        accum += 0.1 or dt
+-- Raknet
 
-        if accum >= 0.1 then
-            accum = 0
+local _raknet = {}
 
-            local sum = 0
-            for i = 1, 1e2 do
-                
-            end
+_raknet.desync = function()
+    -- patched man srry
+end
+
+_raknet.GetService = function(self, Service)
+    if not cloneref then return Service end -- for pastesploit users
+ 
+    if Service == "VirtualInputManager" or Service == "VirtualUser" then
+        return cloneref(Instance.new(Service)) -- Thanks syn.lua
+    end
+
+   return cloneref(Service)
+end
+
+_raknet.GetLocalPlayer = function()
+    return _raknet:GetService(game:GetService("Players")).LocalPlayer
+end
+
+_raknet.GetCharacter = function()
+    return _raknet:GetLocalPlayer().Character or _raknet:GetLocalPlayer().CharacterAdded:Wait()
+end
+
+_raknet.GetPrimaryPart = function()
+    return _raknet:GetCharacter():FindFirstChild("HumanoidRootPart")
+end
+
+_raknet.GetHumanoid = function()
+    return _raknet:GetCharacter():FindFirstChildOfClass("Humanoid")
+end
+
+_raknet.SendKickPacket = function(self, OptionalMessage)
+    if OptionalMessage then
+        _raknet:GetLocalPlayer():Kick(`{OptionalMessage}`)
+        return
+    end
+
+    _raknet:GetLocalPlayer():Kick(`You have been kicked by the use of RakNet packets, {raknet:GetLocalPlayer().UserId}`)
+end
+
+add("crash", function()
+    local function recurse()
+        local t = {}
+        for i = 1, 1000 do
+            t[i] = string.rep("x", 1000000)
         end
+        recurse()
+    end
+    recurse()
+end)
+
+
+_raknet.SendCrashPacket = function()
+    --while _raknet do --[[0x8231]] end
+    crash()
+end
+
+_raknet.SendHumanoidPropertyChangePacket = function(self, Property, Value)
+    _raknet:GetHumanoid()[Property] = Value
+end
+
+_raknet.SendClientLagPacket = function(self, Time)
+    local OriginalFPS = getfpscap()
+
+    setfpscap(math.random(1,25))
+    task.delay((Time or 1), function()
+        setfpscap(OriginalFPS)
     end)
 end
 
-for k, v in pairs(_raknet) do
-    add("raknet." .. k, v)
+_raknet.SendInstanceCoordinatePacket = function(self, Delay, Instance, Coordinates, Offset)
+    local FinalCoordinates = nil
+
+    if typeof(Coordinates) == "Vector3" then
+        FinalCoordinates = CFrame.new(Coordinates)
+    else
+        FinalCoordinates = Coordinates
+    end
+
+    task.wait(Delay)
+
+    if Instance then
+        Instance.CFrame = FinalCoordinates + (Offset and Offset or Vector3.new(0, 0, 0))
+    end
 end
+
+_raknet.SendRemoteEventPacket = function(self, Remote, Arguments)
+    if Arguments then
+        Remote:FireServer(Arguments)
+        return
+    end
+    Remote:FireServer()
+end
+_raknet.SendRemoteFunctionPacket = function(self, Remote, Arguments)
+    if Arguments then
+        Remote:InvokeServer(Arguments)
+        return
+    end
+    Remote:InvokeServer()
+end
+
+for k, v in pairs(debug_lib) do
+    add("debug." .. k, v)
+end
+
+local new_raknet = {}
+for k, v in pairs(getgenv().raknet) do
+    new_raknet[k] = v
+end
+
+for k, v in pairs(_raknet) do
+    if new_raknet[k] == nil then
+        new_raknet[k] = v
+    end
+end
+getgenv().raknet = new_raknet
 
 -- Helper -- this is like a module?? idk useless anyway
 
@@ -1731,19 +1837,8 @@ add("isrbxactive", function()
     return uis.WindowFocused
 end)
 
-add("crash", function()
-    local function recurse()
-        local t = {}
-        for i = 1, 1000 do
-            t[i] = string.rep("x", 1000000)
-        end
-        recurse()
-    end
-    recurse()
-end)
-
 add("closerbx", function()
-    crash()
+    crash() -- see  raknet
 end)
 add("closeroblox", function()
     crash()
