@@ -1,3 +1,18 @@
+-- #matpatz
+
+--  as of 3/23 I will be citing the sources used for implementation of provided functions
+    --[[
+    potassium.pro ,
+    volt.bz ,
+    sunc.su .
+
+    --]]
+    -- not used but potentially useful
+    --[[
+        https://tesker-103.github.io/UNC-Documentation/
+    ]]
+
+
 local functions = {}
 local function add(name, func)
     functions[name] = func
@@ -48,7 +63,7 @@ end)
 
 add("checkcaller", function()
     local info = debug.info(getgenv, 'slnaf')
-    return debug.info(1, 'slnaf') == info
+    return debug.info(1, 'slnaf') ~= info
 end)
 
 add("clonefunction", function(func)
@@ -1908,7 +1923,7 @@ add("gethui", function()
 end)
 
 add("getinstances", function()
-    local t = {game}
+    local t = {}
     for _, v in ipairs(game:GetDescendants()) do
         t[#t + 1] = v
     end
@@ -2510,6 +2525,10 @@ add("saveinstance", function(opts)
     if not opts then opts = options end
     synsaveinstance(opts)
 end)
+add("saveplace", function()
+    saveinstance()
+end)
+
 
 for _, v in ipairs(game:GetDescendants()) do
     if isScript(v, true) then
