@@ -70,17 +70,21 @@ end)
 local ishooked, canhook = {}, {}
 add("isfunctionhooked", function(func)
     assert(type(func) == "function", "expected function, got " .. type(func))
-    return ishooked[func] ~= nil
+    return ishooked[func] ~= nil and ishooked[func] ~= false
 end)
 
 add("hookfunction", function(func, hook)
     assert(type(func) == "function", "expected function, got " .. type(func))
     assert(type(hook) == "function", "expected function for hook, got " .. type(hook))
+    
+    local original = func
+    
     if canhook[func] then 
         ishooked[func] = hook
-        return func
+        return original  -- Return the original function
     end
-    return nil
+    
+    error("function cannot be hooked")
 end)
 
 add("restorefunction", function(func, hook)
@@ -719,7 +723,7 @@ _crypt.rstring = function(len)
     end
     return table.concat(str)
 end
-_crypt.rstring = function(len)
+_crypt.rnum = function(len)
     len = len or 16
     local chars, str = "0123456789", {}
     for i = 1, len do
@@ -850,12 +854,41 @@ for k, v in pairs(crypt) do
     add("crypt." .. k, v)
 end
 
+local existing_crypt = crypt
+for k, v in pairs(crypt) do
+    if not existing_crypt[k] then
+        existing_crypt[k] = v
+    end
+end
+
+local existing_crypt = crypt
+for k, v in pairs(crypt) do
+    if not existing_crypt[k] then
+        existing_crypt[k] = v
+    end
+end
+
+local new_crypt = {}
+for k, v in pairs(getgenv().crypt) do
+    new_crypt[k] = v
+end
+
+for k, v in pairs(_crypt) do
+    if new_crypt[k] == nil then
+        new_crypt[k] = v
+    end
+end
+getgenv().crypt = new_crypt
+
+
 -- Oth
+
+local _oth = {}
 
 local hooks = {}
 local hook_threads, og_threads = setmetatable({}, {__mode = "k"}), setmetatable({}, {__mode = "k"})
 
-add("oth.hook", function(target, hookfn)
+_oth.hook = function(target, hookfn)
     assert(type(target) == "function", "target must be function")
     assert(type(hookfn) == "function", "hook must be function")
 
@@ -893,9 +926,9 @@ add("oth.hook", function(target, hookfn)
     })
 
     return callback
-end)
+end
 
-add("oth.unhook", function(target, hook_or_callback)
+_oth.unhook = function(target, hook_or_callback)
     local list = hooks[target]
     if not list then
         return false
@@ -914,24 +947,43 @@ add("oth.unhook", function(target, hook_or_callback)
     end
 
     return false
-end)
+end
 
-add("oth.get_root_callback", function(target)
+_oth.get_root_callback = function(target)
     local list = hooks[target]
     if not list or #list == 0 then
         return target
     end
 
     return list[1].callback
-end)
+end
 
-add("oth.is_hook_thread", function()
+_oth.is_hook_thread = function()
     return hook_threads[coroutine.running()] == true
-end)
+end
 
-add("oth.get_original_thread", function()
+_oth.get_original_thread = function()
     return og_threads[coroutine.running()]
-end)
+end
+
+local oth = oth or {}; getgenv().oth = oth;local existing_oth = oth
+for k, v in pairs(oth) do
+    if not existing_oth[k] then
+        existing_oth[k] = v
+    end
+end
+
+local new_oth = {}
+for k, v in pairs(getgenv().oth) do
+    new_oth[k] = v
+end
+
+for k, v in pairs(_oth) do
+    if new_oth[k] == nil then
+        new_oth[k] = v
+    end
+end
+getgenv().oth = new_oth
 
 -- Debug
 
@@ -1111,6 +1163,18 @@ for k, v in pairs(debug_lib) do
     add("debug." .. k, v)
 end
 
+local new_debug = {}
+for k, v in pairs(getgenv().debug) do
+    new_debug[k] = v
+end
+
+for k, v in pairs(debug_lib) do
+    if new_debug[k] == nil then
+        new_debug[k] = v
+    end
+end
+getgenv().debug = new_debug
+
 -- Raknet
 
 local rs = game:GetService("RunService")
@@ -1259,11 +1323,11 @@ end
 
 -- for tables
 _helper.tabletostring = function(data)
-    set(data, tostring)
+    return set(data, tostring)
 end
 
 _helper.tabletonumber = function(data)
-    set(data, tonumber)
+    return set(data, tonumber)
 end
 
 for k, v in pairs(_helper) do
@@ -1330,7 +1394,9 @@ types.Line = function(self, Object)
     self.ZIndex = 1
     self.Transparency = 1
 
-    return makeProxy(self, update)
+    local proxy = makeProxy(self, update)
+    update()
+    return proxy
 end
 
 types.Square = function(self, Object)
@@ -1640,23 +1706,27 @@ local vim = game:GetService("VirtualInputManager")
 local uis = game:GetService("UserInputService")
 
 local mouse = uis:GetMouseLocation()
+uis.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        mouse = uis:GetMouseLocation()
+    end
+end)
 
 add("isrbxactive", function()
     return uis.WindowFocused
 end)
 
-local function c()
-    local t = table.create(1e1, _crypt.random(math..random() * 10))
-    table.sort(t, function(a, b)
-        return a < b -- ascending
-    end)
-
-    c()
-end
-
 add("crash", function()
-    crash()
+    local function recurse()
+        local t = {}
+        for i = 1, 1000 do
+            t[i] = string.rep("x", 1000000)
+        end
+        recurse()
+    end
+    recurse()
 end)
+
 add("closerbx", function()
     crash()
 end)
@@ -2508,6 +2578,19 @@ add("hookremote", function(remote, hook)
     assert(typeof(remote) == "Instance", "expected Instance")
     assert(remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction"), "expected RemoteEvent or RemoteFunction")
     assert(type(hook) == "function", "expected function for hook")
+    
+    local oldn
+    oldn = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        
+        if self == remote and (method == "FireServer" or method == "InvokeServer") then
+            return hook(...)
+        end
+        
+        return oldn(self, ...)
+    end)
+    
+    return oldn
 end)
 
 local trgr, trgc = {}, {}
@@ -2742,20 +2825,6 @@ end)
 
 -- Loader
 
-local existing_crypt = crypt
-for k, v in pairs(crypt) do
-    if not existing_crypt[k] then
-        existing_crypt[k] = v
-    end
-end
-
-local existing_crypt = crypt
-for k, v in pairs(crypt) do
-    if not existing_crypt[k] then
-        existing_crypt[k] = v
-    end
-end
-
 for name, func in pairs(functions) do
     if typeof(name) ~= "string" or typeof(func) ~= "function" then
         warn("skipping bad entry: " .. tostring(name))
@@ -2766,27 +2835,3 @@ for name, func in pairs(functions) do
     end
     getgenv()[name] = func
 end
-
-local new_crypt = {}
-for k, v in pairs(getgenv().crypt) do
-    new_crypt[k] = v
-end
-
-for k, v in pairs(_crypt) do
-    if new_crypt[k] == nil then
-        new_crypt[k] = v
-    end
-end
-getgenv().crypt = new_crypt
-
-local new_debug = {}
-for k, v in pairs(getgenv().debug) do
-    new_debug[k] = v
-end
-
-for k, v in pairs(debug_lib) do
-    if new_debug[k] == nil then
-        new_debug[k] = v
-    end
-end
-getgenv().debug = new_debug
