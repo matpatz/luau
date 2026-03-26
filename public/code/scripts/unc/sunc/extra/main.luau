@@ -2,19 +2,25 @@
 
 --  as of 3/23 I will be citing the sources used for implementation of provided functions
     --[[
-    potassium.pro ,
-    volt.bz ,
-    sunc.su ,
-    https://v3rm.net/threads/release-raknet-implementation.15622/ -- thanks vez
-
+        potassium.pro ,
+        volt.bz ,
+        sunc.su ,
+        https://v3rm.net/threads/release-raknet-implementation.15622/, -- thanks vez
+        https://scriptblox.com/script/Universal-Script-UNC-RENC-Functions-For-Nova-17623 -- used to find some functions to implement 
+            i did NOT dm him and wont
     --]]
+
     -- not used but potentially useful
     --[[
         https://tesker-103.github.io/UNC-Documentation/
-    ]]
+    --]]
+--]]
 
-local functions = {}
+local functions = {}; local check2add = 0
 local function add(name, func, expect)
+    check2add += 1
+    -- print("Checking :", name, tostring(func) .. "\t".. c)
+
     functions[name] = func
 end
 local genv = getgenv()
@@ -255,17 +261,121 @@ end)
 
 -- Rconsole
 
+local function rstring(len)
+    len = len or 16
+    local chars, str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", {}
+    for i = 1, len do
+        local idx = math.random(1, #chars)
+        str[i] = chars:sub(idx, idx)
+    end
+    return table.concat(str)
+end
+
+local srsconsole = Instance.new("ScreenGui")
+srsconsole.Name = rstring(6)
+srsconsole.Parent = rconsole
+
+local _isrconsole = false
+local labelOffset = 50 -- starting Y offset for labels
+local labelSpacing = 22 -- space between labels
+
+local function crconsole()
+    _isrconsole = true
+
+    local window = Instance.new("Frame")
+    window.Size = UDim2.fromOffset(399, 251)
+    window.Position = UDim2.new(0.5, -174, 0.5, -75)
+    window.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    window.Draggable = true
+    window.BorderSizePixel = 0
+    window.ClipsDescendants = true
+    window.Parent = srsconsole
+
+    local wc = Instance.new("UICorner", window)
+    wc.CornerRadius = UDim.new(0, 8)
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.fromOffset(260, 18)
+    title.Position = UDim2.fromOffset(14, 10)
+    title.BackgroundTransparency = 1
+    title.Text = "Console"
+    title.Font = Enum.Font.SourceSans
+    title.TextSize = 16
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = window
+
+    local close = Instance.new("TextButton")
+    close.Size = UDim2.fromOffset(20, 20)
+    close.Position = UDim2.fromOffset(321, 8)
+    close.Text = "X"
+    close.Font = Enum.Font.SourceSansBold
+    close.TextSize = 16
+    close.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    close.BackgroundTransparency = 0.8
+    close.TextColor3 = Color3.fromRGB(0, 0, 0)
+    close.Parent = window
+
+    close.MouseButton1Click:Connect(function() srsconsole:Destroy() end)
+    close.MouseEnter:Connect(function() close.BackgroundColor3 = Color3.fromRGB(255, 0, 0) end)
+    close.MouseLeave:Connect(function() close.BackgroundColor3 = Color3.fromRGB(255, 255, 255) end)
+
+    -- Creates a new label at the next position
+    local function createLabel(text, color)
+        color = color or Color3.fromRGB(255, 255, 255)
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.fromOffset(360, 20)
+        label.Position = UDim2.fromOffset(10, labelOffset)
+        label.BackgroundTransparency = 1
+        label.Text = text
+        label.Font = Enum.Font.Code
+        label.TextSize = 14
+        label.TextColor3 = color
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Parent = window
+        label:SetAttribute("killme", true)
+
+        labelOffset += labelSpacing
+        return label
+    end
+
+    -- function to emulate "console input"
+    function input(text, color)
+        createLabel(text, color)
+    end
+
+    input("Hello world!", Color3.fromRGB(0, 255, 0))
+    input("Another line")
+end
+
+local function shouldcreate()
+    if _isrconsole then
+        do end
+    else
+        crconsole()
+    end
+end
+
+crconsole()
+
 add("rconsoleclear", function()
-    do end
+    for _, item in ipairs(rconsole[guin]["window"]) do
+        if item:GetAttribute("killme") then
+            item:Destroy()
+        end
+    end
+end)
+add("rconsolecontent", function()
+    return rconsole[guin]["content"] or {}
 end)
 add("rconsolecreate", function()
-    do end
+    crconsole()
 end)
 add("rconsoledestroy", function()
-    do end
+    rconsole[guin]:Destroy()
 end)
-add("rconsoleinput", function()
-    return ""
+add("rconsoleinput", function(text)
+    input(text)
 end)
 add("rconsoleprint", function(text)
     expect(text, "string", false, 1)
@@ -273,15 +383,18 @@ add("rconsoleprint", function(text)
 end)
 add("rconsolewarn", function(text)
     expect(text, "string", false, 1)
-    warn(text)
+    input(text, Color3.fromRGB(255, 0, 0))
 end)
 add("rconsoleerror", function(text)
     expect(text, "string", false, 1)
-    error(text)
+    input(text, Color3.fromRGB(255, 255, 0))
 end)
 add("rconsolesettitle", function(title)
     expect(title, "string", false, 1)
-    do end
+    srsconsole[guin]["title"].Text = title
+end)
+add("isrconsole", function(title)
+    return _isrconsole
 end)
 
 -- Crypt
@@ -292,7 +405,7 @@ local band, bxor, rshift, lshift, rrotate = b.band, b.bxor, b.rshift, b.lshift, 
 local _crypt = {}
 
 local b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-_crypt.base64encode = function(data)
+_crypt.base64encode = function(data) -- could use the encoding service i suppose
     expect(data, "string", false, 1)
     
     local out = {}
@@ -788,13 +901,7 @@ _crypt.random = function(len)
 end
 
 _crypt.rstring = function(len)
-    len = len or 16
-    local chars, str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", {}
-    for i = 1, len do
-        local idx = math.random(1, #chars)
-        str[i] = chars:sub(idx, idx)
-    end
-    return table.concat(str)
+    rstring(len)
 end
 _crypt.rnum = function(len)
     len = len or 16
@@ -861,7 +968,7 @@ _crypt.fromhex = function(str)
 end
 
 -- inaccurate idk vruh
-_crypt.mac = function(data, key, algorithm)
+_crypt.hmac = function(data, key, algorithm)
     expect(data, "string", false, 1)
     expect(key, "string", false, 2)
     expect(algorithm, "string", false, 3)
@@ -870,7 +977,6 @@ _crypt.mac = function(data, key, algorithm)
     local fromhex = crypt.fromhex
     local tobase64 = crypt.base64encode
 
-    -- internal hash that returns raw bytes, not hex
     local function hashraw(str)
         return fromhex(hash(str, algorithm))
     end
@@ -1302,7 +1408,6 @@ add("crash", function()
     recurse()
 end)
 
-
 _raknet.SendCrashPacket = function()
     --while _raknet do --[[0x8231]] end
     crash()
@@ -1367,8 +1472,8 @@ for k, v in pairs(_raknet) do
         new_raknet[k] = v
     end
 end
-genv().raknet = new_raknet
-genv().rnet - new_raknet
+genv.raknet = new_raknet
+genv.rnet = new_raknet
 
 -- Helper -- this is like a module?? idk useless anyway
 
@@ -1970,13 +2075,9 @@ add("fireclickdetector", function(cd, distance)
     hrp.CFrame = old
 end)
 
-add("firetouchinterest", function(part, state)
+add("firetouchinterest", function(part, touched)
     assert(typeof(part) == "Instance" and part:IsA("BasePart"), "expected BasePart, got " .. typeof(part))
-    expect(state, "number", false, 2)
-
-    if state == 0 then
-        hrp.CFrame = part.CFrame
-    end
+    firesignal(part, touched == false and "TouchEnded" or "Touched")
 end)
 
 add("isnetworkowner", function(part)
@@ -1991,16 +2092,16 @@ add("getcallbackvalue", function(obj, property)
     -- hookmetamethod -- this is so shit ahahahahahhfewfuewufhweiuhf
 end)
 
-add("fireproximityprompt", function(prompt)
+add("fireproximityprompt", function(prompt, triggered, hold)
     assert(typeof(prompt) == "Instance" and prompt:IsA("ProximityPrompt"), "expected ProximityPrompt, got " .. typeof(prompt))
-
-    local old = prompt.HoldDuration
-    prompt.HoldDuration = 0
-    prompt:InputHoldBegin()
-    prompt:InputHoldEnd()
-    prompt.HoldDuration = old
+    local signal
+    if hold then
+        signal = triggered and "PromptButtonHoldBegan" or "PromptButtonHoldEnded"
+    else
+        signal = triggered == false and "TriggerEnded" or "Triggered"
+    end
+    firesignal(prompt, signal)
 end)
-
 local signal_store = setmetatable({}, {__mode = "k"})
 
 add("getconnections", function(signal)
@@ -2021,14 +2122,18 @@ add("getsignalargumentsinfo", function()
     assert(typeof(signal) == "RBXScriptSignal", "expected RBXScriptSignal, got " .. typeof(signal))
 end) 
 
-add("firesignal", function(signal, ...)
-    assert(typeof(signal) == "RBXScriptSignal", "expected RBXScriptSignal, got " .. typeof(signal))
-    local t = signal_store[signal]
-    if not t then return end
-
-    for _, conn in ipairs(t) do
-        if conn.Function then
-            task.spawn(conn.Function, ...)
+-- salood w code
+add("firesignal", function(instance: Instance, signalName: string, args: any)
+    if instance and signalName then
+        local signal = instance[signalName]
+        if signal then
+            for _, connection in ipairs(getconnections(signal)) do
+                if args then
+                    connection:Fire(args)
+                else
+                    connection:Fire()
+                end
+            end
         end
     end
 end)
@@ -2266,26 +2371,45 @@ add("isreadonly", function(object)
     return table.isfrozen(object)
 end)
 
+-- Salood
+local function guard(tbl, readonly)
+    local existing = getmetatable(tbl)
+    if existing then
+        existing.__newindex = function(_, k, v)
+            if readonly then error("attempt to modify a readonly table", 2) end
+            rawset(tbl, k, v)
+        end
+        return tbl
+    end
+
+    local proxy = setmetatable({}, {
+        __index    = tbl,
+        __newindex = function(_, k, v)
+            if readonly then error("attempt to modify a readonly table", 2) end
+            rawset(tbl, k, v)
+        end,
+        __len    = function() return #tbl end,
+        __pairs  = function() return pairs(tbl) end,
+        __ipairs = function() return ipairs(tbl) end,
+    })
+
+    return proxy
+end
+
 add("setreadonly", function(object, readonly)
     expect(object, "table", false, 1)
     assert(type(readonly) == "boolean", "expected boolean for readonly, got " .. type(readonly))
-    if readonly then
-        table.freeze(object)
-    else
-        object = table.clone(object)
-        return object -- so like uhm not good -- wait chat if we hook all table creations then hooray hooray we say because then we own them and can therefore change them
-    end
-end)
-
-add("makewriteable", function(object)
-    expect(object, "table", false, 1)
-    local clone = table.clone(object)
-    return clone
+    return guard(object, readonly)
 end)
 
 add("makereadonly", function(object)
     expect(object, "table", false, 1)
-    setreadonly(object, true)
+    return guard(object, true)
+end)
+
+add("makewriteable", function(object)
+    expect(object, "table", false, 1)
+    return guard(object, false)
 end)
 
 -- Misc
@@ -2450,7 +2574,7 @@ add("rledecompress", function(data)
 end)
 
 local mboxParent = Instance.new("Folder", gethui())
-mboxParent.Name = "mboxes"
+mboxParent.Name = rstring(6)
 
 add("messagebox", function(text, caption, flags)
     expect(text, "string", false, 1)
@@ -2645,6 +2769,25 @@ add("getfps", function()
     fps2 = 1 / (tick() - last)
     
     return math.floor(fps2)
+end)
+
+-- thanks https://scriptblox.com/u/Salood
+add("getplatform", function()
+    return tostring(game:GetService("UserInputService"):GetPlatform()):split(".")[3]
+end)
+
+add("playanimation", function(animation)
+    if animation:find("rbxassetid") then
+        animation = animation
+    else
+        animation = "rbxassetid://" .. animation
+    end
+
+    local hum = _raknet.GetHumanoid()
+    hum:LoadAnimation(animation):Play()
+end)
+add("runanimation", function(anim)
+    playanimation(anim)
 end)
 
 -- Encoding -- useless
@@ -2990,6 +3133,85 @@ add("getactors", function()
     return actors
 end)
 
+local cache, states = setmetatable({}, { __mode = "k" }), {}
+local gstate; local id = 0
+
+local function newState(isActor)
+    id += 1
+
+    local s = {
+        Id = id,
+        IsActorState = isActor and true or false,
+        _actors = {},
+        _scripts = {}
+    }
+
+    function s:GetActors()
+        return self._actors
+    end
+
+    function s:Execute(code)
+        expect(code, "string", false, 1)
+
+        local fn, err = loadstring(code)
+        if not fn then
+            error(err, 2)
+        end
+
+        return fn()
+    end
+
+    states[#states + 1] = s
+    return s
+end
+
+local function getState()
+    gstate = gstate or newState(false)
+    return gstate
+end
+
+add("getgamestate", function()
+    return getState()
+end)
+
+add("getactorstates", function()
+    return states
+end)
+
+add("getluastate", function(obj)
+    if not obj then
+        return getState()
+    end
+
+    expect(obj, "Instance", false, 1)
+
+    local s = cache[obj]
+    if s then return s end
+
+    if obj:IsA("Actor") then
+        s = newState(true)
+        s._actors[#s._actors + 1] = obj
+
+    elseif obj:IsA("BaseScript") then
+        local actor = obj:FindFirstAncestorOfClass("Actor")
+
+        if actor then
+            s = cache[actor] or newState(true)
+            cache[actor] = s
+            s._actors[#s._actors + 1] = actor
+        else
+            s = getState()
+        end
+
+        s._scripts[#s._scripts + 1] = obj
+    else
+        error("expected Actor or BaseScript")
+    end
+
+    cache[obj] = s
+    return s
+end)
+
 add("is_parallel", function()
     return getthreadidentity() >= 8
 end)
@@ -3020,7 +3242,9 @@ add("getactorthreads", function()
 end)
 
 -- Loader
+-- dropped my mem by 200mb
 
+local adding = 0
 for name, func in pairs(functions) do
     if typeof(name) ~= "string" or typeof(func) ~= "function" then
         warn("skipping bad entry: " .. tostring(name))
@@ -3029,5 +3253,9 @@ for name, func in pairs(functions) do
     if getgenv()[name] then
         continue
     end
+    
+    adding += 1
+
+    print("Checking :", name, tostring(func) .. "\t #" .. adding)
     getgenv()[name] = func
 end
