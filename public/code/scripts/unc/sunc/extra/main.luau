@@ -17,14 +17,38 @@ local functions = {}
 local function add(name, func, expect)
     functions[name] = func
 end
+local genv = getgenv()
+local function index(tofind)
+    for _, item in ipairs(genv) do -- i like could cache it but who cares
+        if item == tofind then
+            return item
+        end
+    end
+    return nil
+end
 
--- something to translate a string into a type 
--- used for the expect function because it is easier to input a string than a real type
-  -- also not viable
-local ssignal = (RBXScriptSignal)
+-- translate a type string into a dummy value of that type
+-- so expect can use typeof() from it
+local function translate(t)
+    if t == "string"   then return "" end
+    if t == "number"   then return 0 end
+    if t == "boolean"  then return false end
+    if t == "function" then return function() end end
+    if t == "table"    then return {} end
+    if t == "Instance" then return Instance.new("Folder") end
+    if t == "thread"   then return coroutine.create(function() end) end
+    -- userdata / RBXScriptSignal js let be
+    return t
+end
+
 local function expect(got, expected, care_about_value, arg_num, message)
-    expt = typeof(expected)
-  
+    -- accept either a string shorthand ("function", "Instance" …) or a real value
+    if type(expected) == "string" then
+        expected = translate(expected)
+    end
+
+    local expt = typeof(expected)
+
     arg_num = arg_num or 1
     if not message then
         message = "expected " .. expt .. " at #" .. arg_num .. " got " .. typeof(got)
@@ -32,11 +56,9 @@ local function expect(got, expected, care_about_value, arg_num, message)
 
     if not care_about_value then
         assert(typeof(got) == expt, message)
-    else -- run some more checks
-        message = "expected " .. tostring(expected) .. " at #" .. arg_num .. " got " .. typeof(got) -- wrong values
-    
+    else
+        message = "expected " .. tostring(expected) .. " at #" .. arg_num .. " got " .. typeof(got)
         assert(typeof(got) == expected, message)
-        --assert(typeof(got) == expt, message) -- to keep og or not ... idk
     end
 end
   
@@ -44,18 +66,18 @@ end
 
 local stored = {}
 add("cache.invalidate", function(object)
-    assert(typeof(object) == "Instance", "expected Instance, got " .. typeof(object))
+    expect(object, "Instance", false, 1)
     stored[object] = nil
 end)
 
 add("cache.iscached", function(object)
-    assert(typeof(object) == "Instance", "expected Instance, got " .. typeof(object))
+    expect(object, "Instance", false, 1)
     return stored[object] ~= nil
 end)
 
 add("cache.replace", function(object, new)
-    assert(typeof(object) == "Instance", "expected Instance, got " .. typeof(object))
-    assert(typeof(new) == "Instance", "expected Instance for new, got " .. typeof(new))
+    expect(object, "Instance", false, 1)
+    expect(new, "Instance", false, 2)
     stored[object] = new
 end)
 
@@ -65,7 +87,7 @@ end
 
 -- 100% mine dw abt it
 add("cloneref", function(object)
-    assert(typeof(object) == "Instance", "expected Instance, got " .. typeof(object))
+    expect(object, "Instance", false, 1)
 
     local p = newproxy(true)
     local mt = getmetatable(p)
@@ -76,8 +98,8 @@ add("cloneref", function(object)
 end)
 
 add("compareinstances", function(a, b)
-    assert(typeof(a) == "Instance", "expected Instance for a, got " .. typeof(a))
-    assert(typeof(b) == "Instance", "expected Instance for b, got " .. typeof(b))
+    expect(a, "Instance", false, 1)
+    expect(b, "Instance", false, 2)
     return a == b
 end)
 
@@ -89,7 +111,7 @@ add("checkcaller", function()
 end)
 
 add("clonefunction", function(func)
-    assert(type(func) == "function", "expected function, got " .. type(func))
+    expect(func, "function", false, 1)
     return function(...)
         return func(...)
     end
@@ -106,13 +128,13 @@ end)
 
 local ishooked, canhook = {}, {}
 add("isfunctionhooked", function(func)
-    assert(type(func) == "function", "expected function, got " .. type(func))
+    expect(func, "function", false, 1)
     return ishooked[func] ~= nil and ishooked[func] ~= false
 end)
 
 add("hookfunction", function(func, hook)
-    assert(type(func) == "function", "expected function, got " .. type(func))
-    assert(type(hook) == "function", "expected function for hook, got " .. type(hook))
+    expect(func, "function", false, 1)
+    expect(hook, "function", false, 2)
     
     local original = func
     
@@ -125,17 +147,25 @@ add("hookfunction", function(func, hook)
 end)
 
 add("restorefunction", function(func, hook)
-    assert(type(func) == "function", "expected function, got " .. type(func))
+    expect(func, "function", false, 1)
     ishooked[func] = nil
     return hook
 end)
 
 add("securefunction", function(func)
-    assert(type(func) == "function", "expected function")
+    expect(func, "function", false, 1)
     
     canhook[func] = true
 end)
 
+getgenv().unhooked = {}; local tables = {getgenv, getrenv}
+for _, env in ipairs(tables) do
+  for _, item in ipairs(env()) do
+      if typeof(item) ~= "function" then continue end
+      getgenv()["unhooked"][item] = securefunction(item)
+  end
+end
+              
 add("iscclosure", function(func)
     if type(func) ~= "function" then
         return false
@@ -158,7 +188,7 @@ add("islclosure", function(func)
 end)
 
 add("isexecutorclosure", function(func)
-    assert(type(func) == "function", "expected function")
+    expect(func, "function", false, 1)
 
     for _,v in pairs(getgenv()) do
         if v == func then
@@ -192,7 +222,7 @@ local cclosures = setmetatable({}, {__mode = "k"})
 
 local custom_closures = {}
 add("newcclosure", function(func) -- for half decent iscclosure it will return false
-    assert(type(func) == "function", "expected function, got " .. type(func))
+    expect(func, "function", false, 1)
 
     local wrapper = function(...)
         local args = table.pack(...)
@@ -238,19 +268,19 @@ add("rconsoleinput", function()
     return ""
 end)
 add("rconsoleprint", function(text)
-    assert(type(text) == "string", "expected string, got " .. type(text))
+    expect(text, "string", false, 1)
     print(text)
 end)
 add("rconsolewarn", function(text)
-    assert(type(text) == "string", "expected string, got " .. type(text))
+    expect(text, "string", false, 1)
     warn(text)
 end)
 add("rconsoleerror", function(text)
-    assert(type(text) == "string", "expected string, got " .. type(text))
+    expect(text, "string", false, 1)
     error(text)
 end)
 add("rconsolesettitle", function(title)
-    assert(type(title) == "string", "expected string, got " .. type(title))
+    expect(title, "string", false, 1)
     do end
 end)
 
@@ -263,7 +293,7 @@ local _crypt = {}
 
 local b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 _crypt.base64encode = function(data)
-    assert(type(data) == "string", "expected string, got " .. type(data))
+    expect(data, "string", false, 1)
     
     local out = {}
     
@@ -287,7 +317,7 @@ _crypt.base64encode = function(data)
 end
 
 _crypt.base64decode = function(data)
-    assert(type(data) == "string", "expected string, got " .. type(data))
+    expect(data, "string", false, 1)
 
     local out = {}
     
@@ -316,8 +346,8 @@ _crypt.base64decode = function(data)
 end
 
 _crypt.encrypt = function(data, key)
-    assert(type(data) == "string", "expected string for data, got " .. type(data))
-    assert(type(key) == "string", "expected string for key, got " .. type(key))
+    expect(data, "string", false, 1)
+    expect(key, "string", false, 2)
     assert(#key > 0, "key cannot be empty")
     local out = {}
     local klen = #key
@@ -334,7 +364,7 @@ end
 _crypt.decrypt = _crypt.encrypt -- <<>> = sourcey
 
 _crypt.generatebytes = function(len)
-    assert(type(len) == "number", "expected number, got " .. type(len))
+    expect(len, "number", false, 1)
     assert(len > 0, "length must be greater than 0")
     local t = {}
     for i = 1, len do
@@ -777,7 +807,7 @@ _crypt.rnum = function(len)
 end
 
 _crypt.tobytecode = function(src)
-    assert(type(src) == "string", "expected string")
+    expect(src, "string", false, 1)
 
     local out = table.create(#src)
 
@@ -789,7 +819,7 @@ _crypt.tobytecode = function(src)
 end
 
 _crypt.tobinary = function(str)
-    assert(type(str) == "string", "expected string, got " .. type(str))
+    expect(str, "string", false, 1)
     local result = {}
     for i = 1, #str do
         local byte = str:byte(i)
@@ -803,7 +833,7 @@ _crypt.tobinary = function(str)
 end
 
 _crypt.frombinary = function(binary)
-    assert(type(binary) == "string", "expected string, got " .. type(binary))
+    expect(binary, "string", false, 1)
     binary = binary:gsub("%s", "")
     local result = {}
     for i = 1, #binary, 8 do
@@ -816,14 +846,14 @@ _crypt.frombinary = function(binary)
 end
 
 _crypt.tohex = function(str)
-    assert(type(str) == "string", "expected string, got " .. type(str))
+    expect(str, "string", false, 1)
     return (str:gsub(".", function(c)
         return string.format("%02x", string.byte(c))
     end))
 end
 
 _crypt.fromhex = function(str)
-    assert(type(str) == "string", "expected string, got " .. type(str))
+    expect(str, "string", false, 1)
     assert(#str % 2 == 0, "hex string must have even length")
     return (str:gsub("%x%x", function(c)
         return string.char(tonumber(c, 16))
@@ -832,9 +862,9 @@ end
 
 -- inaccurate idk vruh
 _crypt.mac = function(data, key, algorithm)
-    assert(type(data) == "string", "expected string for data, got " .. type(data))
-    assert(type(key) == "string", "expected string for key, got " .. type(key))
-    assert(type(algorithm) == "string", "expected string for algorithm, got " .. type(algorithm))
+    expect(data, "string", false, 1)
+    expect(key, "string", false, 2)
+    expect(algorithm, "string", false, 3)
 
     local hash = crypt.hash
     local fromhex = crypt.fromhex
@@ -932,8 +962,8 @@ local hooks = {}
 local hook_threads, og_threads = setmetatable({}, {__mode = "k"}), setmetatable({}, {__mode = "k"})
 
 _oth.hook = function(target, hookfn)
-    assert(type(target) == "function", "target must be function")
-    assert(type(hookfn) == "function", "hook must be function")
+    expect(target, "function", false, 1)
+    expect(hookfn, "function", false, 2)
 
     hooks[target] = hooks[target] or {}
 
@@ -1037,7 +1067,7 @@ debug_lib.validlevel = function(level)
 end
 
 debug_lib.isvalidlevel = function(level)
-    assert(type(level) == "number", "expected number, got " .. type(level))
+    expect(level, "number", false, 1)
     return level >= 0
 end
 
@@ -1047,8 +1077,8 @@ end
 
 local constants = {}
 debug_lib.getconstant = function(func, index)
-    assert(type(func) == "function", "expected function, got " .. type(func))
-    assert(type(index) == "number", "expected number for index, got " .. type(index))
+    expect(func, "function", false, 1)
+    expect(index, "number", false, 2)
     local c = constants[func]
     if not c or c[index] == nil then
         error("constant does not exist at index " .. index)
@@ -1057,21 +1087,21 @@ debug_lib.getconstant = function(func, index)
 end
 
 debug_lib.getconstants = function(func)
-    assert(type(func) == "function", "expected function, got " .. type(func))
+    expect(func, "function", false, 1)
     return constants[func] or {}
 end
 
 debug_lib.setconstant = function(func, index, value)
-    assert(type(func) == "function", "expected function, got " .. type(func))
-    assert(type(index) == "number", "expected number for index, got " .. type(index))
+    expect(func, "function", false, 1)
+    expect(index, "number", false, 2)
     constants[func] = constants[func] or {}
     constants[func][index] = value
 end
 
 local upvalues = {}
 debug_lib.getupvalue = function(func, index)
-    assert(type(func) == "function", "expected function, got " .. type(func))
-    assert(type(index) == "number", "expected number for index, got " .. type(index))
+    expect(func, "function", false, 1)
+    expect(index, "number", false, 2)
     local u = upvalues[func]
     if not u or u[index] == nil then
         return nil
@@ -1080,27 +1110,27 @@ debug_lib.getupvalue = function(func, index)
 end
 
 debug_lib.getupvalues = function(func)
-    assert(type(func) == "function", "expected function, got " .. type(func))
+    expect(func, "function", false, 1)
     return upvalues[func] or {}
 end
 
 debug_lib.setupvalue = function(func, index, value)
-    assert(type(func) == "function", "expected function, got " .. type(func))
-    assert(type(index) == "number", "expected number for index, got " .. type(index))
+    expect(func, "function", false, 1)
+    expect(index, "number", false, 2)
     upvalues[func] = upvalues[func] or {}
     upvalues[func][index] = value
 end
 
 local stacks = {}
 debug_lib.getstack = function(level, index)
-    assert(type(level) == "number", "expected number for level, got " .. type(level))
+    expect(level, "number", false, 1)
     local stack = stacks[level]
     if not stack then
         error("invalid stack level: " .. level)
     end
 
     if index then
-        assert(type(index) == "number", "expected number for index, got " .. type(index))
+        expect(index, "number", false, 2)
         if stack[index] == nil then
             error("stack value does not exist at index " .. index)
         end
@@ -1111,15 +1141,15 @@ debug_lib.getstack = function(level, index)
 end
 
 debug_lib.setstack = function(level, index, value)
-    assert(type(level) == "number", "expected number for level, got " .. type(level))
-    assert(type(index) == "number", "expected number for index, got " .. type(index))
+    expect(level, "number", false, 1)
+    expect(index, "number", false, 2)
     stacks[level] = stacks[level] or {}
     stacks[level][index] = value
 end
 
 debug_lib.setinfo = function(func, info)
-    assert(type(func) == "function", "expected function")
-    assert(type(info) == "table", "expected table")
+    expect(func, "function", false, 1)
+    expect(info, "table", false, 2)
     debug_override[func] = info
 end
 
@@ -1218,25 +1248,9 @@ for k, v in pairs(debug_lib) do
 end
 getgenv().debug = new_debug
 
--- rnet
--- apparently this exists or something
-
-local _rnet = {}
-
-_rnet.send = function(data)
-    -- no clue lmao
-end
-
 -- Raknet
 
 local _raknet = {}
--- a table for unhookedable functions 
-
-getgenv().unhooked = {}
-for _, item in ipairs(getgenv()) do -- dont forget getrenv
-    if typeof(item) ~= "function" then continue end
-    table.insert(getgenv().unhooked, securefunction(item))    
-end
                                     
 _raknet.desync = function()
     -- patched man srry
@@ -1338,8 +1352,9 @@ _raknet.SendRemoteFunctionPacket = function(self, Remote, Arguments)
     Remote:InvokeServer()
 end
 
-for k, v in pairs(debug_lib) do
-    add("debug." .. k, v)
+genv.raknet = genv.raknet or {}
+for k, v in pairs(_raknet) do
+    add("raknet." .. k, v)
 end
 
 local new_raknet = {}
@@ -1352,7 +1367,8 @@ for k, v in pairs(_raknet) do
         new_raknet[k] = v
     end
 end
-getgenv().raknet = new_raknet
+genv().raknet = new_raknet
+genv().rnet - new_raknet
 
 -- Helper -- this is like a module?? idk useless anyway
 
@@ -1428,13 +1444,29 @@ _helper.tabledata = function(data)
     return result
 end
 
+_helper.sum = function(tbl)
+    expect(tbl, "table", false, 1)
+    local total = 0
+    for _, v in ipairs(tbl) do
+        expect(v, "number", false, 1)
+        total += v
+    end
+    return total
+end
+
+_helper.average = function(tbl)
+    expect(tbl, "table", false, 1)
+    assert(#tbl > 0, "table cannot be empty")
+    return _helper.sum(tbl) / #tbl
+end
+
 -- local t = {"string", "pango", 3, "rango"}
 -- print(helper.search(t, 3, true, { type = "number" }))
     -- returns "3 3"
 
 -- chat should we pull up wit regex
 _helper.search = function(tbl, looking_for, nested, filter)
-    assert(type(tbl) == "table", "bad argument #1 (table expected)")
+    expect(tbl, "table", false, 1)
     assert(looking_for == nil or true, "bad argument #2")
     assert(nested == nil or type(nested) == "boolean", "bad argument #3 (boolean expected)")
     assert(filter == nil or type(filter) == "table", "bad argument #4 (table expected)")
@@ -1677,7 +1709,7 @@ local Drawing = {
     },
 
     new = function(Type)
-        assert(type(Type) == "string", "expected string for Type, got " .. type(Type))
+        expect(Type, "string", false, 1)
         assert(types[Type], "invalid drawing type: " .. Type)
 
         local Object = Instance.new("Frame")
@@ -1718,13 +1750,13 @@ end)
 
 add("getrenderproperty", function(a, b)
     assert(isrenderobj(a), "expected render object, got " .. type(a))
-    assert(type(b) == "string", "expected string for property, got " .. type(b))
+    expect(b, "string", false, 2)
     return a[b]
 end)
 
 add("setrenderproperty", function(a, b, c)
     assert(isrenderobj(a), "expected render object, got " .. type(a))
-    assert(type(b) == "string", "expected string for property, got " .. type(b))
+    expect(b, "string", false, 2)
     a[b] = c
 end)
 
@@ -1745,23 +1777,23 @@ local fs_files = {}
 local fs_folders = {[""] = true}
 
 add("writefile", function(path, data)
-    assert(type(path) == "string", "expected string for path, got " .. type(path))
-    assert(type(data) == "string", "expected string for data, got " .. type(data))
+    expect(path, "string", false, 1)
+    expect(data, "string", false, 2)
     path = normalize(path)
     fs_files[path] = data
     fs_folders[parent(path)] = true
 end)
 
 add("appendfile", function(path, data)
-    assert(type(path) == "string", "expected string for path, got " .. type(path))
-    assert(type(data) == "string", "expected string for data, got " .. type(data))
+    expect(path, "string", false, 1)
+    expect(data, "string", false, 2)
     path = normalize(path)
     fs_files[path] = (fs_files[path] or "") .. data
     fs_folders[parent(path)] = true
 end)
 
 add("readfile", function(path)
-    assert(type(path) == "string", "expected string for path, got " .. type(path))
+    expect(path, "string", false, 1)
     path = normalize(path)
     if fs_files[path] == nil then
         error("file does not exist: " .. path)
@@ -1770,25 +1802,25 @@ add("readfile", function(path)
 end)
 
 add("isfile", function(path)
-    assert(type(path) == "string", "expected string for path, got " .. type(path))
+    expect(path, "string", false, 1)
     path = normalize(path)
     return fs_files[path] ~= nil
 end)
 
 add("makefolder", function(path)
-    assert(type(path) == "string", "expected string for path, got " .. type(path))
+    expect(path, "string", false, 1)
     path = normalize(path)
     fs_folders[path] = true
 end)
 
 add("isfolder", function(path)
-    assert(type(path) == "string", "expected string for path, got " .. type(path))
+    expect(path, "string", false, 1)
     path = normalize(path)
     return fs_folders[path] == true
 end)
 
 add("listfiles", function(path)
-    assert(type(path) == "string", "expected string for path, got " .. type(path))
+    expect(path, "string", false, 1)
     path = normalize(path)
     local out = {}
 
@@ -1808,14 +1840,14 @@ add("listfiles", function(path)
 end)
 
 add("delfile", function(path)
-    assert(type(path) == "string", "expected string for path, got " .. type(path))
+    expect(path, "string", false, 1)
     path = normalize(path)
     assert(fs_files[path] ~= nil, "file does not exist: " .. path)
     fs_files[path] = nil
 end)
 
 add("delfolder", function(path)
-    assert(type(path) == "string", "expected string for path, got " .. type(path))
+    expect(path, "string", false, 1)
     path = normalize(path)
 
     for f, _ in pairs(fs_files) do
@@ -1832,7 +1864,7 @@ add("delfolder", function(path)
 end)
 
 add("loadfile", function(path, chunkname)
-    assert(type(path) == "string", "expected string for path, got " .. type(path))
+    expect(path, "string", false, 1)
     local ok, src = pcall(readfile, path)
     if not ok then
         return nil, src
@@ -1848,7 +1880,7 @@ add("loadfile", function(path, chunkname)
 end)
 
 add("dofile", function(path)
-    assert(type(path) == "string", "expected string for path, got " .. type(path))
+    expect(path, "string", false, 1)
     local fn, err = loadfile(path)
     return fn()
 end)
@@ -1899,20 +1931,20 @@ add("mouse2release", function()
 end)
 
 add("mousemoveabs", function(x, y)
-    assert(type(x) == "number", "expected number for x, got " .. type(x))
-    assert(type(y) == "number", "expected number for y, got " .. type(y))
+    expect(x, "number", false, 1)
+    expect(y, "number", false, 2)
     vim:SendMouseMoveEvent(x, y, game)
 end)
 
 add("mousemoverel", function(x, y)
-    assert(type(x) == "number", "expected number for x, got " .. type(x))
-    assert(type(y) == "number", "expected number for y, got " .. type(y))
+    expect(x, "number", false, 1)
+    expect(y, "number", false, 2)
     local pos = uis:GetMouseLocation()
     vim:SendMouseMoveEvent(pos.X + x, pos.Y + y, game)
 end)
 
 add("mousescroll", function(pixels)
-    assert(type(pixels) == "number", "expected number for pixels, got " .. type(pixels))
+    expect(pixels, "number", false, 1)
     vim:SendMouseWheelEvent(0, 0, pixels > 0, game)
 end)
 
@@ -1940,7 +1972,7 @@ end)
 
 add("firetouchinterest", function(part, state)
     assert(typeof(part) == "Instance" and part:IsA("BasePart"), "expected BasePart, got " .. typeof(part))
-    assert(type(state) == "number", "expected number for state, got " .. type(state))
+    expect(state, "number", false, 2)
 
     if state == 0 then
         hrp.CFrame = part.CFrame
@@ -1953,8 +1985,8 @@ add("isnetworkowner", function(part)
 end)
 
 add("getcallbackvalue", function(obj, property)
-    assert(typeof(obj) == "Instance", "expected Instance, got " .. typeof(obj))
-    assert(type(property) == "string", "expected string for property, got " .. type(property))
+    expect(obj, "Instance", false, 1)
+    expect(property, "string", false, 2)
 
     -- hookmetamethod -- this is so shit ahahahahahhfewfuewufhweiuhf
 end)
@@ -2002,7 +2034,7 @@ add("firesignal", function(signal, ...)
 end)
 
 add("getcustomasset", function(path)
-    assert(type(path) == "string", "expected string for path, got " .. type(path))
+    expect(path, "string", false, 1)
     if not isfile(path) then
         error("file does not exist: " .. path)
     end
@@ -2026,13 +2058,13 @@ add("getproperties", function(class)
 end)
 
 add("gethiddenproperty", function(object, property)
-    assert(typeof(object) == "Instance", "expected Instance, got " .. typeof(object))
-    assert(type(property) == "string", "expected string for property, got " .. type(property))
+    expect(object, "Instance", false, 1)
+    expect(property, "string", false, 2)
     return ugc:GetPropertyValue(object, property)
 end)
 
 add("gethiddenproperties", function(object, property)
-    assert(typeof(object) == "Instance", "expected Instance, got " .. typeof(object))
+    expect(object, "Instance", false, 1)
     local res = {}
     if object:IsA("Fire") then
       res[prop] = prop
@@ -2043,13 +2075,13 @@ add("gethiddenproperties", function(object, property)
 end)
 
 add("sethiddenproperty", function(object, property, value)
-    assert(typeof(object) == "Instance", "expected Instance, got " .. typeof(object))
-    assert(type(property) == "string", "expected string for property, got " .. type(property))
+    expect(object, "Instance", false, 1)
+    expect(property, "string", false, 2)
     return ugc:SetPropertyValue(object, property, value)
 end)
 
 add("setsimulationradius", function(simrad, maxsimrad)
-    assert(type(simrad) == "number", "expected number for simrad, got " .. type(simrad))
+    expect(simrad, "number", false, 1)
     sethiddenproperty(lp, "SimulationRadius", simrad)
     sethiddenproperty(lp, "MaxSimulationRadius", maxsimrad or simrad)
 end)
@@ -2134,8 +2166,8 @@ end)
 
 local scriptable = {}
 add("isscriptable", function(obj, prop)
-    assert(typeof(obj) == "Instance", "expected Instance, got " .. typeof(obj))
-    assert(type(prop) == "string", "expected string for prop, got " .. type(prop))
+    expect(obj, "Instance", false, 1)
+    expect(prop, "string", false, 2)
 
     local res = false
     for _, item in ipairs(getproperties(obj)) do
@@ -2151,14 +2183,14 @@ end)
 
 -- we would have to use getconnecctions to see any refrence to any property .... . . .. . . ..
 add("setscriptable", function(object, property, value)
-    assert(typeof(object) == "Instance", "expected Instance, got " .. typeof(object))
-    assert(type(property) == "string", "expected string for property, got " .. type(property))
+    expect(object, "Instance", false, 1)
+    expect(property, "string", false, 2)
                                       
-    table.insert(scriptable, {"object" = object, "property" = property, "value" = value})
+    table.insert(scriptable, {object = object, property = property, value = value})
 end)
 
 add("setrbxclipboard", function(data)
-    assert(type(data) == "string", "expected string, got " .. type(data))
+    expect(data, "string", false, 1)
 end)
 
 add("getrendersteppedlist", function()
@@ -2190,7 +2222,7 @@ end)
 
 add("setrawmetatable", function(object, mt)
     assert(type(object) == "table" or typeof(object) == "Instance", "expected table or Instance, got " .. typeof(object))
-    assert(type(mt) == "table", "expected table for mt, got " .. type(mt))
+    expect(mt, "table", false, 2)
 
     local old = getmetatable(object)
     if type(old) == "table" then
@@ -2201,8 +2233,8 @@ add("setrawmetatable", function(object, mt)
 end)
 
 add("hookmetamethod", function(object, method, hook)
-    assert(type(method) == "string", "expected string for method, got " .. type(method))
-    assert(type(hook) == "function", "expected function for hook, got " .. type(hook))
+    expect(method, "string", false, 2)
+    expect(hook, "function", false, 3)
 
     local mt = getrawmetatable(object)
     assert(mt, "no metatable on object")
@@ -2225,17 +2257,17 @@ add("getnamecallmethod", function()
 end)
 
 add("setnamecallmethod", function(method)
-    assert(type(method) == "string", "expected string, got " .. type(method))
+    expect(method, "string", false, 1)
     namecallmethod = method
 end)
 
 add("isreadonly", function(object)
-    assert(type(object) == "table", "expected table, got " .. type(object))
+    expect(object, "table", false, 1)
     return table.isfrozen(object)
 end)
 
 add("setreadonly", function(object, readonly)
-    assert(type(object) == "table", "expected table, got " .. type(object))
+    expect(object, "table", false, 1)
     assert(type(readonly) == "boolean", "expected boolean for readonly, got " .. type(readonly))
     if readonly then
         table.freeze(object)
@@ -2246,13 +2278,13 @@ add("setreadonly", function(object, readonly)
 end)
 
 add("makewriteable", function(object)
-    assert(type(object) == "table", "expected table, got " .. type(object))
+    expect(object, "table", false, 1)
     local clone = table.clone(object)
     return clone
 end)
 
 add("makereadonly", function(object)
-    assert(type(object) == "table", "expected table, got " .. type(object))
+    expect(object, "table", false, 1)
     setreadonly(object, true)
 end)
 
@@ -2421,8 +2453,8 @@ local mboxParent = Instance.new("Folder", gethui())
 mboxParent.Name = "mboxes"
 
 add("messagebox", function(text, caption, flags)
-    assert(type(text) == "string", "expected string for text, got " .. type(text))
-    assert(type(caption) == "string", "expected string for caption, got " .. type(caption))
+    expect(text, "string", false, 1)
+    expect(caption, "string", false, 2)
 
     local gui = Instance.new("ScreenGui")
     gui.Name = tostring(math.random(1e4, 1e5))
@@ -2527,7 +2559,7 @@ end)
 
 local oqueue = ""
 add("queue_on_teleport", function(code)
-    assert(type(code) == "string", "expected string")
+    expect(code, "string", false, 1)
     oqueue = code
 end)
 
@@ -2540,7 +2572,7 @@ add("restet_queuedteleport", function()
 end)
 
 add("request", function(options)
-    assert(type(options) == "table", "expected table for options, got " .. type(options))
+    expect(options, "table", false, 1)
     local url = options.Url
     assert(type(url) == "string" and #url > 0, "expected non-empty string for Url")
 
@@ -2565,35 +2597,35 @@ add("request", function(options)
 end)
 
 add("getinternalparent", function(instance)
-    assert(typeof(instance) == "Instance", "expected Instance, got " .. typeof(instance))
+    expect(instance, "Instance", false, 1)
     return instance.Parent
 end)
 
 add("setinternalparent", function(instance, newparent)
-    assert(typeof(instance) == "Instance", "expected Instance, got " .. typeof(instance))
+    expect(instance, "Instance", false, 1)
     assert(typeof(newparent) == "Instance" or newparent == nil, "expected Instance or nil for newparent")
     instance.Parent = newparent
 end)
 
 add("getfflag", function(fflag)
-    assert(type(fflag) == "string", "expected string, got " .. type(fflag))
+    expect(fflag, "string", false, 1)
     return game:GetFastFlag(fflag:gsub("^FFlag", ""))
 end)
 
 add("setfflag", function(fflag, value)
-    assert(type(fflag) == "string", "expected string for fflag, got " .. type(fflag))
-    assert(type(value) == "string", "expected string for value, got " .. type(value))
+    expect(fflag, "string", false, 1)
+    expect(value, "string", false, 2)
     game:SetFastFlag(fflag:gsub("^FFlag", ""), value)
 end)
 
 add("setclipboard", function(text)
-    assert(type(text) == "string", "expected string, got " .. type(text))
+    expect(text, "string", false, 1)
     print(text)
 end)
 
 local fps = workspace:GetRealPhysicsFPS()
 add("setfpscap", function(f)
-    assert(type(f) == "number", "expected number, got " .. type(f))
+    expect(f, "number", false, 1)
     assert(f > 0, "fps cap must be greater than 0")
     fps = f
 end)
@@ -2628,7 +2660,7 @@ end)
 -- Scripts
 
 add("getscriptclosure", function(scr)
-    assert(typeof(scr) == "Instance", "expected Instance, got " .. typeof(scr))
+    expect(scr, "Instance", false, 1)
     assert(scr:IsA("ModuleScript"), "expected ModuleScript, got " .. scr.ClassName)
     return function(...)
         return require(scr)(...)
@@ -2641,22 +2673,22 @@ add("getscriptfromthread", function()
 end)
 
 add("getscriptbytecode", function(item)
-    assert(typeof(item) == "Instance", "expected Instance, got " .. typeof(item))
+    expect(item, "Instance", false, 1)
     return decompile(item)
 end)
 -- if you dont have either i think youre cooked innit
 add("decompile", function(item)
-    assert(typeof(item) == "Instance", "expected Instance, got " .. typeof(item))
+    expect(item, "Instance", false, 1)
     return getscriptbytecode(item)
 end)
 
 add("getscripthash", function(item)
-    assert(typeof(item) == "Instance", "expected Instance, got " .. typeof(item))
+    expect(item, "Instance", false, 1)
     return crypt.hash(getscriptbytecode(item))
 end)
 
 add("getfunctionhash", function(item)
-    assert(typeof(item) == "function", "expected Function, got " .. typeof(item))
+    expect(item, "function", false, 1)
     return crypt.hash(item)
 end)
 
@@ -2739,9 +2771,9 @@ add("getremotes", function()
 end)
 
 add("hookremote", function(remote, hook)
-    assert(typeof(remote) == "Instance", "expected Instance")
+    expect(remote, "Instance", false, 1)
     assert(remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction"), "expected RemoteEvent or RemoteFunction")
-    assert(type(hook) == "function", "expected function for hook")
+    expect(hook, "function", false, 2)
     
     local oldn
     oldn = hookmetamethod(game, "__namecall", function(self, ...)
@@ -2888,12 +2920,12 @@ add("getthreadidentity", function()
 end)
 
 add("setthreadidentity", function(identity)
-    assert(type(identity) == "number", "expected number, got " .. type(identity))
+    expect(identity, "number", false, 1)
     thread_identity = identity
 end)
 
 add("setidentity", function(identity)
-    assert(type(identity) == "number", "expected number, got " .. type(identity))
+    expect(identity, "number", false, 1)
     setthreadidentity(identity)
 end)
 
@@ -2930,13 +2962,13 @@ add("create_comm_channel", function()
 end)
 
 add("get_comm_channel", function(id)
-    assert(type(id) == "number", "expected number for id, got " .. type(id))
+    expect(id, "number", false, 1)
     return comm_channels[id]
 end)
 
 add("run_on_actor", function(actor, scriptStr, ...)
     assert(typeof(actor) == "Instance" and actor:IsA("Actor"), "expected Actor, got " .. typeof(actor))
-    assert(type(scriptStr) == "string", "expected string for script, got " .. type(scriptStr))
+    expect(scriptStr, "string", false, 2)
 
     local thread = task.spawn(function(...)
         local fn, err = loadstring(scriptStr)
@@ -2964,7 +2996,7 @@ end)
 
 add("run_on_thread", function(thread, scriptStr, ...)
     assert(type(thread) == "thread", "expected thread, got " .. type(thread))
-    assert(type(scriptStr) == "string", "expected string for script, got " .. type(scriptStr))
+    expect(scriptStr, "string", false, 2)
 
     local fn, err = loadstring(scriptStr)
     if not fn then error(err) end
