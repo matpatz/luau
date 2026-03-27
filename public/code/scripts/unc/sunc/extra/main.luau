@@ -273,7 +273,7 @@ end
 
 local srsconsole = Instance.new("ScreenGui")
 srsconsole.Name = rstring(6)
-srsconsole.Parent = rconsole
+srsconsole.Parent = game.CoreGui
 
 local _isrconsole = false
 local labelOffset = 50 -- starting Y offset for labels
@@ -283,6 +283,7 @@ local function crconsole()
     _isrconsole = true
 
     local window = Instance.new("Frame")
+    window.Name = "window"
     window.Size = UDim2.fromOffset(399, 251)
     window.Position = UDim2.new(0.5, -174, 0.5, -75)
     window.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
@@ -345,7 +346,7 @@ local function crconsole()
     end
 
     input("Hello world!", Color3.fromRGB(0, 255, 0))
-    input("Another line")
+    --input("Another line")
 end
 
 local function shouldcreate()
@@ -356,25 +357,34 @@ local function shouldcreate()
     end
 end
 
-crconsole()
+local window = srsconsole["window"]
 
 add("rconsoleclear", function()
-    for _, item in ipairs(rconsole[guin]["window"]) do
+    for _, item in ipairs(window) do
         if item:GetAttribute("killme") then
             item:Destroy()
         end
     end
 end)
 add("rconsolecontent", function()
-    return rconsole[guin]["content"] or {}
+    return window["content"] or {}
 end)
 add("rconsolecreate", function()
     crconsole()
 end)
 add("rconsoledestroy", function()
-    rconsole[guin]:Destroy()
+    window:Destroy()
+end)
+add("rconsolehide", function()
+    window.Visible = false
+end)
+add("rconsoleshow", function()
+    window.Visible = true
 end)
 add("rconsoleinput", function(text)
+    input(text)
+end)
+add("rconsoleinfo", function(text)
     input(text)
 end)
 add("rconsoleprint", function(text)
@@ -391,12 +401,17 @@ add("rconsoleerror", function(text)
 end)
 add("rconsolesettitle", function(title)
     expect(title, "string", false, 1)
-    srsconsole[guin]["title"].Text = title
+    window["title"].Text = title
+end)
+add("rconsolename", function(title)
+    rconsolesettitle(title)
 end)
 add("isrconsole", function(title)
     return _isrconsole
 end)
-
+add("rconsolehidden", funciton()
+    return isrconsole()
+end)
 -- Crypt
 
 local b = bit32
@@ -2823,6 +2838,7 @@ add("getscripthash", function(item)
     return crypt.hash(getscriptbytecode(item))
 end)
 
+-- hash a functions BYTECODE
 add("getfunctionhash", function(item)
     expect(item, "function", false, 1)
     return crypt.hash(item)
@@ -3208,7 +3224,21 @@ end)
 add("is_parallel", function()
     return getthreadidentity() >= 8
 end)
+add("isparallel", function()
+    return is_parallel()
+end)
 
+local bindable = createBindable()
+game.DescendantAdded:Connect(function(actor)
+    if not actor:IsA("Actor") then return end
+    bindable:Fire(actor)
+end)
+add("on_actor_added", function(connect)
+    -- sent a connection, start a thread and maintain it until removed
+    -- when send said bindable do :
+    -- tell the client via the connection of the new actor creation
+end)
+                                                      
 add("run_on_thread", function(thread, scriptStr, ...)
     assert(type(thread) == "thread", "expected thread, got " .. type(thread))
     expect(scriptStr, "string", false, 2)
