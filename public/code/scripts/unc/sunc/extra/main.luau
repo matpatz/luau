@@ -1040,13 +1040,6 @@ for k, v in pairs(crypt) do
     end
 end
 
-local existing_crypt = crypt
-for k, v in pairs(crypt) do
-    if not existing_crypt[k] then
-        existing_crypt[k] = v
-    end
-end
-
 local new_crypt = {}
 for k, v in pairs(getgenv().crypt) do
     new_crypt[k] = v
@@ -2168,7 +2161,7 @@ add("gethiddenproperty", function(object, property)
     return ugc:GetPropertyValue(object, property)
 end)
 
-add("gethiddenproperties", function(object, property)
+add("gethiddenproperties", function(object, prop)
     expect(object, "Instance", false, 1)
     local res = {}
     if object:IsA("Fire") then
@@ -2202,7 +2195,7 @@ end)
 add("getinstances", function()
     local t = {}
     for _, v in ipairs(game:GetDescendants()) do
-        t[#t + 1] = v
+        t[#t + 1] = v:GetFullName()
     end
     return t
 end)
@@ -2549,7 +2542,7 @@ add("rlecompress", function(data)
             count += 1
         end
         if count > 1 then
-            out[#out + 1] = string.char(count)
+            out[#out + 1] = string.char(count + 128)
         end
         out[#out + 1] = char
         i += count
