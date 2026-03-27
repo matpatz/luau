@@ -3249,6 +3249,6 @@ for name, func in pairs(functions) do
     
     adding += 1
 
-    print("Checking :", name, tostring(func) .. "\t #" .. adding)
+    print("Adding :", name, tostring(func) .. "\t #" .. adding)
     getgenv()[name] = func
 end
