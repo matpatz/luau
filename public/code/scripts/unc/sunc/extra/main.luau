@@ -8,6 +8,7 @@
         https://v3rm.net/threads/release-raknet-implementation.15622/, -- thanks vez
         https://scriptblox.com/script/Universal-Script-UNC-RENC-Functions-For-Nova-17623 -- used to find some functions to implement 
             i did NOT dm him and wont
+        -- https://celeryrblx.github.io/lua/rnet/
     --]]
 
     -- not used but potentially useful
@@ -1465,6 +1466,116 @@ _raknet.SendRemoteFunctionPacket = function(self, Remote, Arguments)
     Remote:InvokeServer()
 end
 
+local function createBindable()
+    return Instance.new("BindableEvent")
+end
+
+local capture_active, capture_filter = false, {}
+
+local capture_signal = createBindable()
+_raknet.Capture = capture_signal.Event
+
+-- claudestein
+_raknet.sendphysics = function(self, value)
+    assert(typeof(value) == "CFrame", "expected CFrame, got " .. typeof(value))
+    
+    local hrp = _raknet:GetPrimaryPart()
+    assert(hrp, "no HumanoidRootPart found")
+    
+    -- position only, rotation compression not implemented per docs
+    local pos = value.Position
+    hrp.CFrame = CFrame.new(pos)
+    
+    if capture_active then
+        local packet = {
+            opcode = 0x83, -- physics opcode
+            position = pos,
+            raw = string.format("83 %08X %08X %08X", 
+                math.floor(pos.X * 100),
+                math.floor(pos.Y * 100),
+                math.floor(pos.Z * 100)
+            )
+        }
+        
+        local blocked = false
+        for _, filter_byte in ipairs(capture_filter) do
+            if filter_byte == 0x83 then
+                blocked = true
+                break
+            end
+        end
+        
+        if not blocked then
+            capture_signal:Fire(packet)
+        end
+    end
+end
+
+_raknet.startcapture = function()
+    capture_active = true
+    print("began capture !!)___!!")
+end
+
+_raknet.stopcapture = function()
+    capture_active = false
+    print("stopped capture !!!!!")
+end
+
+_raknet.setfilter = function(self, t)
+    expect(t, "table", false, 1)
+    capture_filter = t
+end
+
+-- who loves claude? me.
+_raknet.sendraw = function(self, value)
+    local bytes = {}
+    
+    if type(value) == "string" then
+        -- parse hex string e.g. "83 FF 00 1A"
+        for byte in value:gmatch("%x%x") do
+            bytes[#bytes + 1] = tonumber(byte, 16)
+        end
+    elseif type(value) == "table" then
+        bytes = value
+    else
+        error("expected string or table, got " .. type(value))
+    end
+    
+    if #bytes == 0 then return end
+    
+    -- check filter
+    for _, filter_byte in ipairs(capture_filter) do
+        if bytes[1] == filter_byte then
+            return -- blocked
+        end
+    end
+    
+    -- dispatch based on opcode
+    local opcode = bytes[1]
+    
+    if opcode == 0x83 then -- physics
+        if #bytes >= 13 then
+            local x = (bytes[2]*16777216 + bytes[3]*65536 + bytes[4]*256 + bytes[5]) / 100
+            local y = (bytes[6]*16777216 + bytes[7]*65536 + bytes[8]*256 + bytes[9]) / 100
+            local z = (bytes[10]*16777216 + bytes[11]*65536 + bytes[12]*256 + bytes[13]) / 100
+            _raknet:sendphysics(CFrame.new(x, y, z))
+        end
+    elseif opcode == 0x83 then -- remote event (0x83 is placeholder, real varies)
+        -- route to remote firing
+    end
+    
+    if capture_active then
+        local hex = {}
+        for _, b in ipairs(bytes) do
+            hex[#hex + 1] = string.format("%02X", b)
+        end
+        capture_signal:Fire({
+            opcode = opcode,
+            raw = table.concat(hex, " ")
+        })
+    end
+end
+
 genv.raknet = genv.raknet or {}
 for k, v in pairs(_raknet) do
     add("raknet." .. k, v)
@@ -2426,9 +2537,17 @@ add("identifyexecutor", function()
     return "Potassium", "1.0"
 end)
 
+local shwid
+add("sethwid", function(input)
+    shwid = input
+end)
+add("set_hwid", function(input)
+    return sethwid(input)
+end)
+
 local anal = game:GetService("RbxAnalyticsService")
 add("gethwid", function()
-    return crypt.hash(anal:GetClientId())
+    return shwid or crypt.hash(anal:GetClientId())
 end)
 
 add("get_hwid", function()
@@ -2739,6 +2858,7 @@ add("setinternalparent", function(instance, newparent)
     instance.Parent = newparent
 end)
 
+-- UserSettings():IsUserFeatureEnabled(u1)
 add("getfflag", function(fflag)
     expect(fflag, "string", false, 1)
     return game:GetFastFlag(fflag:gsub("^FFlag", ""))
@@ -2821,6 +2941,14 @@ end)
 -- could hookmetamethod it or some shit
 add("getscriptfromthread", function()
     return Instance.new("LocalScript", nil)
+end)
+
+add("getscriptthread", function()
+    return coroutine.running()
+end)
+-- no clue
+add("getallthreads", function()
+    return table.create(coroutine.running(), math.random(1, 32))
 end)
 
 add("getscriptbytecode", function(item)
@@ -3102,10 +3230,6 @@ end)
 local actor_threads = setmetatable({}, {__mode = "v"})
 local comm_channels = {}
 
-local function createBindable()
-    return Instance.new("BindableEvent")
-end
-
 add("create_comm_channel", function()
     local num = math.random(1, 99999)
     local int = createBindable()
@@ -3228,15 +3352,17 @@ add("isparallel", function()
     return is_parallel()
 end)
 
-local bindable = createBindable()
-game.DescendantAdded:Connect(function(actor)
-    if not actor:IsA("Actor") then return end
-    bindable:Fire(actor)
-end)
-add("on_actor_added", function(connect)
-    -- sent a connection, start a thread and maintain it until removed
-    -- when send said bindable do :
-    -- tell the client via the connection of the new actor creation
+local actor_event = createBindable()
+
+add("on_actor_added", actor_event)
+local function handle_actor(actor)
+    actor_event:Fire(actor)
+end
+
+game.DescendantAdded:Connect(function(obj)
+    if obj:IsA("Actor") then
+        handle_actor(obj)
+    end
 end)
                                                       
 add("run_on_thread", function(thread, scriptStr, ...)
