@@ -2545,9 +2545,17 @@ add("set_hwid", function(input)
     return sethwid(input)
 end)
 
+add("setmac", function(input)
+    shwid = input
+end)
+
 local anal = game:GetService("RbxAnalyticsService")
-add("gethwid", function()
+add("getmac", function()
     return shwid or crypt.hash(anal:GetClientId())
+end)
+
+add("gethwid", function()
+    return getmac()
 end)
 
 add("get_hwid", function()
