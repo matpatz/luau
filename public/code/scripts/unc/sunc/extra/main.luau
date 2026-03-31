@@ -1739,6 +1739,65 @@ _helper.tabletonumber = function(data)
     return set(data, tonumber)
 end
 
+_helper.is_repeating = function(v)
+    local t = type(v)
+
+    if t ~= "table" and t ~= "string" then
+        return true -- peak, no?
+    end
+
+    -- strings
+    if t == "string" then
+        if #v <= 1 then return true end
+        local first = v:sub(1,1)
+        for i = 2, #v do
+            if v:sub(i,i) ~= first then
+                return false
+            end
+        end
+        return true
+    end
+
+    -- table
+    local first = v[1]
+    for i = 2, #v do
+        if v[i] ~= first then
+            return false
+        end
+    end
+
+    return true
+end
+
+_helper.toexpontent = function(n)
+    if n == 0 then return "0e0" end
+
+    local exp = 0
+    local value = n
+
+    while value >= 10 do
+        value /= 10
+        exp += 1
+    end
+
+    while value < 1 do
+        value *= 10
+        exp -= 1
+    end
+
+    return string.format("%.3ge%d", value, exp)
+end
+
+_helper.fromexpontent = function(str)
+    local base, exp = str:match("([%d%.]+)e([%-]?%d+)")
+    base = tonumber(base)
+    exp = tonumber(exp)
+
+    if not base or not exp then return nil end
+
+    return base * (10 ^ exp)
+end
+
 for k, v in pairs(_helper) do
     add("helper." .. k, v)
 end
@@ -2285,6 +2344,11 @@ add("gethiddenproperty", function(object, property)
     expect(object, "Instance", false, 1)
     expect(property, "string", false, 2)
     return ugc:GetPropertyValue(object, property)
+end)
+
+-- idk about these params
+add("is_hidden", function(object, property)
+    return gethiddenproperty(object, property) ~= nil
 end)
 
 add("gethiddenproperties", function(object, prop)
