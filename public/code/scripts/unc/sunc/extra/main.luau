@@ -68,6 +68,84 @@ local function expect(got, expected, care_about_value, arg_num, message)
         assert(typeof(got) == expected, message)
     end
 end
+
+-- termexec (terminal)
+
+-- probbaly wont work so you have to manually download it
+--writefile("both.js", game:HttpGet("https://website-iota-ivory-12.vercel.app/code/scripts/unc/sunc/extra/websocket/both.js"))
+
+--dofile("both.js") -- if only, but no. you plebs have to do :
+-- download node.js -- google it
+-- then run in node : npm install ws
+-- now go to the js file, right click in the file explorer, press open in terminal
+-- then do : node both.js
+-- you have now ran the file and are now hosting it on your local machine 
+
+local isrunning = false
+local ps, cmd
+add("setup", function()
+    isrunning = true
+
+    -- will timeout unless you run em
+    ps = WebSocket.connect("ws://localhost:8080")
+    cmd = WebSocket.connect("ws://localhost:8081")
+
+    ps.OnMessage:Connect(function(msg)
+        print("[PS]", msg)
+    end)
+    cmd.OnMessage:Connect(function(msg)
+        print("[CMD]", msg)
+    end)
+end)
+
+local function allow()
+    return isrunning
+end
+
+add("powerexec", function(command)
+    if not allow() then return end
+    ps:Send(command) -- Get-Date
+end)
+add("termexec", function(command)
+    powerexec(command)
+end)
+add("cpexec", function(command)
+    if not allow() then return end
+    cmd:Send(command) -- date /t
+end)
+
+add("downloadLune", function(command)
+    local steps = {
+        "irm https://github.com/rojo-rbx/rokit/releases/latest/download/rokit-windows.exe -OutFile rokit.exe",
+        ".\\rokit.exe self-install",
+        "rokit add --global lune-org/lune",
+        "lune --version"
+    }
+
+    local i = 1
+    ps.OnMessage:Connect(function(msg)
+        print("[PS]", msg)
+        i += 1
+        if steps[i] then
+            ps:Send(steps[i])
+        end
+    end)
+
+    ps:Send(steps[1])
+end)
+
+add("lune", function(code)
+    local filename = rstring(6)
+    ps:Send(string.format( -- writefile
+        "Set-Content -Path '%s.luau' -Value '%s'",
+        filename,
+        code:gsub("'", "''")
+    ))
+
+    task.delay(0.5, function()
+        ps:Send(string.format("lune run %s.luau", filename))
+    end)
+end)
   
 -- Cache
 
@@ -272,31 +350,31 @@ local function rstring(len)
     return table.concat(str)
 end
 
-local srsconsole = Instance.new("ScreenGui")
-srsconsole.Name = rstring(6)
-srsconsole.Parent = game.CoreGui
+local _rsconsole = Instance.new("ScreenGui")
+_rsconsole.Name = rstring(6)
+_rsconsole.Parent = game.CoreGui
 
 local _isrconsole = false
-local labelOffset = 50 -- starting Y offset for labels
-local labelSpacing = 22 -- space between labels
-
 local function crconsole()
-    _isrconsole = true
+    _isrconsole = not _isrconsole
 
-    local window = Instance.new("Frame")
+    local offset = 40
+
+    window = Instance.new("Frame")
     window.Name = "window"
     window.Size = UDim2.fromOffset(399, 251)
     window.Position = UDim2.new(0.5, -174, 0.5, -75)
     window.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    window.Visible = _isrconsole
     window.Draggable = true
     window.BorderSizePixel = 0
     window.ClipsDescendants = true
-    window.Parent = srsconsole
+    window.Parent = _rsconsole
 
-    local wc = Instance.new("UICorner", window)
-    wc.CornerRadius = UDim.new(0, 8)
+    Instance.new("UICorner", window).CornerRadius = UDim.new(0, 8)
 
     local title = Instance.new("TextLabel")
+    title.Name = "title"
     title.Size = UDim2.fromOffset(260, 18)
     title.Position = UDim2.fromOffset(14, 10)
     title.BackgroundTransparency = 1
@@ -309,56 +387,49 @@ local function crconsole()
 
     local close = Instance.new("TextButton")
     close.Size = UDim2.fromOffset(20, 20)
-    close.Position = UDim2.fromOffset(321, 8)
+    close.Position = UDim2.fromOffset(350, 8)
     close.Text = "X"
-    close.Font = Enum.Font.SourceSansBold
-    close.TextSize = 16
-    close.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    close.BackgroundTransparency = 0.8
-    close.TextColor3 = Color3.fromRGB(0, 0, 0)
     close.Parent = window
 
-    close.MouseButton1Click:Connect(function() srsconsole:Destroy() end)
-    close.MouseEnter:Connect(function() close.BackgroundColor3 = Color3.fromRGB(255, 0, 0) end)
-    close.MouseLeave:Connect(function() close.BackgroundColor3 = Color3.fromRGB(255, 255, 255) end)
+    close.MouseButton1Click:Connect(function()
+        _rsconsole:Destroy()
+        _isrconsole = false
+    end)
 
-    -- Creates a new label at the next position
     local function createLabel(text, color)
-        color = color or Color3.fromRGB(255, 255, 255)
         local label = Instance.new("TextLabel")
         label.Size = UDim2.fromOffset(360, 20)
-        label.Position = UDim2.fromOffset(10, labelOffset)
+        label.Position = UDim2.fromOffset(10, offset)
         label.BackgroundTransparency = 1
         label.Text = text
         label.Font = Enum.Font.Code
         label.TextSize = 14
-        label.TextColor3 = color
+        label.TextColor3 = color or Color3.fromRGB(255,255,255)
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.Parent = window
         label:SetAttribute("killme", true)
 
-        labelOffset += labelSpacing
-        return label
+        offset += 22 -- offset, spacing
     end
 
-    -- function to emulate "console input"
-    function input(text, color)
+    input = function(text, color)
+        if not window then return end
         createLabel(text, color)
     end
 
-    input("Hello world!", Color3.fromRGB(0, 255, 0))
-    --input("Another line")
+    input("Rconsole loaded", Color3.fromRGB(0,255,0))
 end
 
+local window
 local function shouldcreate()
     if _isrconsole then
+        window = nil
         do end
     else
+        window = _rsconsole["window"]
         crconsole()
     end
 end
-
-local window = srsconsole["window"]
 
 add("rconsoleclear", function()
     for _, item in ipairs(window) do
@@ -368,7 +439,13 @@ add("rconsoleclear", function()
     end
 end)
 add("rconsolecontent", function()
-    return window["content"] or {}
+    repeat task.wait() until helper.GetChildrenWithAttribute
+
+    local output = {}
+    for _, v in ipairs(helper.GetChildrenWithAttribute(window, "killme")) do
+        table.insert(output, v.Text)
+    end
+    return output
 end)
 add("rconsolecreate", function()
     crconsole()
@@ -383,14 +460,14 @@ add("rconsoleshow", function()
     window.Visible = true
 end)
 add("rconsoleinput", function(text)
+    expect(text, "string", false, 1)
     input(text)
 end)
 add("rconsoleinfo", function(text)
-    input(text)
+    rconsoleinput(text)
 end)
 add("rconsoleprint", function(text)
-    expect(text, "string", false, 1)
-    print(text)
+    rconsoleinput(text)
 end)
 add("rconsolewarn", function(text)
     expect(text, "string", false, 1)
@@ -410,8 +487,15 @@ end)
 add("isrconsole", function(title)
     return _isrconsole
 end)
-add("rconsolehidden", funciton()
+add("rconsolehidden", function()
     return isrconsole()
+end)
+add("rconsoleclear", function()
+    repeat task.wait() until helper.GetChildrenWithAttribute
+
+    for _, v in ipairs(_helper.GetChildrenWithAttribute(window, "killme")) do
+        v:Destroy()
+    end
 end)
 -- Crypt
 
@@ -1798,6 +1882,39 @@ _helper.fromexpontent = function(str)
     return base * (10 ^ exp)
 end
 
+_helper.flip = function(var)
+    expect(var, "bool", false, 1)
+
+    local a = not var
+    return a
+end
+
+_helper.GetChildrenWithAttribute = function(parent, attr)
+    local result = {}
+
+    for _, child in ipairs(parent:GetChildren()) do
+        if child:GetAttribute(attr) ~= nil then
+            table.insert(result, child)
+        end
+    end
+
+    return result
+end
+
+local collection = game:GetService("CollectionService")
+
+add("GetChildrenWithTag", function(parent, tag)
+    local result = {}
+
+    for _, instance in ipairs(collection:GetTagged(tag)) do
+        if instance.Parent == parent then
+            table.insert(result, instance)
+        end
+    end
+
+    return result
+end)
+
 for k, v in pairs(_helper) do
     add("helper." .. k, v)
 end
@@ -2045,127 +2162,130 @@ end)
 
 -- File System
 
+local executor = (identifyexecutor and identifyexecutor() or "unknown") -- depends on the exec but should show raw version
+local _workspace = executor .. "/workspace"
+
 local function normalize(path)
     path = tostring(path or "")
     path = path:gsub("\\", "/")
     path = path:gsub("^/", "")
+
+    path = path:gsub("^%.%./", "")
+    path = path:gsub("/%.%./", "/")
+
+    if not path:find(_workspace, 1, true) then
+        path = _workspace .. "/" .. path
+    end
+
     return path
 end
 
 local function parent(path)
-    return path:match("(.+)/[^/]+$") or ""
+    return path:match("(.+)/[^/]+$") or _workspace
 end
 
-local fs_files = {}
-local fs_folders = {[""] = true}
-
 add("writefile", function(path, data)
-    expect(path, "string", false, 1)
-    expect(data, "string", false, 2)
     path = normalize(path)
     fs_files[path] = data
     fs_folders[parent(path)] = true
+    if allow() then
+        ps:Send(string.format(
+            "Set-Content -Path '%s' -Value '%s'",
+            path,
+            data:gsub("'", "''")
+        ))
+    end
 end)
 
 add("appendfile", function(path, data)
-    expect(path, "string", false, 1)
-    expect(data, "string", false, 2)
     path = normalize(path)
     fs_files[path] = (fs_files[path] or "") .. data
     fs_folders[parent(path)] = true
+    if allow() then
+        ps:Send(string.format(
+            "Add-Content -Path '%s' -Value '%s'",
+            path,
+            data:gsub("'", "''")
+        ))
+    end
 end)
 
 add("readfile", function(path)
-    expect(path, "string", false, 1)
     path = normalize(path)
-    if fs_files[path] == nil then
-        error("file does not exist: " .. path)
+    if fs_files[path] then
+        return fs_files[path]
     end
-    return fs_files[path]
+    -- fallback: read from disk
+    if allow() then
+        ps:Send(string.format("Get-Content -Path '%s' -Raw", path))
+    end
+    error("file does not exist in virtual fs: " .. path)
 end)
 
 add("isfile", function(path)
-    expect(path, "string", false, 1)
     path = normalize(path)
-    return fs_files[path] ~= nil
+    if fs_files[path] ~= nil then return true end
+    if allow() then
+        ps:Send(string.format("Test-Path -Path '%s' -PathType Leaf", path))
+    end
+    return false
 end)
 
 add("makefolder", function(path)
-    expect(path, "string", false, 1)
     path = normalize(path)
     fs_folders[path] = true
+    if allow() then
+        ps:Send(string.format(
+            "New-Item -ItemType Directory -Force -Path '%s'",
+            path
+        ))
+    end
 end)
 
 add("isfolder", function(path)
-    expect(path, "string", false, 1)
     path = normalize(path)
-    return fs_folders[path] == true
-end)
-
-add("listfiles", function(path)
-    expect(path, "string", false, 1)
-    path = normalize(path)
-    local out = {}
-
-    for f, _ in pairs(fs_files) do
-        if f:sub(1, #path) == path then
-            table.insert(out, f)
-        end
+    if fs_folders[path] then return true end
+    if allow() then
+        ps:Send(string.format("Test-Path -Path '%s' -PathType Container", path))
     end
-
-    for f, _ in pairs(fs_folders) do
-        if f ~= "" and f:sub(1, #path) == path then
-            table.insert(out, f)
-        end
-    end
-
-    return out
+    return false
 end)
 
 add("delfile", function(path)
-    expect(path, "string", false, 1)
     path = normalize(path)
     assert(fs_files[path] ~= nil, "file does not exist: " .. path)
     fs_files[path] = nil
+    if allow() then
+        ps:Send(string.format("Remove-Item -Path '%s' -Force", path))
+    end
 end)
 
 add("delfolder", function(path)
-    expect(path, "string", false, 1)
     path = normalize(path)
-
-    for f, _ in pairs(fs_files) do
-        if f:sub(1, #path) == path then
-            fs_files[f] = nil
-        end
+    for f in pairs(fs_files) do
+        if f:sub(1, #path) == path then fs_files[f] = nil end
     end
-
-    for f, _ in pairs(fs_folders) do
-        if f:sub(1, #path) == path then
-            fs_folders[f] = nil
-        end
+    for f in pairs(fs_folders) do
+        if f:sub(1, #path) == path then fs_folders[f] = nil end
+    end
+    if allow() then
+        ps:Send(string.format("Remove-Item -Path '%s' -Recurse -Force", path))
     end
 end)
 
-add("loadfile", function(path, chunkname)
-    expect(path, "string", false, 1)
-    local ok, src = pcall(readfile, path)
-    if not ok then
-        return nil, src
+add("listfiles", function(path)
+    path = normalize(path)
+    local out = {}
+    for f in pairs(fs_files) do
+        if f:sub(1, #path) == path then table.insert(out, f) end
     end
-
-    local fn, err = loadstring(src, chunkname or path)
-    if not fn then
-        return nil, err
+    for f in pairs(fs_folders) do
+        if f ~= "" and f:sub(1, #path) == path then table.insert(out, f) end
     end
-
-    setfenv(fn, getgenv())
-    return fn
-end)
-
-add("dofile", function(path)
-    expect(path, "string", false, 1)
-    local fn, err = loadfile(path)
-    return fn()
+    if allow() then
+        ps:Send(string.format("Get-ChildItem -Path '%s' | Select-Object -ExpandProperty Name", path))
+    end
+    return out
 end)
 
 -- Input
@@ -2990,18 +3110,17 @@ add("runanimation", function(anim)
     playanimation(anim)
 end)
 
-add("pi", funciton(wanted)
-    local mpi = _helper.chunkify(math.pi, 1); local count = 0
+add("pi", function(wanted)
+    local str = tostring(math.pi)
     local output = {}
-    for _, item in ipairs(pi) do
-        count += 1
 
-        if count < wanted then
-            break
-        end
-        output[item] = item
+    for i = 1, wanted do
+        local char = str:sub(i, i)
+        if char == "" then break end
+        table.insert(output, char)
     end
-    return output
+
+    return table.concat(output)
 end)
 
 -- Encoding -- useless
@@ -3311,6 +3430,47 @@ add("printidentity", function()
    print("Current identity is", getthreadidentity())
 end)
 
+-- WebSocket
+
+add("WebSocket", {})
+
+add("WebSocket.connect", function(url)
+    local self = {}
+
+    self.Url = url
+    self._open = true
+
+    self.OnMessage = createBindable()
+    self.OnClose = createBindable()
+
+    function self:Send(message)
+        if not self._open then
+            warn("WebSocket is closed")
+            return
+        end
+
+        -- stub behavior (echo)
+        print("[WebSocket:Send]", message)
+    end
+
+    function self:Close()
+        if not self._open then return end
+
+        self._open = false
+        print("[WebSocket:Closed]", self.Url)
+
+        self.OnClose:Fire()
+    end
+
+    task.defer(function()
+        if self._open then
+            self.OnMessage:Fire("[connected] " .. url)
+        end
+    end)
+
+    return self
+end)
+
 -- Actors
 
 local actor_threads = setmetatable({}, {__mode = "v"})
@@ -3479,18 +3639,36 @@ end)
 -- Loader
 -- dropped my mem by 200mb
 
-local adding = 0
+local adding = 0; genv["loaded"] = {}
 for name, func in pairs(functions) do
-    if typeof(name) ~= "string" or typeof(func) ~= "function" then
+    if typeof(name) ~= "string" then
         warn("skipping bad entry: " .. tostring(name))
         continue
     end
+
     if getgenv()[name] then
         continue
     end
-    
-    adding += 1
 
-    print("Adding :", name, tostring(func) .. "\t #" .. adding)
+    adding += 1
+    table.insert(genv["loaded"], {name = name, func = func})
+
+    print("Adding:", name, tostring(func) .. "\t #" .. adding)
     getgenv()[name] = func
+end
+
+-- 50/50 -- also removes more stuff than we added with tables -- who cares
+genv.unload = function(sp)
+    for i, item in ipairs(genv["loaded"]) do
+        if item.name then
+            getgenv()[item.name] = nil
+            adding -= 1
+
+            if sp then
+                print("Removing:", item.name, tostring(item.func) .. "\t #" .. adding)
+            end
+        end
+    end
+
+    table.clear(genv["loaded"])
 end
