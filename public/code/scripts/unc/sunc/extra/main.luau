@@ -1683,7 +1683,7 @@ _helper.average = function(tbl)
     assert(#tbl > 0, "table cannot be empty")
     return _helper.sum(tbl) / #tbl
 end
-
+                                    
 -- local t = {"string", "pango", 3, "rango"}
 -- print(helper.search(t, 3, true, { type = "number" }))
     -- returns "3 3"
@@ -2988,6 +2988,20 @@ add("playanimation", function(animation)
 end)
 add("runanimation", function(anim)
     playanimation(anim)
+end)
+
+add("pi", funciton(wanted)
+    local mpi = _helper.chunkify(math.pi, 1); local count = 0
+    local output = {}
+    for _, item in ipairs(pi) do
+        count += 1
+
+        if count < wanted then
+            break
+        end
+        output[item] = item
+    end
+    return output
 end)
 
 -- Encoding -- useless
