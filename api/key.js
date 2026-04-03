@@ -1,67 +1,89 @@
+// cleaned up the ai code with more ai
 import crypto from "crypto";
 
-/* ===== CONFIG ===== */
-const SHARED = process.env.sSecret;
-const SUPABASE_URL = process.env.supabaseurl;
-const SUPABASE_SERVICE = process.env.supabaseService;
+const SECRET = process.env.sSecret;
+const URL = process.env.supabaseurl;
+const SERVICE_KEY = process.env.supabaseService;
 
-/* ===== UTILS ===== */
-function sha256(s) {
-  return crypto.createHash("sha256").update(s).digest("hex");
-}
+const hash = (str) =>
+  crypto.createHash("sha256").update(str).digest("hex");
 
-function sign(...args) {
-  const parts = Array.from(args).map(v => {
-    if (typeof v === "boolean") return v ? "1" : "0";
-    if (v === null || v === undefined) return "";
-    return String(v);
-  });
-  return sha256(parts.join("|") + "|" + SHARED);
-}
+const makeSig = (...vals) => {
+  let out = "";
 
-/* ===== HANDLER ===== */
+  for (let v of vals) {
+    if (v === true) out += "1";
+    else if (v === false) out += "0";
+    else if (v != null) out += String(v);
+
+    out += "|";
+  }
+
+  return hash(out + SECRET);
+};
+
 export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
 
+  if (req.method !== "POST") {
+    return res.status(405).json({ ok: false });
+  }
+
+  if (!SECRET || !URL || !SERVICE_KEY) {
+    return res.status(500).json({ ok: false });
+  }
+
   try {
-    if (req.method !== "POST") return res.status(405).json({ ok: false });
+    let data = req.body;
 
-    if (!SHARED || !SUPABASE_URL || !SUPABASE_SERVICE)
-      return res.status(500).json({ ok: false });
+    if (typeof data === "string") {
+      try {
+        data = JSON.parse(data);
+      } catch {
+        return res.status(400).json({ ok: false });
+      }
+    }
 
-    let body = req.body;
-    if (typeof body === "string") body = JSON.parse(body);
+    const key = data?.key ? String(data.key) : "";
+    const sig = data?.sig ? String(data.sig) : "";
 
-    const key = String(body?.key || "");
-    const sig = String(body?.sig || "");
+    if (!key || !sig) {
+      return res.status(400).json({ ok: false });
+    }
 
-    if (!key || !sig) return res.status(400).json({ ok: false });
+    // verify request
+    if (sig !== makeSig(key)) {
+      return res.status(401).json({ ok: false });
+    }
 
-    /* ===== VERIFY REQUEST SIGNATURE ===== */
-    if (sig !== sign(key)) return res.status(401).json({ ok: false });
+    // search supabase
+    const query =
+      `${URL}/rest/v1/keys?select=key` +
+      `&key=eq.${encodeURIComponent(key)}` +
+      `&limit=1`;
 
-    /* ===== SUPABASE LOOKUP ===== */
-    const url = `${SUPABASE_URL}/rest/v1/keys?select=key&key=eq.${encodeURIComponent(key)}&limit=1`;
-    const r = await fetch(url, {
+    const resp = await fetch(query, {
       headers: {
-        apikey: SUPABASE_SERVICE,
-        Authorization: `Bearer ${SUPABASE_SERVICE}`,
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
       },
     });
 
-    if (!r.ok) return res.status(500).json({ ok: false });
+    if (!resp.ok) {
+      return res.status(500).json({ ok: false });
+    }
 
-    const rows = await r.json();
-    const ok = Array.isArray(rows) && rows.length > 0;
+    const result = await resp.json();
+    const valid = Array.isArray(result) && result.length > 0;
 
-    /* ===== SIGN RESPONSE ===== */
-    const response = { ok };
-    response.sig = sign(ok);
+    const out = {
+      ok: valid,
+      sig: makeSig(valid),
+    };
 
-    return res.status(200).json(response);
-
-  } catch (e) {
-    console.error("Key handler crashed:", e);
+    return res.status(200).json(out);
+  } catch (err) {
+    console.error("handler error:", err);
     return res.status(500).json({ ok: false });
   }
 }
