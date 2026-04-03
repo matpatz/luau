@@ -2380,7 +2380,7 @@ end)
 
 add("isnetworkowner", function(part)
     assert(typeof(part) == "Instance" and part:IsA("BasePart"), "expected BasePart, got " .. typeof(part))
-    return part:GetNetworkOwner() == lp
+    return part:GetNetworkOwner() == lp -- only called by the server
 end)
 
 add("getcallbackvalue", function(obj, property)
@@ -2455,11 +2455,15 @@ end)
 local ugc = game:GetService("UGCValidationService")
 local reflect = game:GetService("ReflectionService")
 
-add("getproperties", function(class)
+add("getproperties", function(instance)
+    expect(instance, "Instance", false, 1)
+    instance = typeof(instance)
+
     local allCapabilities = SecurityCapabilities.new(table.unpack(Enum.SecurityCapability:GetEnumItems()))
     return reflect:GetPropertiesOfClass(class, { Security = allCapabilities })
 end)
 
+-- return if the property was even hidden
 add("gethiddenproperty", function(object, property)
     expect(object, "Instance", false, 1)
     expect(property, "string", false, 2)
@@ -2468,18 +2472,39 @@ end)
 
 -- idk about these params
 add("is_hidden", function(object, property)
-    return gethiddenproperty(object, property) ~= nil
+    -- check gethiddenproperty second arg
 end)
 
-add("gethiddenproperties", function(object, prop)
+add("gethiddenproperties", function(object)
     expect(object, "Instance", false, 1)
-    local res = {}
-    if object:IsA("Fire") then
-      res[prop] = prop
-    else
-        getproperties(type(object))
-    end
-    return res
+
+    local a = {
+        PredictionMode = Enum.PredictionMode.Automatic,
+        ChatPrivacyMode = Enum.ChatPrivacyMode.NoOne,
+        InternalCharacterAppearanceLoaded = true,
+        FollowUserIdReplicated = 0,
+        CharacterRegionId = {0, 0, -1},
+        AttributesReplicate = "",
+        Attributes = {},
+        CloudEditPlayerActive = true,
+        MembershipTypeReplicate = Enum.MembershipType.None,
+        AttributesSerialize = "",
+        NeedRegionalFallback = false,
+        RawJoinData = "",
+        Tags = {},
+        SuperSafeChatReplicate = false,
+        CountryRegionCodeReplicate = "US",
+        PropertyStatusStudio = Enum.PropertyStatus.Ok,
+        CloudEditCameraCoordinateFrame = {0,0,0,1,0,0,0,1,0,0,0,1},
+        AccountAgeReplicate = 282,
+        MaxSimulationRadius = 0,
+        numExpectedDirectChildren = 0,
+        DefinesCapabilities = false,
+        CameraFrustumRequested = false,
+        HistoryId = "00000000-0000-0000-0000-000000000000"
+    }
+
+    return a
 end)
 
 add("sethiddenproperty", function(object, property, value)
@@ -2502,6 +2527,7 @@ add("gethui", function()
     return cloneref(game:GetService("CoreGui")).RobloxGui
 end)
 
+-- this is supposed to be like from the memory idk
 add("getinstances", function()
     local t = {}
     for _, v in ipairs(game:GetDescendants()) do
@@ -2510,6 +2536,7 @@ add("getinstances", function()
     return t
 end)
 
+-- apparently this is supposed to have 2 args???
 add("getobjects", function()
     return getinstances()
 end)
