@@ -4,8 +4,7 @@ function device()
 	return tostring(uis:GetPlatform()):split(".")[3]
 end
 
-local info = device()
-getgenv().device = info.type
+getgenv().device = device()
 
 --[[
 	local device = getgenv().device or "Mobile"
