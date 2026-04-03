@@ -17,6 +17,8 @@
     --]]
 --]]
 
+local testing = false
+
 local functions = {}; local check2add = 0
 local function add(name, func, expect)
     check2add += 1
@@ -25,7 +27,7 @@ local function add(name, func, expect)
     functions[name] = func
 end
 local genv = getgenv()
-local function index(tofind)
+local function index(tofind) -- i dont think i use this idk
     for _, item in ipairs(genv) do -- i like could cache it but who cares
         if item == tofind then
             return item
@@ -72,14 +74,7 @@ end
 -- termexec (terminal)
 
 -- probbaly wont work so you have to manually download it
---writefile("both.js", game:HttpGet("https://website-iota-ivory-12.vercel.app/code/scripts/unc/sunc/extra/websocket/both.js"))
-
---dofile("both.js") -- if only, but no. you plebs have to do :
--- download node.js -- google it
--- then run in node : npm install ws
--- now go to the js file, right click in the file explorer, press open in terminal
--- then do : node both.js
--- you have now ran the file and are now hosting it on your local machine 
+-- read the features section on the scriptblox post to learn how to set up a websocket
 
 local isrunning = false
 local ps, cmd
@@ -114,6 +109,24 @@ add("cpexec", function(command)
     cmd:Send(command) -- date /t
 end)
 
+add("getenv", function(var)
+    if not allow() then return nil end
+
+    local result, done = nil, false
+
+    local conn
+    conn = ps.OnMessage:Connect(function(msg)
+        conn:Disconnect()
+        result = msg:gsub("%s+$", "") 
+        done = true
+    end)
+
+    ps:Send(string.format("[System.Environment]::GetEnvironmentVariable('%s')", var))
+
+    repeat task.wait() until done
+    return result
+end)
+
 add("downloadLune", function(command)
     local steps = {
         "irm https://github.com/rojo-rbx/rokit/releases/latest/download/rokit-windows.exe -OutFile rokit.exe",
@@ -132,6 +145,26 @@ add("downloadLune", function(command)
     end)
 
     ps:Send(steps[1])
+end)
+
+-- you could also just run : lune --version
+add("islune", function()
+    if not allow() then return false end
+
+    local result, done = false, false
+
+    local conn
+    conn = ps.OnMessage:Connect(function(msg)
+        conn:Disconnect()
+        result = msg ~= nil and msg:gsub("%s", "") ~= ""
+        done = true
+    end)
+
+    ps:Send("Get-Command lune -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source")
+
+    repeat task.wait() until done
+
+    return result
 end)
 
 add("lune", function(code)
@@ -284,29 +317,52 @@ add("isexecutorclosure", function(func)
     return false
 end)
 
--- it isnt persay impossible to implement loadstring but i just dont rlly want to soooo you get a bad version
--- anyway thanks to this guy https://scriptblox.com/script/Universal-Script-luau-VM-execution-77330
+-- no longer do i use this
+    -- it isnt persay impossible to implement loadstring but i just dont rlly want to soooo you get a bad version
+    -- anyway thanks to this guy https://scriptblox.com/script/Universal-Script-luau-VM-execution-77330
 
-local executeable, compiler
-if loadstring then
-    executeable = loadstring(game:HttpGet("https://pastebin.com/raw/BAPvjpyn"))()
-    compiler = loadstring(game:HttpGet("https://pastebin.com/raw/aggszsUg"))()
-end
-
-add("load", function(source, chunkname, mode, env)
-    local function execute(x)
-        return executeable(compiler(x, "dl"), getfenv(2))
+add("loadstring", function(source, chunkname)
+    if not allow() then
+        return (load)(source, chunkname) -- load is highkey nil
     end
-    execute(source)()
+
+    if not islune() then
+        downloadLune()
+    end
+
+    local filename = rstring(6)
+    local filepath = getenv("TEMP") .. "\\__ls_" .. filename .. ".luau"
+    
+    local result, done = nil, false
+
+    ps:Send(string.format(
+        "Set-Content -Path '%s' -Value '%s'",
+        filepath,
+        source:gsub("'", "''")
+    ))
+
+    local conn
+    conn = ps.OnMessage:Connect(function(msg)
+        conn:Disconnect()
+        result = msg
+        done = true
+    end)
+
+    ps:Send(string.format("lune run '%s'", filepath))
+
+    -- remove the item
+    return function()
+        repeat task.wait() until done
+        ps:Send(string.format("Remove-Item '%s' -Force", filepath))
+        return result
+    end
 end)
-add("execute", function(source, chunkname, mode, env)
-    load(source, chunkname, mode, env)
-end)
+--if getrenv and not getrenv().loadstring then getrenv().loadstring = genv.loadstring end
 
 local cclosures = setmetatable({}, {__mode = "k"})
 
 local custom_closures = {}
-add("newcclosure", function(func) -- for half decent iscclosure it will return false
+add("newcclosure", function(func) -- TODO : fix - for half decent iscclosure it will return false
     expect(func, "function", false, 1)
 
     local wrapper = function(...)
@@ -1450,217 +1506,184 @@ getgenv().debug = new_debug
 -- Raknet
 
 local _raknet = {}
-                                    
-_raknet.desync = function()
-    -- patched man srry
-end
 
-_raknet.GetService = function(self, Service)
-    if not cloneref then return Service end -- for pastesploit users
- 
-    if Service == "VirtualInputManager" or Service == "VirtualUser" then
-        return cloneref(Instance.new(Service)) -- Thanks syn.lua
+-- highkey none of this existed
+-- thanks volt for added raknet
+    -- w docs as always
+do                           
+    _raknet.desync = function()
+        -- patched man srry
+    end
+    -- this code is from that v3rm guy
+
+    _raknet.GetService = function(self, Service)
+        if not cloneref then return Service end -- for pastesploit users
+    
+        if Service == "VirtualInputManager" or Service == "VirtualUser" then
+            return cloneref(Instance.new(Service)) -- Thanks syn.lua
+        end
+
+    return cloneref(Service)
     end
 
-   return cloneref(Service)
-end
-
-_raknet.GetLocalPlayer = function()
-    return _raknet:GetService(game:GetService("Players")).LocalPlayer
-end
-
-_raknet.GetCharacter = function()
-    return _raknet:GetLocalPlayer().Character or _raknet:GetLocalPlayer().CharacterAdded:Wait()
-end
-
-_raknet.GetPrimaryPart = function()
-    return _raknet:GetCharacter():FindFirstChild("HumanoidRootPart")
-end
-
-_raknet.GetHumanoid = function()
-    return _raknet:GetCharacter():FindFirstChildOfClass("Humanoid")
-end
-
-_raknet.SendKickPacket = function(self, OptionalMessage)
-    if OptionalMessage then
-        _raknet:GetLocalPlayer():Kick(`{OptionalMessage}`)
-        return
+    _raknet.GetLocalPlayer = function()
+        return _raknet:GetService(game:GetService("Players")).LocalPlayer
     end
 
-    _raknet:GetLocalPlayer():Kick(`You have been kicked by the use of RakNet packets, {raknet:GetLocalPlayer().UserId}`)
-end
+    _raknet.GetCharacter = function()
+        return _raknet:GetLocalPlayer().Character or _raknet:GetLocalPlayer().CharacterAdded:Wait()
+    end
 
-add("crash", function()
-    local function recurse()
-        local t = {}
-        for i = 1, 1000 do
-            t[i] = string.rep("x", 1000000)
+    _raknet.GetPrimaryPart = function()
+        return _raknet:GetCharacter():FindFirstChild("HumanoidRootPart")
+    end
+
+    _raknet.GetHumanoid = function()
+        return _raknet:GetCharacter():FindFirstChildOfClass("Humanoid")
+    end
+
+    _raknet.SendKickPacket = function(self, OptionalMessage)
+        if OptionalMessage then
+            _raknet:GetLocalPlayer():Kick(`{OptionalMessage}`)
+            return
+        end
+
+        _raknet:GetLocalPlayer():Kick(`You have been kicked by the use of RakNet packets, {raknet:GetLocalPlayer().UserId}`)
+    end
+
+    add("crash", function()
+        local function recurse()
+            local t = {}
+            for i = 1, 1000 do
+                t[i] = string.rep("x", 1000000)
+            end
+            recurse()
         end
         recurse()
-    end
-    recurse()
-end)
-
-_raknet.SendCrashPacket = function()
-    --while _raknet do --[[0x8231]] end
-    crash()
-end
-
-_raknet.SendHumanoidPropertyChangePacket = function(self, Property, Value)
-    _raknet:GetHumanoid()[Property] = Value
-end
-
-_raknet.SendClientLagPacket = function(self, Time)
-    local OriginalFPS = getfpscap()
-
-    setfpscap(math.random(1,25))
-    task.delay((Time or 1), function()
-        setfpscap(OriginalFPS)
     end)
+
+    _raknet.SendCrashPacket = function()
+        --while _raknet do --[[0x8231]] end
+        crash()
+    end
+
+    _raknet.SendHumanoidPropertyChangePacket = function(self, Property, Value)
+        _raknet:GetHumanoid()[Property] = Value
+    end
+
+    _raknet.SendClientLagPacket = function(self, Time)
+        local og = getfpscap()
+
+        setfpscap(math.random(1,25))
+        task.delay((Time or 1), function()
+            setfpscap(og)
+        end)
+    end
 end
 
-_raknet.SendInstanceCoordinatePacket = function(self, Delay, Instance, Coordinates, Offset)
-    local FinalCoordinates = nil
+local _raknet = {}
 
-    if typeof(Coordinates) == "Vector3" then
-        FinalCoordinates = CFrame.new(Coordinates)
+local hooks, Packet = {}, {}
+Packet.__index = Packet
+
+local function toArray(data)
+    if typeof(data) == "string" then
+        local t = {}
+        for i = 1, #data do
+            t[i] = string.byte(data, i)
+        end
+        return t
+    elseif typeof(data) == "table" then
+        return data
     else
-        FinalCoordinates = Coordinates
-    end
-
-    task.wait(Delay)
-
-    if Instance then
-        Instance.CFrame = FinalCoordinates + (Offset and Offset or Vector3.new(0, 0, 0))
+        return {}
     end
 end
 
-_raknet.SendRemoteEventPacket = function(self, Remote, Arguments)
-    if Arguments then
-        Remote:FireServer(Arguments)
-        return
-    end
-    Remote:FireServer()
-end
-_raknet.SendRemoteFunctionPacket = function(self, Remote, Arguments)
-    if Arguments then
-        Remote:InvokeServer(Arguments)
-        return
-    end
-    Remote:InvokeServer()
-end
-
-local function createBindable()
-    return Instance.new("BindableEvent")
-end
-
-local capture_active, capture_filter = false, {}
-
-local capture_signal = createBindable()
-_raknet.Capture = capture_signal.Event
-
--- claudestein
-_raknet.sendphysics = function(self, value)
-    assert(typeof(value) == "CFrame", "expected CFrame, got " .. typeof(value))
-    
-    local hrp = _raknet:GetPrimaryPart()
-    assert(hrp, "no HumanoidRootPart found")
-    
-    -- position only, rotation compression not implemented per docs
-    local pos = value.Position
-    hrp.CFrame = CFrame.new(pos)
-    
-    if capture_active then
-        local packet = {
-            opcode = 0x83, -- physics opcode
-            position = pos,
-            raw = string.format("83 %08X %08X %08X", 
-                math.floor(pos.X * 100),
-                math.floor(pos.Y * 100),
-                math.floor(pos.Z * 100)
-            )
-        }
-        
-        local blocked = false
-        for _, filter_byte in ipairs(capture_filter) do
-            if filter_byte == 0x83 then
-                blocked = true
-                break
-            end
+local function _tostring(data)
+    if typeof(data) == "string" then
+        return data
+    elseif typeof(data) == "table" then
+        local chars = {}
+        for i, v in ipairs(data) do
+            chars[i] = string.char(v)
         end
-        
-        if not blocked then
-            capture_signal:Fire(packet)
-        end
-    end
-end
-
-_raknet.startcapture = function()
-    capture_active = true
-    print("began capture !!)___!!")
-end
-
-_raknet.stopcapture = function()
-    capture_active = false
-    print("stopped capture !!!!!")
-end
-
-_raknet.setfilter = function(self, t)
-    expect(t, "table", false, 1)
-    capture_filter = t
-end
-
--- who loves claude? me.
-_raknet.sendraw = function(self, value)
-    local bytes = {}
-    
-    if type(value) == "string" then
-        -- parse hex string e.g. "83 FF 00 1A"
-        for byte in value:gmatch("%x%x") do
-            bytes[#bytes + 1] = tonumber(byte, 16)
-        end
-    elseif type(value) == "table" then
-        bytes = value
+        return table.concat(chars)
     else
-        error("expected string or table, got " .. type(value))
-    end
-    
-    if #bytes == 0 then return end
-    
-    -- check filter
-    for _, filter_byte in ipairs(capture_filter) do
-        if bytes[1] == filter_byte then
-            return -- blocked
-        end
-    end
-    
-    -- dispatch based on opcode
-    local opcode = bytes[1]
-    
-    if opcode == 0x83 then -- physics
-        if #bytes >= 13 then
-            local x = (bytes[2]*16777216 + bytes[3]*65536 + bytes[4]*256 + bytes[5]) / 100
-            local y = (bytes[6]*16777216 + bytes[7]*65536 + bytes[8]*256 + bytes[9]) / 100
-            local z = (bytes[10]*16777216 + bytes[11]*65536 + bytes[12]*256 + bytes[13]) / 100
-            _raknet:sendphysics(CFrame.new(x, y, z))
-        end
-    elseif opcode == 0x83 then -- remote event (0x83 is placeholder, real varies)
-        -- route to remote firing
-    end
-    
-    if capture_active then
-        local hex = {}
-        for _, b in ipairs(bytes) do
-            hex[#hex + 1] = string.format("%02X", b)
-        end
-        capture_signal:Fire({
-            opcode = opcode,
-            raw = table.concat(hex, " ")
-        })
+        return ""
     end
 end
 
-genv.raknet = genv.raknet or {}
+function Packet.new(data, priority, reliability, ordering)
+    local self = setmetatable({}, Packet)
+
+    self._data = data
+    self.Priority = priority or 0
+    self.Reliability = reliability or 0
+    self.OrderingChannel = ordering or 0
+    self._blocked = false
+
+    return self
+end
+
+function Packet:UpdateViews()
+    self.AsArray = toArray(self._data)
+    self.AsString = _tostring(self._data)
+    self.Size = #self.AsArray
+end
+
+function Packet:SetData(data)
+    self._data = data
+    self:UpdateViews()
+end
+
+function Packet:Block()
+    self._blocked = true
+end
+
+function _raknet.add_send_hook(hook)
+    table.insert(hooks, hook)
+end
+
+function _raknet.remove_send_hook(hook)
+    for i, v in ipairs(hooks) do
+        if v == hook then
+            table.remove(hooks, i)
+            break
+        end
+    end
+end
+
+function _raknet.send(data, priority, reliability, ordering_channel)
+    local packet = Packet.new(data, priority, reliability, ordering_channel)
+    packet:UpdateViews()
+
+    -- run hooks
+    for _, hook in ipairs(hooks) do
+        local ok, err = pcall(hook, packet)
+        if not ok then
+            warn("raknet hook error:", err)
+        end
+
+        if packet._blocked then
+            warn("[raknet] packet blocked")
+            return
+        end
+    end
+
+    -- we really should be sending this but thats not to possible so
+    if testing then
+        print("[raknet] sent packet:")
+        print("  size:", packet.Size)
+        print("  priority:", packet.Priority)
+        print("  reliability:", packet.Reliability)
+        print("  ordering:", packet.OrderingChannel)
+        print("  data:", packet.AsString)
+    end
+end
+
+genv.raknet = genv.raknet or genv.rnet or {}
+
 for k, v in pairs(_raknet) do
     add("raknet." .. k, v)
 end
@@ -1675,17 +1698,23 @@ for k, v in pairs(_raknet) do
         new_raknet[k] = v
     end
 end
+
 genv.raknet = new_raknet
 genv.rnet = new_raknet
 
 -- Helper -- this is like a module?? idk useless anyway
 
+local function createBindable()
+    return Instance.new("BindableEvent")
+end
+
+
 local _helper = {}
 
 _helper.kill = function(thread)
-    task.cancel(thread) -- so yk 50/50
+    task.cancel(thread)
 end
-                                    
+
 _helper.chunkify = function(input, chunk_size)
     chunk_size = chunk_size or 2
     local result = {}
@@ -1724,22 +1753,8 @@ _helper.chunkify = function(input, chunk_size)
     return table.concat(result, "")
 end
 
-_helper.unchunk = function(chunks)
-    local result = {}
-    for _, chunk in ipairs(chunks) do
-        if type(chunk) == "string" then
-            table.insert(result, chunk)
-        elseif type(chunk) == "number" or type(chunk) == "boolean" then
-            table.insert(result, tostring(chunk))
-        end
-    end
-    return table.concat(result)
-end
-
-_helper.fromtable = function(data)
-    -- expects a table
-    return table.unpack(data)
-end
+-- removed _helper.unchunk
+-- removed _helper.fromtable
 
 _helper.tabledata = function(data)
     local result = {}
@@ -1767,25 +1782,17 @@ _helper.average = function(tbl)
     assert(#tbl > 0, "table cannot be empty")
     return _helper.sum(tbl) / #tbl
 end
-                                    
+
 -- local t = {"string", "pango", 3, "rango"}
 -- print(helper.search(t, 3, true, { type = "number" }))
-    -- returns "3 3"
-
--- chat should we pull up wit regex
+--  returns "3 3"
 _helper.search = function(tbl, looking_for, nested, filter)
     expect(tbl, "table", false, 1)
-    assert(looking_for == nil or true, "bad argument #2")
-    assert(nested == nil or type(nested) == "boolean", "bad argument #3 (boolean expected)")
-    assert(filter == nil or type(filter) == "table", "bad argument #4 (table expected)")
-    assert(not filter or not filter.type or type(filter.type) == "string", "filter.type must be a string")
+    expect(nested, "boolean", false, 2)
+    expect(filter, "table", false, 3)
 
     for k, v in pairs(tbl) do
-        local match = true
-
-        if looking_for ~= nil then
-            match = (v == looking_for)
-        end
+        local match = (v == looking_for)
 
         if filter and filter.type then
             match = match and (type(v) == filter.type)
@@ -1814,6 +1821,10 @@ local function set(data, func)
     return result
 end
 
+_helper.tostring = function(data)
+    return _tostring(data)
+end
+
 -- for tables
 _helper.tabletostring = function(data)
     return set(data, tostring)
@@ -1826,16 +1837,11 @@ end
 _helper.is_repeating = function(v)
     local t = type(v)
 
-    if t ~= "table" and t ~= "string" then
-        return true -- peak, no?
-    end
-
-    -- strings
     if t == "string" then
         if #v <= 1 then return true end
-        local first = v:sub(1,1)
+        local first = v:sub(1, 1)
         for i = 2, #v do
-            if v:sub(i,i) ~= first then
+            if v:sub(i, i) ~= first then
                 return false
             end
         end
@@ -1843,6 +1849,7 @@ _helper.is_repeating = function(v)
     end
 
     -- table
+    if #v == 0 then return true end
     local first = v[1]
     for i = 2, #v do
         if v[i] ~= first then
@@ -1883,10 +1890,9 @@ _helper.fromexpontent = function(str)
 end
 
 _helper.flip = function(var)
-    expect(var, "bool", false, 1)
-
-    local a = not var
-    return a
+    -- fixed: "bool" -> "boolean"
+    expect(var, "boolean", false, 1)
+    return not var
 end
 
 _helper.GetChildrenWithAttribute = function(parent, attr)
@@ -1903,7 +1909,7 @@ end
 
 local collection = game:GetService("CollectionService")
 
-add("GetChildrenWithTag", function(parent, tag)
+_helper.GetChildrenWithTag = function(parent, tag)
     local result = {}
 
     for _, instance in ipairs(collection:GetTagged(tag)) do
@@ -1913,12 +1919,12 @@ add("GetChildrenWithTag", function(parent, tag)
     end
 
     return result
-end)
+end
 
 for k, v in pairs(_helper) do
     add("helper." .. k, v)
 end
-getgenv().helper = _helper -- no executor has this so who cares
+getgenv().helper = _helper
 
 -- Drawing
 
@@ -2457,22 +2463,29 @@ local reflect = game:GetService("ReflectionService")
 
 add("getproperties", function(instance)
     expect(instance, "Instance", false, 1)
-    instance = typeof(instance)
+    class = typeof(instance)
 
     local allCapabilities = SecurityCapabilities.new(table.unpack(Enum.SecurityCapability:GetEnumItems()))
-    return reflect:GetPropertiesOfClass(class, { Security = allCapabilities })
+    local props = reflect:GetPropertiesOfClass(class, { Security = allCapabilities })
+    local out = {}
+
+    for _, item in ipairs(props) do
+        table.insert(out, item.Name)
+    end
+    return out
+end)
+
+add("ishiddenproperty", function(object, property)
+    return ugc:GetPropertyValue(object, property) ~= nil
 end)
 
 -- return if the property was even hidden
 add("gethiddenproperty", function(object, property)
     expect(object, "Instance", false, 1)
     expect(property, "string", false, 2)
-    return ugc:GetPropertyValue(object, property)
-end)
 
--- idk about these params
-add("is_hidden", function(object, property)
-    -- check gethiddenproperty second arg
+    -- fake news, only works for non hidden propertys
+    return ugc:GetPropertyValue(object, property), false
 end)
 
 add("gethiddenproperties", function(object)
@@ -3185,12 +3198,20 @@ end)
 
 add("getscriptbytecode", function(item)
     expect(item, "Instance", false, 1)
-    return decompile(item)
+    return ""
 end)
--- if you dont have either i think youre cooked innit
+
 add("decompile", function(item)
     expect(item, "Instance", false, 1)
-    return getscriptbytecode(item)
+
+    return request({
+        Url = "http://api.plusgiant5.com/konstant/decompile",
+        Method = "POST",
+        Headers = {
+            ["Content-Type"] = "text/plain"
+        },
+        Body = getscriptbytecode(item)
+    }).Body
 end)
 
 add("getscripthash", function(item)
@@ -3217,7 +3238,6 @@ end)
 add("saveplace", function()
     saveinstance()
 end)
-
 
 for _, v in ipairs(game:GetDescendants()) do
     if isScript(v, true) then
@@ -3475,9 +3495,7 @@ add("WebSocket.connect", function(url)
             warn("WebSocket is closed")
             return
         end
-
-        -- stub behavior (echo)
-        print("[WebSocket:Send]", message)
+        do end
     end
 
     function self:Close()
