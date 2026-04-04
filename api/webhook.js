@@ -1,3 +1,4 @@
+// who cares ig
 const webhooks = {
   1087852616: "https://discord.com/api/webhooks/1387246480410148978/qD8vaCCGaXF7kxJ8QfmexV9N7Euq4omaaoWRrTlExf8FJQuAuS-hAr80sO92le3Jg8Z7",
   105938112304055: "https://discord.com/api/webhooks/1422373646013431828/HyqRzqTB787PqUj64ZYrOj7I17F-rJsIklH5AirX3-NHdayZK4b8p5d8Dx3i9K8YNzs-",
