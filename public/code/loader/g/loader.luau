@@ -12,7 +12,7 @@ local games = {
 local found = games[_game] or "unknown"
 if found ~= "unknown" then
     local url = "https://website-iota-ivory-12.vercel.app/code/games/" .. found .. "/main.luau"
-    setclipboard(url)
+    --setclipboard(url)
     loadstring(game:HttpGet(url))()
 
     local payload = {
