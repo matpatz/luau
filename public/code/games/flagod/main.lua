@@ -1,11 +1,10 @@
 local rep = game:GetService("ReplicatedStorage")
-local FlagsModule = require(rep.Packages.GameData.Flags)
-local FlagsService = rep.Packages.Knit.Services.FlagsService
+local flagmod = require(rep.Packages.GameData.Flags)
+local flags = rep.Packages.Knit.Services.FlagsService
 
 local SolveRemote = FlagsService.RF.Solve
-local TriggerEvent = FlagsService.RE.TriggerGameSolution
 
-TriggerEvent.OnClientEvent:Connect(function(eventType, data)
+flags.RE.TriggerGameSolution.OnClientEvent:Connect(function(eventType, data)
 	task.wait(tonumber(getgenv().timer))
     if eventType ~= "ShowFlag" then return end
 
@@ -13,7 +12,7 @@ TriggerEvent.OnClientEvent:Connect(function(eventType, data)
     local difc = data.Rarity or "Cakewalk"
     local countryName
 
-    for _, flag in ipairs(FlagsModule[difc] or {}) do
+    for _, flag in ipairs(flagmod[difc] or {}) do
         if flag.ImageId == imageId then
             countryName = flag.CountryName
             break
