@@ -2386,7 +2386,7 @@ end)
 
 add("isnetworkowner", function(part)
     assert(typeof(part) == "Instance" and part:IsA("BasePart"), "expected BasePart, got " .. typeof(part))
-    return part:GetNetworkOwner() == lp -- only called by the server
+    return gethiddenproperty(part, "NetworkOwnerV3")
 end)
 
 add("getcallbackvalue", function(obj, property)
