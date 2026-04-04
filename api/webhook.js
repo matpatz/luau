@@ -16,35 +16,30 @@ export default async function handler(req, res) {
   }
 
   try {
-    const body = typeof req.body === "string"
-      ? JSON.parse(req.body)
-      : req.body || {};
+    // Force parse if it's a string
+    let body = req.body;
+    if (typeof body === "string") {
+      body = JSON.parse(body);
+    }
 
-    const username = body.username;
-    const executor = body.executor;
-    const gname = body.gname;
-    const placeid = body.placeid;
-
+    const { username, executor, gname, placeid } = body;
     const webhookUrl = webhooks[String(placeid)];
 
     if (!webhookUrl) {
-      console.log("no webhook for:", placeid);
       return res.status(400).json({ ok: false });
     }
 
-    const msg = {
-      content: `Username: ${username} | Executor: ${executor} | Game: ${gname} | PlaceId: ${placeid}`
-    };
-
-    const r = await fetch(webhookUrl, {
+    await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(msg)
+      body: JSON.stringify({
+        content: `Username: ${username} | Executor: ${executor} | Game: ${gname} | PlaceId: ${placeid}`
+      })
     });
 
-    return res.status(200).json({ ok: true, status: r.status });
+    return res.status(200).json({ ok: true });
   } catch (e) {
-    console.error("err:", e);
-    return res.status(500).json({ ok: false });
+    console.error("Error:", e);
+    return res.status(500).json({ ok: false, error: e.message });
   }
 }
