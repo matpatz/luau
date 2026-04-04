@@ -3150,6 +3150,7 @@ add("runanimation", function(anim)
     playanimation(anim)
 end)
 
+-- limited to actual math.pi but ya
 add("pi", function(wanted)
     local str = tostring(math.pi)
     local output = {}
