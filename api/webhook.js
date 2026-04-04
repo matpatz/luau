@@ -1,7 +1,7 @@
 // who cares ig
 const webhooks = {
     // lucky block
-    "106931261124996": "https://discord.com/api/webhooks/1422373646013431828/HyqRzqTB787PqUj64ZYrOj7I17F-rJsIklH5AirX3-NHdayZK4b8p5d8Dx3i9K8YNzs-",
+    "662417684": "https://discord.com/api/webhooks/1489794802097852618/rS50RLlVMw3_7Lj5RFuPI5fNGaLwsyoc7c7NBf2Jnua8RzJg2x3QvD-qb9E3MtezdXfQ",
     // prospecting
     "129827112113663": "https://discord.com/api/webhooks/1422374009600741430/NFfvcty5NZPHOH4_sUZCJkOjz7n_99W3FMqlvSZkNout4Rb1Yb-n2WDYmRZllJMpfFPi",
     // answer or die
