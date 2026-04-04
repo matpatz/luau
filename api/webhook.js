@@ -13,17 +13,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    const secret = req.headers["x-webhook-secret"];
-    if (process.env.WH_SECRET && secret !== process.env.WH_SECRET) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
     const { username, executor, placeId, game } = req.body || {};
 
-    if (!placeId) return res.status(400).json({ error: "Missing placeId" });
-
     const webhookUrl = webhooks[placeId];
-    if (!webhookUrl) return res.status(400).json({ error: "Unsupported PlaceId" });
+    if (!webhookUrl) {
+      return res.status(400).json({ error: "No webhook for this placeId" });
+    }
 
     const payload = {
       content: `Username: ${username} | Executor: ${executor} | Game: ${game} | PlaceId: ${placeId}`
