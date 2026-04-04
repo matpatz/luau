@@ -4,6 +4,7 @@ local lp = game:GetService("Players").LocalPlayer
 local payload = {
     lp.Name,
     lp.UserId,
+    identifyexecutor(),
     game:GetService("MarketplaceService"):GetProductInfo(_game).Name) or "Unknown",
     _game
 }
