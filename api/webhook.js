@@ -16,7 +16,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { username, executor, placeId, game } = req.body || {};
+    const { username, executor, placeId, gname } = req.body || {};
 
     const webhookUrl = webhooks[placeId];
     if (!webhookUrl) {
@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     }
 
     const payload = {
-      content: `Username: ${username} | Executor: ${executor} | Game: ${game} | PlaceId: ${placeId}`
+      content: `Username: ${username} | Executor: ${executor} | Game: ${gname} | PlaceId: ${placeId}`
     };
 
     const response = await fetch(webhookUrl, {
