@@ -71,6 +71,10 @@ local function expect(got, expected, care_about_value, arg_num, message)
     end
 end
 
+local services = {
+    RunService = game:GetService("RunService")
+}
+
 -- termexec (terminal)
 
 -- probbaly wont work so you have to manually download it
@@ -316,6 +320,7 @@ add("isexecutorclosure", function(func)
 
     return false
 end)
+-- isexecutorthread idk
 
 -- no longer do i use this
     -- it isnt persay impossible to implement loadstring but i just dont rlly want to soooo you get a bad version
@@ -2641,12 +2646,36 @@ add("setrbxclipboard", function(data)
     expect(data, "string", false, 1)
 end)
 
-add("getrendersteppedlist", function()
-    return {}
+local tracked = {} -- highkey needs autoexec or its basically useless
+local old; old = hookfunction(services["RunService"].BindToRenderStep, function(self, name, priority, fn)
+    tracked[name] = {
+        Function = fn,
+        Priority = priority,
+        FromExecutor = isexecutorclosure(fn) -- or uhm checkcaller
+    }
+
+    return old(self, name, priority, fn)
 end)
 
-add("replicatesignal", function(signal, ...)
+add("getrendersteppedlist", function(shouldexec)
+    local output = {}
+
+    for name, data in pairs(tracked) do
+        if shouldexec then
+            output[name] = data -- returns all items
+        else
+            if data.FromExecutor == false then
+                output[name] = data
+            end
+        end
+    end
+    return output
+end)
+
+add("replicatesignal", function(signal)
     assert(typeof(signal) == "RBXScriptSignal", "expected RBXScriptSignal, got " .. typeof(signal))
+
+    firesignal(signal)
 end)
 
 -- Metatable
@@ -3050,7 +3079,7 @@ add("get_queued_teleport", function()
     return oqueue
 end)
 
-add("restet_queuedteleport", function()
+add("reset_queuedteleport", function()
     oqueue = ""
 end)
 
