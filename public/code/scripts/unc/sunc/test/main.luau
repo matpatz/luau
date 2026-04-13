@@ -1,4 +1,4 @@
-local time = tick()
+local time = tick and tick() or 0
 local tcount, sunc, failed = 0, 0, 0
 
 local searchable, tests = {}, {}
@@ -39,6 +39,8 @@ local function sendTest(item, result, extra, emsg)
 
     print(out)
 end
+
+local getgenv = getgenv and getgenv or getfenv
 
 getgenv().search = function(search)
     for _, item in pairs(searchable) do
@@ -378,7 +380,7 @@ do
     sendTest(test, success and result == true)
 end
 
-local encoding = game:GetService("EncodingService")
+--local encoding = game:GetService("EncodingService")
 do
     local test = "crypt.base64encode: known encoding"
 
@@ -464,11 +466,7 @@ do
     sendTest(test, success and result == true)
 end
 
--- ============================================================
--- DEBUG
--- ============================================================
-
-print("\n========== DEBUG ==========\n")
+print(wrap("Debug"))
 
 -- debug.getregistry
 do
@@ -664,11 +662,7 @@ do
     sendTest(test, success and result == true)
 end
 
--- ============================================================
--- DRAWING
--- ============================================================
-
-print("\n========== DRAWING ==========\n")
+print(wrap("Drawing"))
 
 -- Drawing.new
 do
@@ -791,18 +785,14 @@ do
     sendTest(test, success and result == true)
 end
 
--- ============================================================
--- FILE SYSTEM
--- ============================================================
-
-print("\n========== FILE SYSTEM ==========\n")
+print(wrap("File System"))
 
 -- writefile / readfile
 do
     local test = "writefile/readfile: roundtrip preserves data"
     local success, result = pcall(function()
-        local path = "potassium_test_file.txt"
-        local data = "Hello, Potassium!"
+        local path = rname(12) .. ".txt"
+        local data = rname(12)
         writefile(path, data)
         local read = readfile(path)
         delfile(path)
@@ -815,12 +805,14 @@ end
 do
     local test = "appendfile: appends data to file"
     local success, result = pcall(function()
-        local path = "potassium_test_append.txt"
+        local path = rname(12)
+        local suffix = rname(4)
         writefile(path, "Hello")
-        appendfile(path, ", World!")
+        local append = ", World!" .. suffix
+        appendfile(path, append)
         local read = readfile(path)
         delfile(path)
-        return read == "Hello, World!"
+        return read == "Hello, World!" .. suffix
     end)
     sendTest(test, success and result == true)
 end
@@ -932,14 +924,11 @@ do
     end)
     sendTest(test, success and result == true)
 end
-
--- ============================================================
--- INPUT
--- ============================================================
-
-print("\n========== INPUT ==========\n")
+    
+print(wrap("Input"))
 
 -- isrbxactive
+-- TODO : Fix this test
 do
     local test = "isrbxactive: returns a boolean"
     local success, result = pcall(function()
@@ -1005,11 +994,7 @@ do
     sendTest(test, success and result == true)
 end
 
--- ============================================================
--- INSTANCE
--- ============================================================
-
-print("\n========== INSTANCE ==========\n")
+print(wrap("Instance"))
 
 -- fireclickdetector
 do
@@ -1258,11 +1243,7 @@ do
     sendTest(test, success and result == true)
 end
 
--- ============================================================
--- METATABLE
--- ============================================================
-
-print("\n========== METATABLE ==========\n")
+print(wrap("Metatable"))
 
 -- getrawmetatable
 do
@@ -1346,11 +1327,7 @@ do
     sendTest(test, success and result == true)
 end
 
--- ============================================================
--- MISCELLANEOUS
--- ============================================================
-
-print("\n========== MISCELLANEOUS ==========\n")
+print(wrap("Misc"))
 
 -- identifyexecutor
 do
@@ -1473,11 +1450,7 @@ do
     sendTest(test, success and result == true)
 end
 
--- ============================================================
--- SCRIPTS
--- ============================================================
-
-print("\n========== SCRIPTS ==========\n")
+print(wrap("Instance"))
 
 -- getgc
 do
@@ -1515,11 +1488,39 @@ end
 do
     local test = "getgenv: setting a value persists"
     local success, result = pcall(function()
-        getgenv().__potassium_test = "test_value"
-        return getgenv().__potassium_test == "test_value"
+        getgenv().__test = "test_value"
+        getgenv().__test_func = function(...) return "value_test" end
+
+        local yay = getgenv().__test == "test_value" and getgenv().__test_func() == "value_test"
+        return yay
     end)
     sendTest(test, success and result == true)
-    getgenv().__potassium_test = nil
+    getgenv().__test = nil; getgenv().__test_func = nil
+end
+
+do
+    local test = "getgenv: setting a value to nil, then it not being accessible"
+    local success, result = pcall(function()
+        return getgenv().__test == nil and getgenv().__test_func == nil
+    end)
+    sendTest(test, success and result == true)
+end
+
+do
+    local test = "getgenv: changing an executor function to nil then testing if it is usable"
+    local success, result = pcall(function()
+        getgenv()["loadstring"] = nil
+        return getgenv().loadstring("return 12") == 12
+    end)
+    sendTest(test, success and result == true)
+end
+do
+    local test = "getgenv: making sure getgenv is not simply getfenv"
+    local success, result = pcall(function()
+        getgenv().lebronjames = true
+        return getgenv == getfenv and getfenv().lebronjames ~= true
+    end)
+    sendTest(test, success and result == true)
 end
 
 -- getrenv
@@ -1660,11 +1661,7 @@ do
     sendTest(test, success and result == true)
 end
 
--- ============================================================
--- WEBSOCKETS
--- ============================================================
-
-print("\n========== WEBSOCKETS ==========\n")
+print(wrap("WebSockets"))
 
 do
     local test = "WebSocket.connect: exists and is callable"
@@ -1674,11 +1671,7 @@ do
     sendTest(test, success and result == true)
 end
 
--- ============================================================
--- ACTOR
--- ============================================================
-
-print("\n========== ACTOR ==========\n")
+print(wrap("Actor"))
 
 do
     local test = "getactors: exists and returns table"
@@ -1741,11 +1734,15 @@ do
     sendTest(test, success and result == true)
 end
 
--- ============================================================
--- RESULTS
--- ============================================================
+print(wrap("Oth"))
+print("\nNo Tests\n")
 
-print("\n========== RESULTS ==========\n")
+print(wrap("RackNet / rnet"))
+print("\nNo Tests\n") -- this isnt possible to test so just make it docs -- ill just steal from volt ngl -- link users to my docs on that one website
+
+-- The end
+
+print(wrap("Results"))
 
 print(string.format(
     "Completed the tests with a success rate of %.2f%% (%d/%d; Failed: %d) within %.2f seconds\n\n%s",
@@ -1753,21 +1750,23 @@ print(string.format(
     sunc,
     tcount,
     failed,
-    tick() - time,
-    string.rep("\t", 4) .. "View 'https://docs.sunc.su' for more accurate and detailed results."
+    tick and tick() or 0 - time,
+    string.rep("\t", 4) .. "View 'https://docs.sunc.su' for more accurate and detailed results (not made by me)."
 ))
 
-local gui = Instance.new("ScreenGui")
-gui.Name = rname()
-gui.Parent = gethui() or game.CoreGui
-
-local button = Instance.new("TextButton", gui)
-button.Name = rname()
-button.Text = "Load Extra?"
-button.AnchorPoint = Vector2.new(0.5, 0.5); button.Position = UDim2.fromScale(0.75, 0.5)
-button.Size = UDim2.fromScale(0.1, 0.05)
-Instance.new("UICorner", button).CornerRadius = UDim.new(0.2, 0)
-
-button.Activated:Connect(function()
-    loadstring(game:HttpGet("https://website-iota-ivory-12.vercel.app/code/scripts/unc/sunc/extra.luau"))()
+pcall(function()
+    local gui = Instance.new("ScreenGui")
+    gui.Name = rname()
+    gui.Parent = gethui() or game.CoreGui
+    
+    local button = Instance.new("TextButton", gui)
+    button.Name = rname()
+    button.Text = "Load Extra?"
+    button.AnchorPoint = Vector2.new(0.5, 0.5); button.Position = UDim2.fromScale(0.75, 0.5)
+    button.Size = UDim2.fromScale(0.1, 0.05)
+    Instance.new("UICorner", button).CornerRadius = UDim.new(0.2, 0)
+    
+    button.Activated:Connect(function()
+        loadstring(game:HttpGet("https://website-iota-ivory-12.vercel.app/code/scripts/unc/sunc/extra.luau"))()
+    end)
 end)
