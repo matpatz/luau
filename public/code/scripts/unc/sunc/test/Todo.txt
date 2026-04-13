@@ -1,0 +1,1 @@
+add simple tests like debug.getinfo(func).what == "C" and such
