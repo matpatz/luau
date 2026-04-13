@@ -1,1 +1,2 @@
 add simple tests like debug.getinfo(func).what == "C" and such
+a check to make sure it doesnt have a line count
