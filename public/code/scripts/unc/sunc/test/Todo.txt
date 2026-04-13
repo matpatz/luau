@@ -1,2 +1,8 @@
 add simple tests like debug.getinfo(func).what == "C" and such
 a check to make sure it doesnt have a line count
+
+have like a 'parent' test of all the tests to let users know if the function passed or failed in the form of one test :
+    getgenv : failed -- the overall parent function thing
+    X getgenv: it failed idk
+    ✓ getgenv: it passed
+    X getgenv: it failed again :((
