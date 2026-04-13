@@ -19,12 +19,42 @@
 
 local testing = false
 
+local cclosures = setmetatable({}, {__mode = "k"})
+local function _newc(func)
+    expect(func, "function", false, 1)
+
+    local wrapper = function(...)
+        local args = table.pack(...)
+        local co = coroutine.create(function()
+            return func(table.unpack(args, 1, args.n))
+        end)
+
+        local ok, res = coroutine.resume(co)
+        if not ok then
+            error(res, 2)
+        end
+
+        return res
+    end
+
+    cclosures[wrapper] = true
+    custom_closures[func] = true
+
+    debug_override[wrapper] = {
+        source = "[C]",
+        short_src = "[C]",
+    }
+
+    return wrapper
+end
+local newcclosure = newcclosure and newcclosure or _newc
+
 local functions = {}; local check2add = 0
 local function add(name, func, expect)
     check2add += 1
     -- print("Checking :", name, tostring(func) .. "\t".. c)
 
-    functions[name] = func
+    functions[name] = newcclosure(func) -- we now save it as a C closure or maybe be dont
 end
 local genv = getgenv()
 local function index(tofind) -- i dont think i use this idk
@@ -364,35 +394,11 @@ add("loadstring", function(source, chunkname)
 end)
 --if getrenv and not getrenv().loadstring then getrenv().loadstring = genv.loadstring end
 
-local cclosures = setmetatable({}, {__mode = "k"})
-
 local custom_closures = {}
 add("newcclosure", function(func) -- TODO : fix - for half decent iscclosure it will return false
     expect(func, "function", false, 1)
 
-    local wrapper = function(...)
-        local args = table.pack(...)
-        local co = coroutine.create(function()
-            return func(table.unpack(args, 1, args.n))
-        end)
-
-        local ok, res = coroutine.resume(co)
-        if not ok then
-            error(res, 2)
-        end
-
-        return res
-    end
-
-    cclosures[wrapper] = true
-    custom_closures[func] = true
-
-    debug_override[wrapper] = {
-        source = "[C]",
-        short_src = "[C]",
-    }
-
-    return wrapper
+    return _newc()
 end)
 
 add("isnewcclosure", function(func)
