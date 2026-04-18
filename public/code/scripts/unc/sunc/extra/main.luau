@@ -1723,7 +1723,7 @@ end
 
 -- raknet wrapper
 if raknet then
-    loadstring(game:HttpGet("https://github.com/xaviersupreme/raknet-wrapper/blob/main/raknet.luau"))()
+    loadstring(game:HttpGet("https://github.com/xaviersupreme/raknet-wrapper/raw/main/raknet.luau"))()
 end
 
 genv.raknet = genv.raknet or genv.rnet or {}
@@ -1751,7 +1751,6 @@ genv.rnet = new_raknet
 local function createBindable()
     return Instance.new("BindableEvent")
 end
-
 
 local _helper = {}
 
@@ -1934,7 +1933,6 @@ _helper.fromexpontent = function(str)
 end
 
 _helper.flip = function(var)
-    -- fixed: "bool" -> "boolean"
     expect(var, "boolean", false, 1)
     return not var
 end
@@ -2450,8 +2448,8 @@ add("fireproximityprompt", function(prompt, triggered, hold)
     end
     firesignal(prompt, signal)
 end)
-local signal_store = setmetatable({}, {__mode = "k"})
 
+local signal_store = setmetatable({}, {__mode = "k"})
 add("getconnections", function(signal)
     assert(typeof(signal) == "RBXScriptSignal", "expected RBXScriptSignal, got " .. typeof(signal))
     return signal_store[signal] or {}
@@ -3262,7 +3260,7 @@ add("getscriptthread", function()
 end)
 -- no clue
 add("getallthreads", function()
-    return table.create(coroutine.running(), math.random(1, 32))
+    return table.create(math.random(1, 32), coroutine.running())
 end)
 
 add("getscriptbytecode", function(item)
