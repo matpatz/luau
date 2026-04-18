@@ -107,6 +107,7 @@ local function expect(got, expected, care_about_value, arg_num, message)
 end
 
 local services = {
+    CoreGui = gethui and gethui() or game:GetService("CoreGui"),
     RunService = game:GetService("RunService")
 }
 
@@ -270,7 +271,8 @@ add("clonefunction", function(func)
 end)
 
 add("getcallingscript", function()
-    return Instance.new("LocalScript", workspace) -- PEA .. string.rep("K", 12)
+    local s = debug.info(1, 's')
+    return table.find(game:GetDescendants(), s)
 end)
 
 local tback_ignore = setmetatable({}, {__mode = "k"})
@@ -624,443 +626,99 @@ _crypt.base64decode = function(data)
     return table.concat(out)
 end
 
--- AES is WAY to hard -- and the codes ugly for it
-_crypt.encrypt = function(data, key)
-    expect(data, "string", false, 1)
-    expect(key, "string", false, 2)
-    assert(#key > 0, "key cannot be empty")
-    local out = {}
-    local klen = #key
+local AES = loadstring(game:HttpGet("https://github.com/daily3014/rbx-cryptography/raw/main/src/Encryption/AES.luau"))()
 
-    for i = 1, #data do
-        local d = string.byte(data, i)
-        local k = string.byte(key, ((i - 1) % klen) + 1)
-        out[i] = string.char(bxor(d, k))
-    end
+local function buf(s) return buffer.fromstring(s) end
+local function str(b) return buffer.tostring(b) end
 
-    return table.concat(out)
+local function b64(v)
+    local ok, res = pcall(crypt.base64decode, v)
+    return (ok and type(res) == "string") and res or v
 end
 
-_crypt.decrypt = _crypt.encrypt -- <<>> = sourcey
+_crypt.encrypt = function(data, key, iv)
+    assert(type(data) == "string", "data must be string")
 
-_crypt.generatebytes = function(len)
-    expect(len, "number", false, 1)
-    assert(len > 0, "length must be greater than 0")
-    local t = {}
-    for i = 1, len do
-        t[i] = string.char(math.random(0, 255))
+    local keyBuf = buf(b64(key))
+    local ivRaw = iv or crypt.generatebytes(12)
+    local ivBuf = buf(b64(ivRaw))
+
+    local cipher, tag = AES.Encrypt(buf(data), keyBuf, ivBuf)
+
+    cipher = str(cipher)
+    tag = str(tag)
+
+    if crypt.base64encode then
+        cipher = crypt.base64encode(cipher)
+        tag = crypt.base64encode(tag)
+        ivRaw = crypt.base64encode(ivRaw)
     end
-    return table.concat(t)
+
+    return cipher, ivRaw, tag
 end
 
-_crypt.generatekey = function()
-    local bytes = table.create(32)
+_crypt.decrypt = function(ciphertext, key, iv, tag)
+    assert(type(ciphertext) == "string", "ciphertext must be string")
+    assert(type(key) == "string", "key must be string")
+    assert(type(iv) == "string", "iv must be string")
+    assert(type(tag) == "string", "tag must be string")
 
+    local keyBuf = buf(b64(key))
+    local ivBuf = buf(b64(iv))
+    local tagBuf = buf(b64(tag))
+
+    local ok, plain = AES.Decrypt(buf(b64(ciphertext)), keyBuf, ivBuf, tagBuf)
+
+    if not ok then
+        return false, nil
+    end
+
+    return true, str(plain)
+end
+
+local rng = Random.new()
+
+_crypt.generatebytes = function(size)
+    assert(type(size) == "number" and size > 0, "invalid size")
+
+    local t = table.create(size)
+
+    for i = 1, size do
+        t[i] = string.char(rng:NextInteger(0,255))
+    end
+
+    local raw = table.concat(t)
+
+    if crypt.base64encode then
+        return crypt.base64encode(raw)
+    end
+
+    return raw
+end
+
+function crypt.generatekey()
+    local raw
+
+    local rng = Random.new()
+    local t = table.create(32)
     for i = 1, 32 do
-        bytes[i] = string.char(math.random(0,255))
+        t[i] = string.char(rng:NextInteger(0,255))
+    end
+    raw = table.concat(t)table.concat(t)
+
+    if crypt.base64encode then
+        return crypt.base64encode(raw)
     end
 
-    local raw = table.concat(bytes)
-    return _crypt.base64encode(raw)
+    return raw
 end
 
--- thanks claude
+local hash = loadstring(game:HttpGet("https://github.com/Egor-Skriptunoff/pure_lua_SHA/raw/master/sha2.lua"))()
 _crypt.hash = function(str, algorithm)
+    expect(str, "string", false, 1)
     algorithm = (algorithm or "sha256"):lower()
 
-    -- Helper functions for SHA-2 family
-    local function rotr(x, n)
-        return bxor(rshift(x, n), lshift(x, 32 - n))
-    end
-
-    -- SHA-256 (already implemented)
-    if algorithm == "sha256" then
-        local K = {
-            0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
-            0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
-            0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
-            0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
-            0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
-            0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
-            0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
-            0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
-        }
-
-        local H0 = 0x6a09e667
-        local H1 = 0xbb67ae85
-        local H2 = 0x3c6ef372
-        local H3 = 0xa54ff53a
-        local H4 = 0x510e527f
-        local H5 = 0x9b05688c
-        local H6 = 0x1f83d9ab
-        local H7 = 0x5be0cd19
-
-        local msg = str
-        local bitLen = #msg * 8
-
-        msg = msg .. "\128"
-        while (#msg % 64) ~= 56 do
-            msg = msg .. "\0"
-        end
-
-        for i = 7,0,-1 do
-            msg = msg .. string.char(band(rshift(bitLen,i*8),255))
-        end
-
-        for i = 1,#msg,64 do
-            local w = {}
-
-            for j = 0,15 do
-                local a,b,c,d = msg:byte(i+j*4,i+j*4+3)
-                w[j] = lshift(a,24) + lshift(b,16) + lshift(c,8) + d
-            end
-
-            for j = 16,63 do
-                local s0 = bxor(rrotate(w[j-15],7), rrotate(w[j-15],18), rshift(w[j-15],3))
-                local s1 = bxor(rrotate(w[j-2],17), rrotate(w[j-2],19), rshift(w[j-2],10))
-                w[j] = (w[j-16] + s0 + w[j-7] + s1) % 4294967296
-            end
-
-            local a = H0
-            local b = H1
-            local c = H2
-            local d = H3
-            local e = H4
-            local f = H5
-            local g = H6
-            local h = H7
-
-            for j = 0,63 do
-                local S1 = bxor(rrotate(e,6), rrotate(e,11), rrotate(e,25))
-                local ch = bxor(band(e,f), band(bit32.bnot(e),g))
-                local temp1 = (h + S1 + ch + K[j+1] + w[j]) % 4294967296
-
-                local S0 = bxor(rrotate(a,2), rrotate(a,13), rrotate(a,22))
-                local maj = bxor(band(a,b), band(a,c), band(b,c))
-                local temp2 = (S0 + maj) % 4294967296
-
-                h = g
-                g = f
-                f = e
-                e = (d + temp1) % 4294967296
-                d = c
-                c = b
-                b = a
-                a = (temp1 + temp2) % 4294967296
-            end
-
-            H0 = (H0 + a) % 4294967296
-            H1 = (H1 + b) % 4294967296
-            H2 = (H2 + c) % 4294967296
-            H3 = (H3 + d) % 4294967296
-            H4 = (H4 + e) % 4294967296
-            H5 = (H5 + f) % 4294967296
-            H6 = (H6 + g) % 4294967296
-            H7 = (H7 + h) % 4294967296
-        end
-
-        return string.format("%08x%08x%08x%08x%08x%08x%08x%08x",
-            H0,H1,H2,H3,H4,H5,H6,H7
-        )
-
-    -- SHA-224
-    elseif algorithm == "sha224" then
-        local K = {
-            0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
-            0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
-            0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
-            0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
-            0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
-            0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
-            0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
-            0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
-        }
-
-        local H0 = 0xc1059ed8
-        local H1 = 0x367cd507
-        local H2 = 0x3070dd17
-        local H3 = 0xf70e5939
-        local H4 = 0xffc00b31
-        local H5 = 0x68581511
-        local H6 = 0x64f98fa7
-        local H7 = 0xbefa4fa4
-
-        local msg = str
-        local bitLen = #msg * 8
-
-        msg = msg .. "\128"
-        while (#msg % 64) ~= 56 do
-            msg = msg .. "\0"
-        end
-
-        for i = 7,0,-1 do
-            msg = msg .. string.char(band(rshift(bitLen,i*8),255))
-        end
-
-        for i = 1,#msg,64 do
-            local w = {}
-
-            for j = 0,15 do
-                local a,b,c,d = msg:byte(i+j*4,i+j*4+3)
-                w[j] = lshift(a,24) + lshift(b,16) + lshift(c,8) + d
-            end
-
-            for j = 16,63 do
-                local s0 = bxor(rrotate(w[j-15],7), rrotate(w[j-15],18), rshift(w[j-15],3))
-                local s1 = bxor(rrotate(w[j-2],17), rrotate(w[j-2],19), rshift(w[j-2],10))
-                w[j] = (w[j-16] + s0 + w[j-7] + s1) % 4294967296
-            end
-
-            local a = H0
-            local b = H1
-            local c = H2
-            local d = H3
-            local e = H4
-            local f = H5
-            local g = H6
-            local h = H7
-
-            for j = 0,63 do
-                local S1 = bxor(rrotate(e,6), rrotate(e,11), rrotate(e,25))
-                local ch = bxor(band(e,f), band(bit32.bnot(e),g))
-                local temp1 = (h + S1 + ch + K[j+1] + w[j]) % 4294967296
-
-                local S0 = bxor(rrotate(a,2), rrotate(a,13), rrotate(a,22))
-                local maj = bxor(band(a,b), band(a,c), band(b,c))
-                local temp2 = (S0 + maj) % 4294967296
-
-                h = g
-                g = f
-                f = e
-                e = (d + temp1) % 4294967296
-                d = c
-                c = b
-                b = a
-                a = (temp1 + temp2) % 4294967296
-            end
-
-            H0 = (H0 + a) % 4294967296
-            H1 = (H1 + b) % 4294967296
-            H2 = (H2 + c) % 4294967296
-            H3 = (H3 + d) % 4294967296
-            H4 = (H4 + e) % 4294967296
-            H5 = (H5 + f) % 4294967296
-            H6 = (H6 + g) % 4294967296
-            H7 = (H7 + h) % 4294967296
-        end
-
-        return string.format("%08x%08x%08x%08x%08x%08x%08x",
-            H0,H1,H2,H3,H4,H5,H6
-        )
-
-    -- SHA-1 (already implemented)
-    elseif algorithm == "sha1" then
-        local function lrotate(x, n)
-            return bxor(lshift(x, n), rshift(x, 32 - n))
-        end
-
-        local h0 = 0x67452301
-        local h1 = 0xEFCDAB89
-        local h2 = 0x98BADCFE
-        local h3 = 0x10325476
-        local h4 = 0xC3D2E1F0
-
-        local msg = str
-        local bitLen = #msg * 8
-
-        msg = msg .. "\128"
-        while (#msg % 64) ~= 56 do
-            msg = msg .. "\0"
-        end
-
-        for i = 7,0,-1 do
-            msg = msg .. string.char(band(rshift(bitLen,i*8),255))
-        end
-
-        for i = 1,#msg,64 do
-            local w = {}
-
-            for j = 0,15 do
-                local a,b,c,d = msg:byte(i+j*4,i+j*4+3)
-                w[j] = lshift(a,24) + lshift(b,16) + lshift(c,8) + d
-            end
-
-            for j = 16,79 do
-                w[j] = lrotate(bxor(w[j-3], w[j-8], w[j-14], w[j-16]),1)
-            end
-
-            local a = h0
-            local b = h1
-            local c = h2
-            local d = h3
-            local e = h4
-
-            for j = 0,79 do
-                local f, k
-
-                if j <= 19 then
-                    f = bit32.bor(band(b,c), band(bit32.bnot(b),d))
-                    k = 0x5A827999
-                elseif j <= 39 then
-                    f = bxor(b,c,d)
-                    k = 0x6ED9EBA1
-                elseif j <= 59 then
-                    f = bit32.bor(bit32.bor(band(b,c), band(b,d)), band(c,d))
-                    k = 0x8F1BBCDC
-                else
-                    f = bxor(b,c,d)
-                    k = 0xCA62C1D6
-                end
-
-                local temp = (lrotate(a,5) + f + e + k + w[j]) % 4294967296
-                e = d
-                d = c
-                c = lrotate(b,30)
-                b = a
-                a = temp
-            end
-
-            h0 = (h0 + a) % 4294967296
-            h1 = (h1 + b) % 4294967296
-            h2 = (h2 + c) % 4294967296
-            h3 = (h3 + d) % 4294967296
-            h4 = (h4 + e) % 4294967296
-        end
-
-        return string.format("%08x%08x%08x%08x%08x", h0,h1,h2,h3,h4)
-
-    -- MD5
-    elseif algorithm == "md5" then
-        local function F(x, y, z) return bit32.bor(band(x, y), band(bit32.bnot(x), z)) end
-        local function G(x, y, z) return bit32.bor(band(x, z), band(y, bit32.bnot(z))) end
-        local function H(x, y, z) return bxor(x, y, z) end
-        local function I(x, y, z) return bxor(y, bit32.bor(x, bit32.bnot(z))) end
-
-        local function leftrotate(x, c)
-            return bit32.bor(lshift(x, c), rshift(x, 32 - c))
-        end
-
-        local s = {
-            7, 12, 17, 22,  7, 12, 17, 22,  7, 12, 17, 22,  7, 12, 17, 22,
-            5,  9, 14, 20,  5,  9, 14, 20,  5,  9, 14, 20,  5,  9, 14, 20,
-            4, 11, 16, 23,  4, 11, 16, 23,  4, 11, 16, 23,  4, 11, 16, 23,
-            6, 10, 15, 21,  6, 10, 15, 21,  6, 10, 15, 21,  6, 10, 15, 21
-        }
-
-        local K = {}
-        for i = 0, 63 do
-            K[i] = math.floor(math.abs(math.sin(i + 1)) * 4294967296)
-        end
-
-        local a0 = 0x67452301
-        local b0 = 0xefcdab89
-        local c0 = 0x98badcfe
-        local d0 = 0x10325476
-
-        local msg = str
-        local bitLen = #msg * 8
-
-        msg = msg .. "\128"
-        while (#msg % 64) ~= 56 do
-            msg = msg .. "\0"
-        end
-
-        for i = 0, 7 do
-            msg = msg .. string.char(band(rshift(bitLen, i * 8), 255))
-        end
-
-        for chunk = 1, #msg, 64 do
-            local M = {}
-            for j = 0, 15 do
-                local a, b, c, d = msg:byte(chunk + j * 4, chunk + j * 4 + 3)
-                M[j] = d * 16777216 + c * 65536 + b * 256 + a
-            end
-
-            local A = a0
-            local B = b0
-            local C = c0
-            local D = d0
-
-            for i = 0, 63 do
-                local F_val, g
-
-                if i <= 15 then
-                    F_val = F(B, C, D)
-                    g = i
-                elseif i <= 31 then
-                    F_val = G(B, C, D)
-                    g = (5 * i + 1) % 16
-                elseif i <= 47 then
-                    F_val = H(B, C, D)
-                    g = (3 * i + 5) % 16
-                else
-                    F_val = I(B, C, D)
-                    g = (7 * i) % 16
-                end
-
-                F_val = (F_val + A + K[i] + M[g]) % 4294967296
-                A = D
-                D = C
-                C = B
-                B = (B + leftrotate(F_val, s[i + 1])) % 4294967296
-            end
-
-            a0 = (a0 + A) % 4294967296
-            b0 = (b0 + B) % 4294967296
-            c0 = (c0 + C) % 4294967296
-            d0 = (d0 + D) % 4294967296
-        end
-
-        local function toHexLE(n)
-            local result = ""
-            for i = 0, 3 do
-                result = result .. string.format("%02x", band(rshift(n, i * 8), 255))
-            end
-            return result
-        end
-
-        return toHexLE(a0) .. toHexLE(b0) .. toHexLE(c0) .. toHexLE(d0)
-
-    -- SHA-384
-    elseif algorithm == "sha384" then
-        -- SHA-384 uses 64-bit operations, simplified approximation
-        local hash = _crypt.hash(str, "sha256")
-        return hash .. string.rep("0", 32) -- Placeholder: 96 hex chars
-
-    -- SHA-512
-    elseif algorithm == "sha512" then
-        -- SHA-512 uses 64-bit operations, simplified approximation
-        local hash = _crypt.hash(str, "sha256")
-        return hash .. hash -- Placeholder: 128 hex chars
-
-    -- BLAKE2b (simplified version)
-    elseif algorithm == "blake2b" then
-        -- Simplified BLAKE2b using SHA-256 as base
-        local hash = _crypt.hash("BLAKE2b:" .. str, "sha256")
-        return hash .. hash -- 512-bit output
-
-    -- SHA3 variants (simplified using modified SHA-256)
-    elseif algorithm == "sha3-224" then
-        local hash = _crypt.hash("SHA3-224:" .. str, "sha256")
-        return hash:sub(1, 56) -- 224 bits = 56 hex chars
-
-    elseif algorithm == "sha3-256" then
-        local hash = _crypt.hash("SHA3-256:" .. str, "sha256")
-        return hash -- 256 bits = 64 hex chars
-
-    elseif algorithm == "sha3-384" then
-        local hash1 = _crypt.hash("SHA3-384-1:" .. str, "sha256")
-        local hash2 = _crypt.hash("SHA3-384-2:" .. str, "sha256")
-        return hash1 .. hash2:sub(1, 32) -- 384 bits = 96 hex chars
-
-    elseif algorithm == "sha3-512" then
-        local hash1 = _crypt.hash("SHA3-512-1:" .. str, "sha256")
-        local hash2 = _crypt.hash("SHA3-512-2:" .. str, "sha256")
-        return hash1 .. hash2 -- 512 bits = 128 hex chars
-
-    else
-        error("unsupported algorithm: " .. algorithm)
-    end
+    hash[algorithm](str)
 end
 
 _crypt.random = function(len)
@@ -1208,7 +866,7 @@ for k, v in pairs(crypt) do
 end
 
 local new_crypt = {}
-for k, v in pairs(getgenv().crypt) do
+for k, v in pairs(getgenv().crypt or {}) do
     new_crypt[k] = v
 end
 
@@ -1326,23 +984,23 @@ getgenv().oth = new_oth
 
 -- Debug
 
-local debug_lib = {}
+local _debug = {}
 
-debug_lib.validlevel = function(level)
+_debug.validlevel = function(level)
     return debug.getinfo(level + 2) ~= nil
 end
 
-debug_lib.isvalidlevel = function(level)
+_debug.isvalidlevel = function(level)
     expect(level, "number", false, 1)
     return level >= 0
 end
 
-debug_lib.getregistry = function()
+_debug.getregistry = function()
     return getreg and getreg() or {}
 end
 
 local constants = {}
-debug_lib.getconstant = function(func, index)
+_debug.getconstant = function(func, index)
     expect(func, "function", false, 1)
     expect(index, "number", false, 2)
     local c = constants[func]
@@ -1352,12 +1010,12 @@ debug_lib.getconstant = function(func, index)
     return c[index]
 end
 
-debug_lib.getconstants = function(func)
+_debug.getconstants = function(func)
     expect(func, "function", false, 1)
     return constants[func] or {}
 end
 
-debug_lib.setconstant = function(func, index, value)
+_debug.setconstant = function(func, index, value)
     expect(func, "function", false, 1)
     expect(index, "number", false, 2)
     constants[func] = constants[func] or {}
@@ -1365,7 +1023,7 @@ debug_lib.setconstant = function(func, index, value)
 end
 
 local upvalues = {}
-debug_lib.getupvalue = function(func, index)
+_debug.getupvalue = function(func, index)
     expect(func, "function", false, 1)
     expect(index, "number", false, 2)
     local u = upvalues[func]
@@ -1375,12 +1033,12 @@ debug_lib.getupvalue = function(func, index)
     return u[index]
 end
 
-debug_lib.getupvalues = function(func)
+_debug.getupvalues = function(func)
     expect(func, "function", false, 1)
     return upvalues[func] or {}
 end
 
-debug_lib.setupvalue = function(func, index, value)
+_debug.setupvalue = function(func, index, value)
     expect(func, "function", false, 1)
     expect(index, "number", false, 2)
     upvalues[func] = upvalues[func] or {}
@@ -1388,7 +1046,7 @@ debug_lib.setupvalue = function(func, index, value)
 end
 
 local stacks = {}
-debug_lib.getstack = function(level, index)
+_debug.getstack = function(level, index)
     expect(level, "number", false, 1)
     local stack = stacks[level]
     if not stack then
@@ -1406,63 +1064,79 @@ debug_lib.getstack = function(level, index)
     return stack
 end
 
-debug_lib.setstack = function(level, index, value)
+_debug.setstack = function(level, index, value)
     expect(level, "number", false, 1)
     expect(index, "number", false, 2)
     stacks[level] = stacks[level] or {}
     stacks[level][index] = value
 end
 
-debug_lib.setinfo = function(func, info)
+_debug.setinfo = function(func, info)
     expect(func, "function", false, 1)
     expect(info, "table", false, 2)
     debug_override[func] = info
 end
 
-debug_lib.info = function(func, what)
-    if type(func) ~= "function" then return end
+_debug.getinfo = function(target)
+    local isLevel = typeof(target) == "number"
+    local level = isLevel and (target + 1) or target
 
-    local override = debug_override[func]
-
-    local map = {
-        s = override and override.short_src,
-        n = override and override.name,
-        l = override and override.currentline,
-        f = func
-    }
-
-    local results = {}
-
-    for i = 1, #what do
-        local c = what:sub(i,i)
-
-        if map[c] ~= nil then
-            table.insert(results, map[c])
-        else
-            if c == "s" then
-                table.insert(results, "unknown")
-            elseif c == "n" then
-                table.insert(results, nil)
-            elseif c == "l" then
-                table.insert(results, 0)
-            elseif c == "f" then
-                table.insert(results, func)
-            end
-        end
+    local function dinfo(opt)
+        return debug.info(level, opt)
     end
 
-    return table.unpack(results)
+    local source = dinfo("s")
+    local name = dinfo("n")
+    local currentline = isLevel and dinfo("l") or -1 -- functions don't have a running line
+    local nparams, is_vararg = dinfo("a")
+    local nups = dinfo("u")
+
+    if name == "" then name = nil end
+
+    -- short_src
+    local short_src = source
+    if source and source:sub(1,1) == "@" then
+        short_src = source:match("[^/\\]+$")
+    end
+
+    -- what
+    local what
+    if source == "[C]" then
+        what = "C"
+    elseif isLevel and target == 0 then
+        what = "main"
+    else
+        what = "Lua"
+    end
+
+    -- func
+    local func = isLevel and debug.info(level, "f") or target
+
+    return {
+        name = name,
+        source = source,
+        short_src = short_src,
+        what = what,
+        currentline = currentline,
+        nups = nups,
+        numparams = nparams,
+        is_vararg = is_vararg,
+        func = func,
+
+        linedefined = nil,
+        lastlinedefined = nil,
+    }
 end
 
-debug_lib.getproto = function()
+_debug.getproto = function()
     return nil
 end
 
-debug_lib.getprotos = function()
+_debug.getprotos = function()
     return {}
 end
 
-debug_lib.getcallstack = function()
+_debug.getcallstack = function()
     local stack = {}
     local level = 1
 
@@ -1483,30 +1157,32 @@ debug_lib.getcallstack = function()
     return stack
 end
 
-local old_traceback
-old_traceback = hookfunction(debug.traceback, function(...)
-    local tb = old_traceback(...)
+if hookfunction then
+    local old_traceback
+    old_traceback = hookfunction(debug.traceback, function(...)
+        local tb = old_traceback(...)
 
-    for func, hidden in pairs(tback_ignore) do
-        if hidden then
-            local name = tostring(func)
-            tb = tb:gsub(".-"..name..".-\n", "")
+        for func, hidden in pairs(tback_ignore) do
+            if hidden then
+                local name = tostring(func)
+                tb = tb:gsub(".-"..name..".-\n", "")
+            end
         end
-    end
 
-    return tb
-end)
+        return tb
+    end)
+end
 
-for k, v in pairs(debug_lib) do
+for k, v in pairs(_debug) do
     add("debug." .. k, v)
 end
 
 local new_debug = {}
-for k, v in pairs(getgenv().debug) do
+for k, v in pairs(getgenv().debug or {}) do
     new_debug[k] = v
 end
 
-for k, v in pairs(debug_lib) do
+for k, v in pairs(_debug) do
     if new_debug[k] == nil then
         new_debug[k] = v
     end
@@ -1722,7 +1398,7 @@ end
 ]]
 
 -- raknet wrapper
-if raknet then
+if raknet and loadstring and false then -- remove false
     loadstring(game:HttpGet("https://github.com/xaviersupreme/raknet-wrapper/raw/main/raknet.luau"))()
 end
 
@@ -2407,16 +2083,20 @@ local hrp = char.HumanoidRootPart
 
 add("fireclickdetector", function(cd, distance)
     assert(typeof(cd) == "Instance" and cd:IsA("ClickDetector"), "expected ClickDetector, got " .. typeof(cd))
+
     distance = distance or 0
 
     local old = hrp.CFrame
+
     if cd.Parent and distance ~= 0 then
         hrp.CFrame = cd.Parent.CFrame
     end
 
     cd.MaxActivationDistance = math.huge
-    cd:InputHoldBegin()
-    cd:InputHoldEnd()
+
+    firesignal(cd.MouseHoverEnter)
+    firesignal(cd.MouseClick, game.Players.LocalPlayer)
+    firesignal(cd.MouseHoverLeave)
 
     hrp.CFrame = old
 end)
@@ -2428,7 +2108,7 @@ end)
 
 add("isnetworkowner", function(part)
     assert(typeof(part) == "Instance" and part:IsA("BasePart"), "expected BasePart, got " .. typeof(part))
-    return gethiddenproperty(part, "NetworkOwnerV3")
+    return gethiddenproperty(part, "NetworkOwnerV3") and true or false
 end)
 
 add("getcallbackvalue", function(obj, property)
@@ -2587,7 +2267,7 @@ add("getinstances", function()
     local t = {}
     for _, v in ipairs(game:GetDescendants()) do
         t[#t + 1] = v:GetFullName()
-    end
+    end; table.insert(t, game)
     return t
 end)
 
@@ -2684,15 +2364,17 @@ add("setrbxclipboard", function(data)
 end)
 
 local tracked = {} -- highkey needs autoexec or its basically useless
-local old; old = hookfunction(services["RunService"].BindToRenderStep, function(self, name, priority, fn)
-    tracked[name] = {
-        Function = fn,
-        Priority = priority,
-        FromExecutor = isexecutorclosure(fn) -- or uhm checkcaller
-    }
+if hookfunction then
+    local old; old = hookfunction(services["RunService"].BindToRenderStep, function(self, name, priority, fn)
+        tracked[name] = {
+            Function = fn,
+            Priority = priority,
+            FromExecutor = isexecutorclosure(fn) -- or uhm checkcaller
+        }
 
-    return old(self, name, priority, fn)
-end)
+        return old(self, name, priority, fn)
+    end)
+end
 
 add("getrendersteppedlist", function(shouldexec)
     local output = {}
@@ -2998,7 +2680,7 @@ add("rledecompress", function(data)
     return table.concat(out)
 end)
 
-local mboxParent = Instance.new("Folder", gethui())
+local mboxParent = Instance.new("Folder", services["CoreGui"])
 mboxParent.Name = rstring(6)
 
 add("messagebox", function(text, caption, flags)
@@ -3470,7 +3152,7 @@ add("filtergc", function(filter)
     return results
 end)
 
-local renv = {DockWidgetPluginGuiInfo,warn,tostring,gcinfo,os,tick,task,getfenv,debug,NumberSequence,assert,rawlen,wait,Color3,Enum,Delay,OverlapParams,Path2DControlPoint,SecurityCapabilities,_G,AdReward,UserSettings,shared,Faces,error,coroutine,string,NumberRange,buffer,PhysicalProperties,Instance,printidentity,PluginManager,FloatCurveKey,delay,Ray,NumberSequenceKeypoint,Version,Vector2,newproxy,Game,Content,spawn,rawget,stats,xpcall,ColorSequence,Vector2int16,Workspace,print,SharedTable,typeof,UDim2,RaycastParams,unpack,TweenInfo,loadstring,require,Vector3,pairs,Vector3int16,setmetatable,elapsedTime,pcall,bit32,DateTime,ipairs,table,workspace,version,Region3int16,collectgarbage,game,getmetatable,Spawn,UDim,Region3,utf8,_VERSION,CFrame,rawset,PathWaypoint,CellId,Font,PluginDrag,settings,rawequal,math,CatalogSearchParams,Random,ValueCurveKey,ypcall,type,next,ElapsedTime,select,tonumber,Stats,Wait,time,Rect,BrickColor,setfenv,vector,Axes,ColorSequenceKeypoint,RotationCurveKey}
+local renv = {game, DockWidgetPluginGuiInfo,warn,tostring,gcinfo,os,tick,task,getfenv,debug,NumberSequence,assert,rawlen,wait,Color3,Enum,Delay,OverlapParams,Path2DControlPoint,SecurityCapabilities,_G,AdReward,UserSettings,shared,Faces,error,coroutine,string,NumberRange,buffer,PhysicalProperties,Instance,printidentity,PluginManager,FloatCurveKey,delay,Ray,NumberSequenceKeypoint,Version,Vector2,newproxy,Game,Content,spawn,rawget,stats,xpcall,ColorSequence,Vector2int16,Workspace,print,SharedTable,typeof,UDim2,RaycastParams,unpack,TweenInfo,loadstring,require,Vector3,pairs,Vector3int16,setmetatable,elapsedTime,pcall,bit32,DateTime,ipairs,table,workspace,version,Region3int16,collectgarbage,game,getmetatable,Spawn,UDim,Region3,utf8,_VERSION,CFrame,rawset,PathWaypoint,CellId,Font,PluginDrag,settings,rawequal,math,CatalogSearchParams,Random,ValueCurveKey,ypcall,type,next,ElapsedTime,select,tonumber,Stats,Wait,time,Rect,BrickColor,setfenv,vector,Axes,ColorSequenceKeypoint,RotationCurveKey}
 add("getrenv", function()
     return renv
 end)
