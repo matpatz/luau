@@ -17,6 +17,7 @@
     --]]
 --]]
 
+local time = tick()
 local testing = false
 
 local cclosures = setmetatable({}, {__mode = "k"})
@@ -3414,6 +3415,13 @@ for name, func in pairs(functions) do
     print("Adding:", name, tostring(func) .. "\t #" .. adding)
     getgenv()[name] = func
 end
+
+print(string.format(
+    "Completed the implementation of #%d functions within %.2f seconds\n%s",
+    adding,
+    tick() - time,
+    string.rep("\t", 4) .. "Join my discord server (https://discord.gg/bSPRYhBGtf) or dm 'matpatz' on discord for any inquiries or suggestions"
+))
 
 -- 50/50 -- also removes more stuff than we added with tables -- who cares
 genv.unload = function(sp)
