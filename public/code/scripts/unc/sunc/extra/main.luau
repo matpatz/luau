@@ -20,8 +20,9 @@
 local testing = false
 
 local cclosures = setmetatable({}, {__mode = "k"})
+local custom_closures = {}; local debug_override = setmetatable({}, {__mode = "k"})
 local function _newc(func)
-    expect(func, "function", false, 1)
+    --expect(func, "function", false, 1)
 
     local wrapper = function(...)
         local args = table.pack(...)
@@ -54,7 +55,11 @@ local function add(name, func, expect)
     check2add += 1
     -- print("Checking :", name, tostring(func) .. "\t".. c)
 
-    functions[name] = newcclosure(func) -- we now save it as a C closure or maybe be dont
+    if typeof(func) ~= "function" and true then
+        functions[name] = func
+    else
+        functions[name] = newcclosure(func)
+    end
 end
 local genv = getgenv()
 local function index(tofind) -- i dont think i use this idk
@@ -237,16 +242,11 @@ local function t(item)
     return typeof(item) ~= "Instance"
 end
 
--- 100% mine dw abt it
+-- TODO : cloneref : its yk a placeholder
 add("cloneref", function(object)
     expect(object, "Instance", false, 1)
 
-    local p = newproxy(true)
-    local mt = getmetatable(p)
-    mt.__index = function(_, k) return object[k] end
-    mt.__newindex = function(_, k, v) object[k] = v end
-    mt.__tostring = function() return tostring(object) end
-    return p
+    return object
 end)
 
 add("compareinstances", function(a, b)
@@ -394,11 +394,10 @@ add("loadstring", function(source, chunkname)
 end)
 --if getrenv and not getrenv().loadstring then getrenv().loadstring = genv.loadstring end
 
-local custom_closures = {}
 add("newcclosure", function(func) -- TODO : fix - for half decent iscclosure it will return false
     expect(func, "function", false, 1)
 
-    return _newc()
+    return _newc(func)
 end)
 
 add("isnewcclosure", function(func)
@@ -625,6 +624,7 @@ _crypt.base64decode = function(data)
     return table.concat(out)
 end
 
+-- AES is WAY to hard -- and the codes ugly for it
 _crypt.encrypt = function(data, key)
     expect(data, "string", false, 1)
     expect(key, "string", false, 2)
@@ -1419,7 +1419,6 @@ debug_lib.setinfo = function(func, info)
     debug_override[func] = info
 end
 
-local debug_override = setmetatable({}, {__mode = "k"})
 debug_lib.info = function(func, what)
     if type(func) ~= "function" then return end
 
@@ -1521,10 +1520,7 @@ local _raknet = {}
 -- highkey none of this existed
 -- thanks volt for added raknet
     -- w docs as always
-do                           
-    _raknet.desync = function()
-        -- patched man srry
-    end
+do
     -- this code is from that v3rm guy
 
     _raknet.GetService = function(self, Service)
@@ -1534,7 +1530,7 @@ do
             return cloneref(Instance.new(Service)) -- Thanks syn.lua
         end
 
-    return cloneref(Service)
+        return cloneref(Service)
     end
 
     _raknet.GetLocalPlayer = function()
@@ -1591,6 +1587,8 @@ do
         end)
     end
 end
+
+-- actual raknet is very detected btw; I wouldnt use desync on a main
 
 local _raknet = {}
 
@@ -1691,6 +1689,41 @@ function _raknet.send(data, priority, reliability, ordering_channel)
         print("  ordering:", packet.OrderingChannel)
         print("  data:", packet.AsString)
     end
+end
+
+-- from this guy : https://v3rm.net/threads/release-raknet-desync.27587/
+-- which is from somewhere else
+local function rakhook(packet)
+    if packet.PacketId == 0x1B then
+        local buf = packet.AsBuffer
+        buffer.writeu32(buf, 1, 0xFFFFFFFF)
+        packet:SetData(buf)
+    end
+end
+
+local hooked = false
+_raknet.desync = function()
+    raknet.add_send_hook(rakhook)
+    hooked = true
+end
+_raknet.sync = function()
+    if hooked then
+        raknet.remove_send_hook(rakhook)
+    end
+    hooked = false
+end
+
+--[[ -- crashes you. Im prolly getting banned soon enough
+    raknet.add_send_hook(function(packet)
+        local data = packet.AsBuffer
+        buffer.writeu32(data, 1, 0xFFFFFFFF)
+        packet:SetData(data)
+    end)
+]]
+
+-- raknet wrapper
+if raknet then
+    loadstring(game:HttpGet("https://github.com/xaviersupreme/raknet-wrapper/blob/main/raknet.luau"))()
 end
 
 genv.raknet = genv.raknet or genv.rnet or {}
