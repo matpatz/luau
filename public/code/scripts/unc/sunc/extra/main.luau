@@ -207,6 +207,11 @@ add("islune", function()
     return result
 end)
 
+local r = loadstring(game:HttpGet("https://github.com/daily3014/rbx-cryptography/raw/main/src/Utilities/RandomString.luau"))()
+local rstring = function(len)
+    r(ln)
+end
+
 add("lune", function(code)
     local filename = rstring(6)
     ps:Send(string.format( -- writefile
@@ -572,58 +577,17 @@ local band, bxor, rshift, lshift, rrotate = b.band, b.bxor, b.rshift, b.lshift, 
 
 local _crypt = {}
 
-local b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+local b64 = loadstring(game:HttpGet("https://github.com/daily3014/rbx-cryptography/raw/main/src/Utilities/Base64.luau"))()
 _crypt.base64encode = function(data) -- could use the encoding service i suppose
     expect(data, "string", false, 1)
-    
-    local out = {}
-    
-    for i = 1, #data, 3 do
-        local b1, b2, b3 = data:byte(i, i + 2)
-        b2 = b2 or 0
-        b3 = b3 or 0
-        
-        local n = b1 * 65536 + b2 * 256 + b3
-        
-        out[#out + 1] = b64:sub(math.floor(n / 262144) % 64 + 1, math.floor(n / 262144) % 64 + 1)
-        out[#out + 1] = b64:sub(math.floor(n / 4096)   % 64 + 1, math.floor(n / 4096)   % 64 + 1)
-        out[#out + 1] = b64:sub(math.floor(n / 64)     % 64 + 1, math.floor(n / 64)     % 64 + 1)
-        out[#out + 1] = b64:sub(                n       % 64 + 1,                 n      % 64 + 1)
-    end
-    
-    local result = table.concat(out)
-    local pad = (3 - #data % 3) % 3
-    
-    return result:sub(1, #result - pad) .. string.rep("=", pad)
+
+   return buffer.tostring(b64.Encode(buffer.fromstring(tostring(data))))
 end
 
 _crypt.base64decode = function(data)
     expect(data, "string", false, 1)
 
-    local out = {}
-    
-    data = data:gsub("[^%w%+%/%=]", "")
-    
-    for i = 1, #data, 4 do
-        local c1, c2, c3, c4 = data:sub(i,i), data:sub(i+1,i+1), data:sub(i+2,i+2), data:sub(i+3,i+3)
-        
-        local n1 = b64:find(c1, 1, true) - 1
-        local n2 = b64:find(c2, 1, true) - 1
-        local n3 = c3 == "=" and 0 or (b64:find(c3, 1, true) - 1)
-        local n4 = c4 == "=" and 0 or (b64:find(c4, 1, true) - 1)
-        
-        local n = n1 * 262144 + n2 * 4096 + n3 * 64 + n4
-        
-        out[#out + 1] = string.char(math.floor(n / 65536) % 256)
-        if c3 ~= "=" then
-            out[#out + 1] = string.char(math.floor(n / 256) % 256)
-        end
-        if c4 ~= "=" then
-            out[#out + 1] = string.char(n % 256)
-        end
-    end
-    
-    return table.concat(out)
+    return buffer.tostring(b64.Decode(buffer.fromstring(tostring(data))))
 end
 
 local AES = loadstring(game:HttpGet("https://github.com/daily3014/rbx-cryptography/raw/main/src/Encryption/AES.luau"))()
