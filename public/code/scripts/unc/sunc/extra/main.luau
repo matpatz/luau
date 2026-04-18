@@ -696,7 +696,7 @@ _crypt.generatebytes = function(size)
     return raw
 end
 
-function crypt.generatekey()
+_crypt.generatekey = function()
     local raw
 
     local rng = Random.new()
