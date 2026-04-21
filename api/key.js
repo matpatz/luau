@@ -1,4 +1,3 @@
-// cleaned up the ai code with more ai
 import crypto from "crypto";
 
 const SECRET = process.env.sSecret;
@@ -8,18 +7,23 @@ const SERVICE_KEY = process.env.supabaseService;
 const hash = (str) =>
   crypto.createHash("sha256").update(str).digest("hex");
 
+const safeEqual = (a, b) => {
+  const ba = Buffer.from(a || "");
+  const bb = Buffer.from(b || "");
+  if (ba.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ba, bb);
+};
+
+const canon = (v) => {
+  if (v === true) return "1";
+  if (v === false) return "0";
+  if (v == null) return "";
+  return String(v);
+};
+
 const makeSig = (...vals) => {
-  let out = "";
-
-  for (let v of vals) {
-    if (v === true) out += "1";
-    else if (v === false) out += "0";
-    else if (v != null) out += String(v);
-
-    out += "|";
-  }
-
-  return hash(out + SECRET);
+  const joined = vals.map(canon).join("|") + "|" + SECRET;
+  return hash(joined);
 };
 
 export default async function handler(req, res) {
@@ -44,21 +48,26 @@ export default async function handler(req, res) {
       }
     }
 
-    const key = data?.key ? String(data.key) : "";
-    const sig = data?.sig ? String(data.sig) : "";
-
-    if (!key || !sig) {
+    if (!data || typeof data !== "object") {
       return res.status(400).json({ ok: false });
     }
 
-    // verify request
-    if (sig !== makeSig(key)) {
+    const key = typeof data.key === "string" ? data.key : "";
+    const sig = typeof data.sig === "string" ? data.sig : "";
+
+    if (key.length < 4 || sig.length < 10) {
+      return res.status(400).json({ ok: false });
+    }
+
+    // verify request signature (tamper check)
+    const expectedSig = makeSig(key);
+    if (!safeEqual(sig, expectedSig)) {
       return res.status(401).json({ ok: false });
     }
 
-    // search supabase
+    // query supabase
     const query =
-      `${URL}/rest/v1/keys?select=key` +
+      `${URL}/rest/v1/keys?select=key,expires_at` +
       `&key=eq.${encodeURIComponent(key)}` +
       `&limit=1`;
 
@@ -70,18 +79,31 @@ export default async function handler(req, res) {
     });
 
     if (!resp.ok) {
-      return res.status(500).json({ ok: false });
+      return res.status(502).json({ ok: false });
     }
 
-    const result = await resp.json();
-    const valid = Array.isArray(result) && result.length > 0;
+    const rows = await resp.json();
 
-    const out = {
+    let valid = false;
+
+    if (Array.isArray(rows) && rows.length > 0) {
+      const row = rows[0];
+
+      if (row.expires_at) {
+        const now = Date.now();
+        const exp = new Date(row.expires_at).getTime();
+
+        if (!Number.isNaN(exp) && now < exp) {
+          valid = true;
+        }
+      }
+    }
+
+    return res.status(200).json({
       ok: valid,
       sig: makeSig(valid),
-    };
+    });
 
-    return res.status(200).json(out);
   } catch (err) {
     console.error("handler error:", err);
     return res.status(500).json({ ok: false });
