@@ -1,22 +1,5 @@
 -- #matpatz
 
---  as of 3/23 I will be citing the sources used for implementation of provided functions
-    --[[
-        potassium.pro ,
-        volt.bz ,
-        sunc.su ,
-        https://v3rm.net/threads/release-raknet-implementation.15622/, -- thanks vez
-        https://scriptblox.com/script/Universal-Script-UNC-RENC-Functions-For-Nova-17623 -- used to find some functions to implement 
-            i did NOT dm him and wont
-        -- https://celeryrblx.github.io/lua/rnet/
-    --]]
-
-    -- not used but potentially useful
-    --[[
-        https://tesker-103.github.io/UNC-Documentation/
-    --]]
---]]
-
 local time = tick()
 local testing = false
 
@@ -249,11 +232,22 @@ local function t(item)
     return typeof(item) ~= "Instance"
 end
 
--- TODO : cloneref : its yk a placeholder
+-- the alien boi
 add("cloneref", function(object)
     expect(object, "Instance", false, 1)
 
-    return object
+    if setmetatable then
+        local proxy = {}
+        local mt = {
+            __index = object,
+            __newindex = function(_, k, v) object[k] = v end,
+            __tostring = function() return tostring(object) end,
+            __eq = function() return false end
+        }
+        return setmetatable(proxy, mt)
+    else
+        return object
+    end
 end)
 
 add("compareinstances", function(a, b)
@@ -292,18 +286,19 @@ add("isfunctionhooked", function(func)
     return ishooked[func] ~= nil and ishooked[func] ~= false
 end)
 
+-- thanks https://scriptblox.com/u/imjustanaIienguy
 add("hookfunction", function(func, hook)
     expect(func, "function", false, 1)
     expect(hook, "function", false, 2)
     
-    local original = func
-    
-    if canhook[func] then 
-        ishooked[func] = hook
-        return original  -- Return the original function
+    if replaceclosure then
+        return replaceclosure(func, hook)
     end
-    
-    error("function cannot be hooked")
+    local old = func
+    local hooked = function(...)
+        return hook(old, ...)
+    end
+    return hooked, old
 end)
 
 add("restorefunction", function(func, hook)
@@ -1042,6 +1037,42 @@ _debug.setinfo = function(func, info)
     debug_override[func] = info
 end
 
+-- claudestein
+local function getFunctionLines(source, startLine)
+    local currentLine = 0
+    local depth = 0
+    local started = false
+    local result = {}
+
+    for line in (source .. "\n"):gmatch("([^\n]*)\n") do
+        currentLine = currentLine + 1
+
+        if currentLine >= startLine then
+            result[#result + 1] = line
+
+            -- count openers
+            for _ in line:gmatch("%f[%a]do%f[%A]") do depth = depth + 1 end
+            for _ in line:gmatch("%f[%a]then%f[%A]") do depth = depth + 1 end
+            for _ in line:gmatch("%f[%a]function%f[%A]") do depth = depth + 1 end
+            for _ in line:gmatch("%f[%a]repeat%f[%A]") do depth = depth + 1 end
+
+            -- count closers
+            for _ in line:gmatch("%f[%a]end%f[%A]") do depth = depth - 1 end
+            for _ in line:gmatch("%f[%a]until%f[%A]") do depth = depth - 1 end
+
+            if not started and depth > 0 then
+                started = true
+            end
+
+            if started and depth <= 0 then
+                break
+            end
+        end
+    end
+
+    return table.concat(result, "\n")
+end
+                                    
 _debug.getinfo = function(target)
     local isLevel = typeof(target) == "number"
     local level = isLevel and (target + 1) or target
@@ -1076,6 +1107,7 @@ _debug.getinfo = function(target)
 
     -- func
     local func = isLevel and debug.info(level, "f") or target
+    local hash = getfunctionhash and getfunctionhash(func) or ""
 
     return {
         name = name,
@@ -1086,10 +1118,11 @@ _debug.getinfo = function(target)
         nups = nups,
         numparams = nparams,
         is_vararg = is_vararg,
+        hash = hash,
+        size = #hash, -- idk uhhh thought it would be cool but executors should implement differently
         func = func,
 
-        linedefined = nil,
-        lastlinedefined = nil,
+        lastlinedefined = getFunctionLines(decompile(source), currentline)
     }
 end
 
@@ -2393,23 +2426,20 @@ add("setrawmetatable", function(object, mt)
     setmetatable(object, mt)
 end)
 
-add("hookmetamethod", function(object, method, hook)
+add("hookmetamethod", function(i, m, f)
     expect(method, "string", false, 2)
     expect(hook, "function", false, 3)
 
-    local mt = getrawmetatable(object)
-    assert(mt, "no metatable on object")
-
-    local old = mt[method]
-    assert(old, "method does not exist: " .. method)
-
-    mt[method] = function(...)
-        return hook(old, ...)
+    if getrawmetatable then
+        local s = getrawmetatable(i)
+        local o = s[m]
+        if not o then return warn("Method Not Found") end
+        setreadonly(s, false)
+        s[m] = f
+        setreadonly(s, true)
+        return o
     end
-
-    return function(...)
-        return old(...)
-    end
+    return i
 end)
 
 local namecallmethod = nil
@@ -3101,20 +3131,75 @@ add("getgc", function()
     return trgc
 end)
 
-add("filtergc", function(filter)
-    local results = {}
-    for _, obj in ipairs(trgc) do
-        if type(filter) == "string" then
-            if type(obj) == filter then
-                results[#results + 1] = obj
+add("filtergc", function(type, filter_options, return_one)
+    local matches = {}
+    if type == "table" then
+        for i,v in getgc(true) do
+            if typeof(v) ~= "table" then continue end
+            local passed = true
+            if filter_options ~= nil then
+                if typeof(filter_options.Keys) == "table" and passed then
+                    for _, key in filter_options.Keys do
+                        if rawget(v, key) == nil then passed = false break end
+                    end
+                end
+                if typeof(filter_options.Values) == "table" and passed then
+                    local tableVals = {}
+                    for _,value in next, v do table.insert(tableVals, value) end
+                    for _, value in filter_options.Values do
+                        if not table.find(tableVals, value) then passed = false break end
+                    end
+                end
+                if typeof(filter_options.KeyValuePairs) == "table" and passed then
+                    for key, value in filter_options.KeyValuePairs do
+                        if rawget(v, key) ~= value then passed = false break end
+                    end
+                end
+                if typeof(filter_options.Metatable) == "table" and passed then
+                    passed = filter_options.Metatable == getrawmetatable(v)
+                end
+                if not passed then continue end
             end
-        elseif type(filter) == "function" then
-            if filter(obj) then
-                results[#results + 1] = obj
-            end
+            if return_one and passed then return v elseif passed then table.insert(matches, v) end
         end
+    elseif type == "function" then
+        if filter_options.IgnoreExecutor == nil then filter_options.IgnoreExecutor = true end
+        for i,v in getgc(false) do
+            if typeof(v) ~= "function" then continue end
+            local passed = true
+            if filter_options ~= nil then
+                if filter_options.Name and passed then passed = debug.info(v, "n") == filter_options.Name end
+                if filter_options.IgnoreExecutor == true and passed then passed = isexecutorclosure(v) == false end
+                if iscclosure(v) and (typeof(filter_options.Hash) == "string" or typeof(filter_options.Constants) == "table") then passed = false end
+                if iscclosure(v) == false and passed then
+                    if typeof(filter_options.Hash) == "string" and passed then passed = getfunctionhash(v) == filter_options.Hash end
+                    if typeof(filter_options.Constants) == "table" and passed then
+                        local funcConsts = {}
+                        for idx, constant in debug.getconstants(v) do
+                            if constant ~= nil then table.insert(funcConsts, constant) end
+                        end
+                        for _, constant in filter_options.Constants do
+                            if not table.find(funcConsts, constant) then passed = false break end
+                        end
+                    end
+                end
+                if typeof(filter_options.Upvalues) == "table" and passed then
+                    local funcUpvals = {}
+                    for idx, upval in debug.getupvalues(v) do
+                        if upval ~= nil then table.insert(funcUpvals, upval) end
+                    end
+                    for _, upval in filter_options.Upvalues do
+                        if not table.find(funcUpvals, upval) then passed = false break end
+                    end
+                end
+                if not passed then continue end
+            end
+            if return_one and passed then return v elseif passed then table.insert(matches, v) end
+        end
+    else
+        error(debug.traceback(`Expected type 'function' or 'table' (got '{type}')`, 2))
     end
-    return results
+    return return_one ~= true and matches or nil
 end)
 
 local renv = {game, DockWidgetPluginGuiInfo,warn,tostring,gcinfo,os,tick,task,getfenv,debug,NumberSequence,assert,rawlen,wait,Color3,Enum,Delay,OverlapParams,Path2DControlPoint,SecurityCapabilities,_G,AdReward,UserSettings,shared,Faces,error,coroutine,string,NumberRange,buffer,PhysicalProperties,Instance,printidentity,PluginManager,FloatCurveKey,delay,Ray,NumberSequenceKeypoint,Version,Vector2,newproxy,Game,Content,spawn,rawget,stats,xpcall,ColorSequence,Vector2int16,Workspace,print,SharedTable,typeof,UDim2,RaycastParams,unpack,TweenInfo,loadstring,require,Vector3,pairs,Vector3int16,setmetatable,elapsedTime,pcall,bit32,DateTime,ipairs,table,workspace,version,Region3int16,collectgarbage,game,getmetatable,Spawn,UDim,Region3,utf8,_VERSION,CFrame,rawset,PathWaypoint,CellId,Font,PluginDrag,settings,rawequal,math,CatalogSearchParams,Random,ValueCurveKey,ypcall,type,next,ElapsedTime,select,tonumber,Stats,Wait,time,Rect,BrickColor,setfenv,vector,Axes,ColorSequenceKeypoint,RotationCurveKey}
@@ -3421,6 +3506,25 @@ print(string.format(
     adding,
     tick() - time,
     string.rep("\t", 4) .. "Join my discord server (https://discord.gg/bSPRYhBGtf) or dm 'matpatz' on discord for any inquiries or suggestions"
+))
+
+local docs = {
+    "potassium.pro",
+    "volt.bz",
+    "sunc.su",
+    "https://celeryrblx.github.io/lua/rnet -- unused",
+    "https://tesker-103.github.io/UNC-Documentation -- unused"
+}
+local codeused = {
+    "https://scriptblox.com/u/imjustanaIienguy (github.com/lunar0x4) -- hookmetamethod, hookfunction, filtergc, and other stuff",
+    "https://scriptblox.com/script/Universal-Script-UNC-RENC-Functions-For-Nova-17623 -- used to find functions for implemenation",
+    "https://v3rm.net/threads/release-raknet-implementation.15622 -- completely made up docs"
+}
+
+print(string.format(
+    "Documentation used: %s\nCode used: %s",
+    table.concat(docs, "\n\t, "),
+    table.concat(codeused, "\n\t, ")
 ))
 
 -- 50/50 -- also removes more stuff than we added with tables -- who cares
