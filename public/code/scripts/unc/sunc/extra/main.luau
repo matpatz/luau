@@ -3003,6 +3003,18 @@ add("getscripts", function()
     return scripts
 end)
 
+-- update getloaded modules to return
+-- [[
+{
+    the_module_name = {
+        game:GetService("ReplicatedStorage").Modules.Money, -- its source
+        required {
+            -- what BaseScripts have required it
+        }
+    }
+}
+--]]
+
 add("getloadedmodules", function()
     local modules = {}
     for _, s in ipairs(scripts) do
@@ -3023,6 +3035,9 @@ add("isrequired", function(module)
         end
     end
     return false
+end)
+add("isloadedmodule", function(module
+    return isrequired(module)
 end)
 
 add("getdeletedactors", function()
