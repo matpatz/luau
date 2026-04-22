@@ -8,3 +8,6 @@ have like a 'parent' test of all the tests to let users know if the function pas
         ✓ getgenv: it passed
         X getgenv: it failed again :((
 
+some test could be : 
+    using hookfunction on getnilinsances then testing something like getdeletedactors or a function like it
+        -- because executor implemented functions wouldn't be effected while Lua implentations would be
