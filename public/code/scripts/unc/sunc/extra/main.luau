@@ -2500,8 +2500,17 @@ end)
 
 -- Misc
 
-add("identifyexecutor", function()
-    return "Potassium", "1.0"
+-- Custom : a new param to include or disclude the executor version
+-- no more stupid variable shit
+
+-- or maybe it should be something like this
+    -- local name, version = idenifyexecutor()
+    -- print(name, version)
+    -- perhaps both
+
+add("identifyexecutor", function(include_version)
+    local ver = include_version and " v2.1.1" or ""
+    return `Potassium{ver}`
 end)
 
 local shwid
