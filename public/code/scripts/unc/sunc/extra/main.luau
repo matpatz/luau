@@ -1,4 +1,4 @@
--- #matpatz
+-- #matpatz -- I have alot of bad commits so uh lmk if shit doesnt work
 
 local time = tick()
 local testing = false
@@ -2513,6 +2513,10 @@ add("identifyexecutor", function(include_version)
     return `Potassium{ver}`
 end)
 
+add("identifyversion", function(include_version)
+    return select(2, identifyexecutor())
+end)
+
 local shwid
 add("sethwid", function(input)
     shwid = input
@@ -3013,7 +3017,7 @@ add("getscripts", function()
 end)
 
 -- update getloaded modules to return
--- [[
+--[[
 {
     the_module_name = {
         game:GetService("ReplicatedStorage").Modules.Money, -- its source
@@ -3045,7 +3049,7 @@ add("isrequired", function(module)
     end
     return false
 end)
-add("isloadedmodule", function(module
+add("isloadedmodule", function(module)
     return isrequired(module)
 end)
 
