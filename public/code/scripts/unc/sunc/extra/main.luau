@@ -681,6 +681,18 @@ _crypt.hash = function(str, algorithm)
     hash[algorithm](str)
 end
 
+-- TODO dumb implemenation ill change it later
+_crypt.salt = function(n: string): string
+    local mid = math.floor(#n / 2)
+    
+    local first = n:sub(1, mid)
+    local second = n:sub(mid + 1)
+
+    local rand = tostring(math.random(1e4, 1e6))
+
+    return first .. rand .. second
+end
+
 _crypt.random = function(len)
     return crypt.generatebytes(len)
 end
