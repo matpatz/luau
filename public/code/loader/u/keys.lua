@@ -1,4 +1,4 @@
-_G.Keys = {
+return {
     -- Mouse buttons
     ["Left Mouse"] = 0x01,
     ["Right Mouse"] = 0x02,
@@ -271,5 +271,3 @@ _G.Keys = {
     ["&"] = 0x37,        -- Ampersand (Shift + 7)
     ["*"] = 0x38         -- Asterisk (Shift + 8)
 }
-
-return Keys
