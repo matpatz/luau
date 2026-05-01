@@ -378,48 +378,6 @@ add("isourclosure", function(func)
 end)
 -- isexecutorthread idk
 
--- no longer do i use this
-    -- it isnt persay impossible to implement loadstring but i just dont rlly want to soooo you get a bad version
-    -- anyway thanks to this guy https://scriptblox.com/script/Universal-Script-luau-VM-execution-77330
-
-add("loadstring", function(source, chunkname)
-    if not allow() then
-        return (load)(source, chunkname) -- load is highkey nil
-    end
-
-    if not islune() then
-        downloadLune()
-    end
-
-    local filename = rstring(6)
-    local filepath = getenv("TEMP") .. "\\__ls_" .. filename .. ".luau"
-    
-    local result, done = nil, false
-
-    ps:Send(string.format(
-        "Set-Content -Path '%s' -Value '%s'",
-        filepath,
-        source:gsub("'", "''")
-    ))
-
-    local conn
-    conn = ps.OnMessage:Connect(function(msg)
-        conn:Disconnect()
-        result = msg
-        done = true
-    end)
-
-    ps:Send(string.format("lune run '%s'", filepath))
-
-    -- remove the item
-    return function()
-        repeat task.wait() until done
-        ps:Send(string.format("Remove-Item '%s' -Force", filepath))
-        return result
-    end
-end)
---if getrenv and not getrenv().loadstring then getrenv().loadstring = genv.loadstring end
-
 add("newcclosure", function(func) -- TODO : fix - for half decent iscclosure it will return false
     expect(func, "function", false, 1)
 
@@ -579,11 +537,57 @@ add("rconsoleclear", function()
         v:Destroy()
     end
 end)
+
+-- importante
+-- no longer do i use this
+    -- it isnt persay impossible to implement loadstring but i just dont rlly want to soooo you get a bad version
+    -- anyway thanks to this guy https://scriptblox.com/script/Universal-Script-luau-VM-execution-77330
+
+add("loadstring", function(source, chunkname)
+    if not allow() then
+        return (load)(source, chunkname) -- load is highkey nil
+    end
+
+    if not islune() then
+        downloadLune()
+    end
+
+    local filename = rstring(6)
+    local filepath = getenv("TEMP") .. "\\__ls_" .. filename .. ".luau"
+    
+    local result, done = nil, false
+
+    ps:Send(string.format(
+        "Set-Content -Path '%s' -Value '%s'",
+        filepath,
+        source:gsub("'", "''")
+    ))
+
+    local conn
+    conn = ps.OnMessage:Connect(function(msg)
+        conn:Disconnect()
+        result = msg
+        done = true
+    end)
+
+    ps:Send(string.format("lune run '%s'", filepath))
+
+    -- remove the item
+    return function()
+        repeat task.wait() until done
+        ps:Send(string.format("Remove-Item '%s' -Force", filepath))
+        return result
+    end
+end)
+                
 -- Crypt
 
 local b = bit32
 local band, bxor, rshift, lshift, rrotate = b.band, b.bxor, b.rshift, b.lshift, b.rrotate
 
+local function buf(s) return buffer.fromstring(s) end
+local function str(b) return buffer.tostring(b) end
+                
 local _crypt = {}
 
 local b64 = loadstring(game:HttpGet("https://github.com/daily3014/rbx-cryptography/raw/main/src/Utilities/Base64.luau"))()
@@ -598,22 +602,46 @@ _crypt.base64decode = function(data)
 
     return buffer.tostring(b64.Decode(buffer.fromstring(tostring(data))))
 end
-
-local AES = loadstring(game:HttpGet("https://github.com/daily3014/rbx-cryptography/raw/main/src/Encryption/AES.luau"))()
-
-local function buf(s) return buffer.fromstring(s) end
-local function str(b) return buffer.tostring(b) end
-
-local function b64(v)
-    local ok, res = pcall(crypt.base64decode, v)
-    return (ok and type(res) == "string") and res or v
+local b64 = function(str: string): string
+    return _crypt.base64encode(str) or ""
+end
+local de64 = function(str: string): string
+    return _crypt.base64decode(str) or ""
 end
 
+local rng = Random.new()
+
+local CSPRNG = loadstring(game:HttpGet("https://raw.githubusercontent.com/daily3014/rbx-cryptography/main/src/Utilities/CSPRNG/init.luau"))()
+_crypt.generatebytes = function(size)
+    CSPRNG.RandomBytes(size)
+end
+_crypt.random = function(len)
+    return de64(crypt.generatebytes(len))
+end
+
+_crypt.generatekey = function()
+    local raw
+                  
+    local t = table.create(32)
+    for i = 1, 32 do
+        t[i] = string.char(rng:NextInteger(0,255))
+    end
+    raw = table.concat(t)table.concat(t)
+
+    if b64 then
+        return b64(raw)
+    end
+
+    return raw
+end
+
+
+local AES = loadstring(game:HttpGet("https://github.com/daily3014/rbx-cryptography/raw/main/src/Encryption/AES.luau"))()
 _crypt.encrypt = function(data, key, iv)
     assert(type(data) == "string", "data must be string")
 
     local keyBuf = buf(b64(key))
-    local ivRaw = iv or crypt.generatebytes(12)
+    local ivRaw = iv or _crypt.generatebytes(12)
     local ivBuf = buf(b64(ivRaw))
 
     local cipher, tag = AES.Encrypt(buf(data), keyBuf, ivBuf)
@@ -649,43 +677,6 @@ _crypt.decrypt = function(ciphertext, key, iv, tag)
     return true, str(plain)
 end
 
-local rng = Random.new()
-
-_crypt.generatebytes = function(size)
-    assert(type(size) == "number" and size > 0, "invalid size")
-
-    local t = table.create(size)
-
-    for i = 1, size do
-        t[i] = string.char(rng:NextInteger(0,255))
-    end
-
-    local raw = table.concat(t)
-
-    if crypt.base64encode then
-        return crypt.base64encode(raw)
-    end
-
-    return raw
-end
-
-_crypt.generatekey = function()
-    local raw
-
-    local rng = Random.new()
-    local t = table.create(32)
-    for i = 1, 32 do
-        t[i] = string.char(rng:NextInteger(0,255))
-    end
-    raw = table.concat(t)table.concat(t)
-
-    if crypt.base64encode then
-        return crypt.base64encode(raw)
-    end
-
-    return raw
-end
-
 local hash = loadstring(game:HttpGet("https://github.com/Egor-Skriptunoff/pure_lua_SHA/raw/master/sha2.lua"))()
 _crypt.hash = function(str, algorithm)
     expect(str, "string", false, 1)
@@ -693,34 +684,26 @@ _crypt.hash = function(str, algorithm)
 
     hash[algorithm](str)
 end
-
--- TODO dumb implemenation ill change it later
-_crypt.salt = function(n: string): string
-    local mid = math.floor(#n / 2)
-    
-    local first = n:sub(1, mid)
-    local second = n:sub(mid + 1)
-
-    local rand = tostring(math.random(1e4, 1e6))
-
-    return first .. rand .. second
+                
+_crypt.rnum = function(len)
+    len = len or 12
+    return CSPRNG.RandomNum(len/2, len)
 end
 
-_crypt.random = function(len)
-    return crypt.generatebytes(len)
+local xor = loadstring(game:HttpGet("https://raw.githubusercontent.com/daily3014/rbx-cryptography/refs/heads/main/src/Encryption/XOR.luau"))()
+_crypt.salt = function(n: string): string
+    local b = buf(n)
+    local c = xor(b, str(_crypt.rnum(12)))
+    local n = xor(c, str(_crypt.rnum(12))) -- wrong key = wrong encryption = different characters = salt
+    return str(n)
+end
+
+_crypt.xor = function(data: string): string
+    return str(xor(buf(data)))
 end
 
 _crypt.rstring = function(len)
     rstring(len)
-end
-_crypt.rnum = function(len)
-    len = len or 16
-    local chars, str = "0123456789", {}
-    for i = 1, len do
-        local idx = math.random(1, #chars)
-        str[i] = chars:sub(idx, idx)
-    end
-    return table.concat(str)
 end
 
 _crypt.tobytecode = function(src)
@@ -778,9 +761,9 @@ _crypt.fromhex = function(str)
 end
 
 -- inaccurate idk vruh
-_crypt.hmac = function(data, key, algorithm)
-    expect(data, "string", false, 1)
-    expect(key, "string", false, 2)
+_crypt.hmac = function(key, data, algorithm)
+    expect(key, "string", false, 1)
+    expect(data, "string", false, 2)
     expect(algorithm, "string", false, 3)
 
     local hash = crypt.hash
