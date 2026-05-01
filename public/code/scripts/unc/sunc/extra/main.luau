@@ -193,7 +193,8 @@ end)
 
 local r = loadstring(game:HttpGet("https://github.com/daily3014/rbx-cryptography/raw/main/src/Utilities/RandomString.luau"))()
 local rstring = function(len)
-    r(ln)
+    len = len or 16
+    return r(len, false)
 end
 
 add("lune", function(code)
@@ -431,19 +432,9 @@ end)
 
 -- Rconsole
 
-local function rstring(len)
-    len = len or 16
-    local chars, str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", {}
-    for i = 1, len do
-        local idx = math.random(1, #chars)
-        str[i] = chars:sub(idx, idx)
-    end
-    return table.concat(str)
-end
-
 local _rsconsole = Instance.new("ScreenGui")
 _rsconsole.Name = rstring(6)
-_rsconsole.Parent = game.CoreGui
+_rsconsole.Parent = services["CoreGui"]
 
 local _isrconsole = false
 local function crconsole()
