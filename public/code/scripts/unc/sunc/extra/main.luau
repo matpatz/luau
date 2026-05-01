@@ -281,6 +281,12 @@ add("setstackhidden", function(func, hidden)
 end)
 
 local ishooked, canhook = {}, {}
+for k,v in pairs(genv) do
+    if typeof(v) == "function" then
+        ishooked[v] = true
+    end
+end
+
 add("isfunctionhooked", function(func)
     expect(func, "function", false, 1)
     return ishooked[func] ~= nil and ishooked[func] ~= false
@@ -298,7 +304,17 @@ add("hookfunction", function(func, hook)
     local hooked = function(...)
         return hook(old, ...)
     end
+
+    ishooked[func] = true
     return hooked, old
+end)
+
+add("hiddenhook", function(func, hook)
+    hookfunction(func, hook)
+    ishooked[func] = false
+end)
+add("secrethook", function(...)
+    hiddenhook(...)
 end)
 
 add("restorefunction", function(func, hook)
@@ -352,6 +368,12 @@ add("isexecutorclosure", function(func)
     end
 
     return false
+end)
+add("checkclosure", function(func)
+    return isexecutorclosure(func)
+end)
+add("isourclosure", function(func)
+    return isexecutorclosure(func)
 end)
 -- isexecutorthread idk
 
@@ -848,7 +870,6 @@ for k, v in pairs(_crypt) do
     end
 end
 getgenv().crypt = new_crypt
-
 
 -- Oth
 
@@ -1649,6 +1670,44 @@ _helper.GetChildrenWithTag = function(parent, tag)
     return result
 end
 
+-- claude
+_helper.removeduplicates = function(t: table): table
+    local seen = {}
+    local result = {}
+
+    for _, v in pairs(t) do
+        if not seen[v] then
+            seen[v] = true
+            table.insert(result, v)
+        end
+    end
+
+    return result
+end
+
+_helper.issametable = function(a: table, b: table): bool
+    if a == b then return true end
+    if typeof(a) ~= "table" or typeof(b) ~= "table" then return false end
+
+    -- Check same number of keys
+    local aCount, bCount = 0, 0
+    for _ in pairs(a) do aCount += 1 end
+    for _ in pairs(b) do bCount += 1 end
+    if aCount ~= bCount then return false end
+
+    -- Check all keys/values match
+    for k, v in pairs(a) do
+        local bv = b[k]
+        if typeof(v) == "table" and typeof(bv) == "table" then
+            if not issametable(v, bv) then return false end
+        elseif v ~= bv then
+            return false
+        end
+    end
+
+    return true
+end
+
 for k, v in pairs(_helper) do
     add("helper." .. k, v)
 end
@@ -2121,11 +2180,23 @@ add("isnetworkowner", function(part)
     return gethiddenproperty(part, "NetworkOwnerV3") and true or false
 end)
 
-add("getcallbackvalue", function(obj, property)
-    expect(obj, "Instance", false, 1)
+add("getcallbackvalue", function(instance: Instance, property: string)
+    expect(instance, "Instance", false, 1)
     expect(property, "string", false, 2)
 
-    -- hookmetamethod -- this is so shit ahahahahahhfewfuewufhweiuhf
+    local ok, result = pcall(function()
+        return getrawmetatable(instance)[property]
+    end)
+
+    if ok and typeof(result) == "function" then
+        return result
+    end
+
+    return nil
+end)
+
+add("getcallbackmember", function(...)
+    getcallbackvalue(...)
 end)
 
 add("fireproximityprompt", function(prompt, triggered, hold)
@@ -2137,6 +2208,14 @@ add("fireproximityprompt", function(prompt, triggered, hold)
         signal = triggered == false and "TriggerEnded" or "Triggered"
     end
     firesignal(prompt, signal)
+end)
+
+add("getproximitypromptduration", function(pprompt)
+    return pprompt.HoldDuration
+end)
+
+add("setproximitypromptduration", function(pprompt, tset)
+    pprompt.HoldDuration = tset
 end)
 
 local signal_store = setmetatable({}, {__mode = "k"})
@@ -2256,6 +2335,10 @@ add("sethiddenproperty", function(object, property, value)
     expect(object, "Instance", false, 1)
     expect(property, "string", false, 2)
     return ugc:SetPropertyValue(object, property, value)
+end)
+
+add("sethiddenprop", function(...)
+    sethiddenproperty(...)
 end)
 
 add("setsimulationradius", function(simrad, maxsimrad)
@@ -2551,261 +2634,162 @@ add("gethwid", function()
 end)
 
 add("get_hwid", function()
-    return gethwid()
+    return getmac()
 end)
 
--- we LOVE claude
+add("get_user_identifer", function()
+    return getmac()
+end)
+
+local base = "https://website-iota-ivory-12.vercel.app/code/scripts/unc/sunc/extra/"
+local lz4 = loadstring(game:HttpGet(base .. "lz4/main.luau"))()
+
+-- this is not matching up with Potassiums compression
+-- idk man
 add("lz4compress", function(data)
-    assert(type(data) == "string", "data must be string")
-    
-    if #data == 0 then return "" end
-    
-    local output = {}
-    local pos = 1
-    local anchor = 1
-    
-    -- Hash table for finding matches
-    local hash_table = {}
-    local function hash(p)
-        if p + 3 > #data then return 0 end
-        local a, b, c, d = data:byte(p, p + 3)
-        return ((a * 256 + b) * 256 + c) * 256 + d
-    end
-    
-    while pos <= #data do
-        local best_len = 0
-        local best_offset = 0
-        
-        -- Find match
-        local h = hash(pos)
-        if h ~= 0 and hash_table[h] then
-            local match_pos = hash_table[h]
-            if match_pos < pos then
-                local len = 0
-                while pos + len <= #data and 
-                      match_pos + len <= #data and 
-                      data:byte(pos + len) == data:byte(match_pos + len) and
-                      len < 255 do
-                    len = len + 1
-                end
-                
-                if len >= 4 then
-                    best_len = len
-                    best_offset = pos - match_pos
-                end
-            end
-        end
-        
-        hash_table[h] = pos
-        
-        if best_len >= 4 then
-            -- Output literal run
-            local literal_len = pos - anchor
-            if literal_len > 0 then
-                output[#output + 1] = string.char(literal_len)
-                output[#output + 1] = data:sub(anchor, pos - 1)
-            end
-            
-            -- Output match
-            output[#output + 1] = string.char(0xFF) -- Match marker
-            output[#output + 1] = string.char(best_len)
-            output[#output + 1] = string.char(math.floor(best_offset / 256))
-            output[#output + 1] = string.char(best_offset % 256)
-            
-            pos = pos + best_len
-            anchor = pos
-        else
-            pos = pos + 1
-        end
-    end
-    
-    if anchor <= #data then
-        local literal_len = #data - anchor + 1
-        output[#output + 1] = string.char(literal_len)
-        output[#output + 1] = data:sub(anchor)
-    end
-    
-    return table.concat(output)
+    expect(data, "string", 1)
+    return lz4.compress(data)
 end)
 
--- also claude btw
 add("lz4decompress", function(data)
-    assert(type(data) == "string", "data must be string")
-    
-    if #data == 0 then return "" end
-    
-    local output = {}
-    local pos = 1
-    
-    while pos <= #data do
-        local token = data:byte(pos)
-        pos = pos + 1
-        
-        if token == 0xFF then
-            if pos + 3 > #data then break end
-            
-            local match_len = data:byte(pos)
-            local offset = data:byte(pos + 1) * 256 + data:byte(pos + 2)
-            pos = pos + 3
-            
-            local out_pos = #table.concat(output)
-            local match_start = out_pos - offset + 1
-            
-            for i = 1, match_len do
-                output[#output + 1] = output[match_start + i - 1]
-            end
-        else
-            local literal_len = token
-            if pos + literal_len - 1 > #data then break end
-            
-            output[#output + 1] = data:sub(pos, pos + literal_len - 1)
-            pos = pos + literal_len
-        end
-    end
-    
-    return table.concat(output)
+    expect(data, "string", 1)
+    return lz4.decompress(data)
 end)
+
+-- https://github.com/kennyledet/Algorithm-Implementations -- the goat
+local rle = loadstring(game:HttpGet(base .. "rle/main.luau"))()
 
 add("rlecompress", function(data)
-    assert(type(data) == "string", "expected string, got " .. type(data))
-    local out, i = {}, 1
-    while i <= #data do
-        local char = data:sub(i, i)
-        local count = 1
-        while i + count <= #data and data:sub(i + count, i + count) == char and count < 255 do
-            count += 1
-        end
-        if count > 1 then
-            out[#out + 1] = string.char(count + 128)
-        end
-        out[#out + 1] = char
-        i += count
-    end
-    return table.concat(out)
+    expect(data, "string", 1)
+    return rle.encode(data)
 end)
 
 add("rledecompress", function(data)
-    assert(type(data) == "string", "expected string, got " .. type(data))
-    local out, i = {}, 1
-    while i <= #data do
-        local byte = data:byte(i)
-        if byte > 127 and i + 1 <= #data then
-            out[#out + 1] = string.rep(data:sub(i + 1, i + 1), byte - 128)
-            i += 2
-        else
-            out[#out + 1] = data:sub(i, i)
-            i += 1
-        end
-    end
-    return table.concat(out)
+    expect(data, "string", 1)
+    return rle.decode(data)
 end)
 
 local mboxParent = Instance.new("Folder", services["CoreGui"])
 mboxParent.Name = rstring(6)
 
-add("messagebox", function(text, caption, flags)
+add("messagebox", function(text: string, caption: string, flags: number): number
     expect(text, "string", false, 1)
     expect(caption, "string", false, 2)
+    expect(flags, "number", false, 3)
 
-    local gui = Instance.new("ScreenGui")
-    gui.Name = tostring(math.random(1e4, 1e5))
-    gui.Parent = mboxParent
+    if allow() then
+        local ps = string.format(
+            [[powershell -Command "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('%s','%s',%d) | Out-Null"]],
+            text:gsub("'", "''"),
+            caption:gsub("'", "''"),
+            flags
+        )
+        powerexec(ps)
+    else       
+        local gui = Instance.new("ScreenGui")
+        gui.Name = tostring(math.random(1e4, 1e5))
+        gui.Parent = mboxParent
 
-    local window = Instance.new("Frame")
-    window.Size = UDim2.fromOffset(349, 151)
-    window.Position = UDim2.new(0.5, -174, 0.5, -75)
-    window.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    window.Draggable = true
-    window.BorderSizePixel = 0
-    window.ClipsDescendants = true
-    window.Parent = gui
+        local window = Instance.new("Frame")
+        window.Size = UDim2.fromOffset(349, 151)
+        window.Position = UDim2.new(0.5, -174, 0.5, -75)
+        window.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        window.Draggable = true
+        window.BorderSizePixel = 0
+        window.ClipsDescendants = true
+        window.Parent = gui
 
-    local wc = Instance.new("UICorner", window)
-    wc.CornerRadius = UDim.new(0, 8)
+        local wc = Instance.new("UICorner", window)
+        wc.CornerRadius = UDim.new(0, 8)
 
-    local strip = Instance.new("Frame")
-    strip.Size = UDim2.fromOffset(349, 35)
-    strip.Position = UDim2.fromOffset(0, 0)
-    strip.BackgroundColor3 = Color3.fromRGB(240, 240, 240)
-    strip.BorderSizePixel = 0
-    strip.ClipsDescendants = true
-    strip.Parent = window
+        local strip = Instance.new("Frame")
+        strip.Size = UDim2.fromOffset(349, 35)
+        strip.Position = UDim2.fromOffset(0, 0)
+        strip.BackgroundColor3 = Color3.fromRGB(240, 240, 240)
+        strip.BorderSizePixel = 0
+        strip.ClipsDescendants = true
+        strip.Parent = window
 
-    Instance.new("UICorner", strip).CornerRadius = wc.CornerRadius
+        Instance.new("UICorner", strip).CornerRadius = wc.CornerRadius
 
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.fromOffset(260, 18)
-    title.Position = UDim2.fromOffset(14, 10)
-    title.BackgroundTransparency = 1
-    title.Text = caption
-    title.Font = Enum.Font.SourceSans
-    title.TextSize = 16
-    title.TextColor3 = Color3.fromRGB(0, 0, 0)
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Parent = window
+        local title = Instance.new("TextLabel")
+        title.Size = UDim2.fromOffset(260, 18)
+        title.Position = UDim2.fromOffset(14, 10)
+        title.BackgroundTransparency = 1
+        title.Text = caption
+        title.Font = Enum.Font.SourceSans
+        title.TextSize = 16
+        title.TextColor3 = Color3.fromRGB(0, 0, 0)
+        title.TextXAlignment = Enum.TextXAlignment.Left
+        title.Parent = window
 
-    local close = Instance.new("TextButton")
-    close.Size = UDim2.fromOffset(20, 20)
-    close.Position = UDim2.fromOffset(321, 8)
-    close.Text = "X"
-    close.Font = Enum.Font.SourceSansBold
-    close.TextSize = 16
-    close.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    close.BackgroundTransparency = 0.8
-    close.TextColor3 = Color3.fromRGB(0, 0, 0)
-    close.Parent = window
+        local close = Instance.new("TextButton")
+        close.Size = UDim2.fromOffset(20, 20)
+        close.Position = UDim2.fromOffset(321, 8)
+        close.Text = "X"
+        close.Font = Enum.Font.SourceSansBold
+        close.TextSize = 16
+        close.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        close.BackgroundTransparency = 0.8
+        close.TextColor3 = Color3.fromRGB(0, 0, 0)
+        close.Parent = window
 
-    close.MouseButton1Click:Connect(function() gui:Destroy() end)
-    close.MouseEnter:Connect(function() close.BackgroundColor3 = Color3.fromRGB(255, 0, 0) end)
-    close.MouseLeave:Connect(function() close.BackgroundColor3 = Color3.fromRGB(255, 255, 255) end)
+        close.MouseButton1Click:Connect(function() gui:Destroy() end)
+        close.MouseEnter:Connect(function() close.BackgroundColor3 = Color3.fromRGB(255, 0, 0) end)
+        close.MouseLeave:Connect(function() close.BackgroundColor3 = Color3.fromRGB(255, 255, 255) end)
 
-    local msg = Instance.new("TextLabel")
-    msg.Size = UDim2.fromOffset(250, 20)
-    msg.Position = UDim2.fromOffset(54, 58)
-    msg.BackgroundTransparency = 1
-    msg.Text = text
-    msg.Font = Enum.Font.SourceSans
-    msg.TextSize = 14
-    msg.TextColor3 = Color3.fromRGB(0, 0, 0)
-    msg.TextXAlignment = Enum.TextXAlignment.Left
-    msg.Parent = window
+        local msg = Instance.new("TextLabel")
+        msg.Size = UDim2.fromOffset(250, 20)
+        msg.Position = UDim2.fromOffset(54, 58)
+        msg.BackgroundTransparency = 1
+        msg.Text = text
+        msg.Font = Enum.Font.SourceSans
+        msg.TextSize = 14
+        msg.TextColor3 = Color3.fromRGB(0, 0, 0)
+        msg.TextXAlignment = Enum.TextXAlignment.Left
+        msg.Parent = window
 
-    local strip2 = Instance.new("Frame")
-    strip2.Size = UDim2.fromOffset(349, 38)
-    strip2.Position = UDim2.fromOffset(0, window.Size.Y.Offset - 38)
-    strip2.BackgroundColor3 = Color3.fromRGB(240, 240, 240)
-    strip2.BorderSizePixel = 0
-    strip2.ClipsDescendants = true
-    strip2.Parent = window
+        local strip2 = Instance.new("Frame")
+        strip2.Size = UDim2.fromOffset(349, 38)
+        strip2.Position = UDim2.fromOffset(0, window.Size.Y.Offset - 38)
+        strip2.BackgroundColor3 = Color3.fromRGB(240, 240, 240)
+        strip2.BorderSizePixel = 0
+        strip2.ClipsDescendants = true
+        strip2.Parent = window
 
-    local s2c = Instance.new("UICorner")
-    s2c.CornerRadius = wc.CornerRadius
-    s2c.Parent = strip2
+        local s2c = Instance.new("UICorner")
+        s2c.CornerRadius = wc.CornerRadius
+        s2c.Parent = strip2
 
-    local function createBtn(btnText, pos)
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.fromOffset(72, 26)
-        btn.Position = UDim2.fromOffset(pos, 5.8)
-        btn.BackgroundColor3 = Color3.fromRGB(240, 240, 240)
-        btn.Text = btnText
-        btn.Font = Enum.Font.SourceSans
-        btn.TextSize = 14
-        btn.TextColor3 = Color3.fromRGB(0, 0, 0)
-        btn.ClipsDescendants = true
-        btn.Parent = strip2
+        local function createBtn(btnText, pos)
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.fromOffset(72, 26)
+            btn.Position = UDim2.fromOffset(pos, 5.8)
+            btn.BackgroundColor3 = Color3.fromRGB(240, 240, 240)
+            btn.Text = btnText
+            btn.Font = Enum.Font.SourceSans
+            btn.TextSize = 14
+            btn.TextColor3 = Color3.fromRGB(0, 0, 0)
+            btn.ClipsDescendants = true
+            btn.Parent = strip2
 
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+            Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
 
-        local stroke = Instance.new("UIStroke", btn)
-        stroke.Color = Color3.fromRGB(200, 200, 200)
-        stroke.Thickness = 1
-        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+            local stroke = Instance.new("UIStroke", btn)
+            stroke.Color = Color3.fromRGB(200, 200, 200)
+            stroke.Thickness = 1
+            stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
-        return btn
+            return btn
+        end
+
+        local ok = createBtn("OK", 263)
+        ok.MouseButton1Click:Connect(function() gui:Destroy() end)
     end
+end)
 
-    local ok = createBtn("OK", 263) -- should be based on flags btw -- no real docs on how the system works just guess a bit
-    ok.MouseButton1Click:Connect(function() gui:Destroy() end)
+add("messageboxasync", function(...)
+    messagebox(...)
 end)
 
 local oqueue = ""
@@ -2845,6 +2829,16 @@ add("request", function(options)
         Body = success and result or tostring(result),
         Headers = {},
     }
+end)
+
+add("httpget", function(self: any?, url: string): string
+    if typeof(self) == "string" then
+        url = self
+    end
+
+    expect(url, "string", false, 1)
+    
+    return game:HttpGetAsync(url)
 end)
 
 add("getinternalparent", function(instance)
@@ -2969,6 +2963,9 @@ add("getscriptbytecode", function(item)
     expect(item, "Instance", false, 1)
     return ""
 end)
+add("dumpstring", function(item)
+    return getscriptbytecode(item)
+end)
 
 add("decompile", function(item)
     expect(item, "Instance", false, 1)
@@ -2988,10 +2985,10 @@ add("getscripthash", function(item)
     return crypt.hash(getscriptbytecode(item))
 end)
 
--- hash a functions BYTECODE
+-- hash a functions BYTECODE and string.dump doesnt exist so
 add("getfunctionhash", function(item)
     expect(item, "function", false, 1)
-    return crypt.hash(item)
+    return crypt.hash(item, "sha384")
 end)
 
 local synsaveinstance = loadstring(game:HttpGet("https://raw.githubusercontent.com/luau/UniversalSynSaveInstance/main/saveinstance.luau", true), "saveinstance")()
@@ -3251,6 +3248,38 @@ add("getgenv", function()
     return getfenv(0)
 end)
 
+add("dumpenv", function()
+    local result = {}
+
+    for k, v in pairs(getgenv()) do
+        if typeof(v) == "table" then
+            local sub = {}
+            for subk, subv in pairs(v) do
+                sub[subk] = subv
+            end
+            result[k] = sub
+        else
+            result[k] = v
+        end
+    end
+
+    return result
+end)
+
+-- Idk what to name it so like
+add("printenv", function(docs: bool): bool
+    -- TODO: docs would also print the documenation or rather a brief explanation of the function
+    local env = dumpenv()
+    for k, v in pairs(env) do
+        print(k, translate(v))
+        if typeof(v) == "table" then
+            for subk, subv in pairs(v) do
+                print('\t', subk, translate(subv))
+            end
+        end
+    end
+end)
+
 add("getsenv", function(scr)
     assert(typeof(scr) == "Instance" and scr:IsA("LocalScript"), "expected LocalScript, got " .. typeof(scr))
     return getfenv(0)
@@ -3299,15 +3328,15 @@ add("setidentity", function(identity)
     expect(identity, "number", false, 1)
     setthreadidentity(identity)
 end)
-
 add("getidentity", function()
     return getthreadidentity()
 end)
-
 add("getthreadcontext", function()
     return getthreadidentity()
 end)
-
+add("getthreadcaps", function()
+    return getthreadidentity()
+end)
 add("identity", function() -- just added this for testing
    return getthreadidentity()
 end)
