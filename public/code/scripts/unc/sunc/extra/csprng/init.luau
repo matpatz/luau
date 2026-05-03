@@ -26,8 +26,8 @@
 
 local cs = "https://raw.githubusercontent.com/daily3014/rbx-cryptography/refs/heads/main/src/Utilities/CSPRNG"
 
-local Conversions = loadstring(game:HttpGet(`{cs}/Conversions`))()
-local ChaCha20 = loadstring(game:HttpGet(`{cs}.ChaCha20`))()
+local Conversions = loadstring(game:HttpGet(`{cs}/Conversions`))
+local ChaCha20 = loadstring(game:HttpGet(`{cs}/ChaCha20`))()
 local Blake3 = loadstring(game:HttpGet(`{cs}/Blake3.luau`))()
 
 export type EntropyProvider = (BytesLeft: number) -> buffer?
