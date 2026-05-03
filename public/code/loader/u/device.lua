@@ -1,7 +1,15 @@
 local uis = game:GetService("UserInputService")
 
-function device()
-	return tostring(uis:GetPlatform()):split(".")[3]
+local function device()
+	local platform = tostring(uis:GetPlatform()):split(".")[3]
+
+	if platform == "Windows" or platform == "OSX" or platform == "UWP" then
+		return "PC"
+	elseif platform == "Android" or platform == "IOS" then
+		return "Mobile"
+	else
+		return "Other"
+	end
 end
 
 getgenv().device = device()
