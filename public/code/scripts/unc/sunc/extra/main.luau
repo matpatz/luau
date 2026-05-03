@@ -47,8 +47,9 @@ local function add(name, func, expect)
 end
 local genv = getgenv()
 local function alias(names, func)
+    local _func = genv[func] or functions[func] or func 
     for k,v in ipairs(names) do
-        genv[v] = func
+        add(v, _func)
     end
 end
 
@@ -316,9 +317,13 @@ add("hookfunction", function(func, hook)
     return hooked, old
 end)
 
-alias({"hiddenhook", "secrethook"}, function(func, hook)
+add("hiddenhook", function(func, hook)
     hookfunction(func, hook)
     ishooked[func] = false
+end)
+
+alias({"secrethook"}, function(func, hook)
+    hiddenhook(func, hook)
 end)
 
 add("restorefunction", function(func, hook)
@@ -524,7 +529,8 @@ add("rconsolesettitle", function(title)
     expect(title, "string", false, 1)
     window["title"].Text = title
 end)
-add("rconsolename", function(title)
+
+alias({"rconsolename"}, function(title)
     rconsolesettitle(title)
 end)
 add("isrconsole", function(title)
@@ -2592,28 +2598,17 @@ local shwid
 add("sethwid", function(input)
     shwid = input
 end)
-add("set_hwid", function(input)
+
+alias({"set_hwid", "setmac"}, function(input)
     return sethwid(input)
 end)
 
-add("setmac", function(input)
-    shwid = input
-end)
-
 local anal = game:GetService("RbxAnalyticsService")
-add("getmac", function()
+add("gethwid", function()
     return shwid or crypt.hash(anal:GetClientId())
 end)
 
-add("gethwid", function()
-    return getmac()
-end)
-
-add("get_hwid", function()
-    return getmac()
-end)
-
-add("get_user_identifer", function()
+alias({"get_hwid", "get_user_identifier", "getmac"}, function()
     return getmac()
 end)
 
