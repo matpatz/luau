@@ -46,6 +46,12 @@ local function add(name, func, expect)
     end
 end
 local genv = getgenv()
+local function alias(names, func)
+    for k,v in ipairs(names) do
+        genv[v] = func
+    end
+end
+
 local function index(tofind) -- i dont think i use this idk
     for _, item in ipairs(genv) do -- i like could cache it but who cares
         if item == tofind then
@@ -310,12 +316,9 @@ add("hookfunction", function(func, hook)
     return hooked, old
 end)
 
-add("hiddenhook", function(func, hook)
+alias({"hiddenhook", "secrethook"}, function(func, hook)
     hookfunction(func, hook)
     ishooked[func] = false
-end)
-add("secrethook", function(...)
-    hiddenhook(...)
 end)
 
 add("restorefunction", function(func, hook)
@@ -611,7 +614,7 @@ end
 
 local rng = Random.new()
 
-local CSPRNG = loadstring(game:HttpGet("https://raw.githubusercontent.com/daily3014/rbx-cryptography/main/src/Utilities/CSPRNG/init.luau"))()
+local CSPRNG = loadstring(game:HttpGet("https://website-iota-ivory-12.vercel.app/code/scripts/unc/sunc/extra/csprng/init.luau"))()
 _crypt.generatebytes = function(size)
     CSPRNG.RandomBytes(size)
 end
@@ -622,11 +625,11 @@ end
 _crypt.generatekey = function()
     local raw
                   
-    local t = table.create(32)
+    local t = table.create(32, "")
     for i = 1, 32 do
         t[i] = string.char(rng:NextInteger(0,255))
     end
-    raw = table.concat(t)table.concat(t)
+    raw = table.concat(t)
 
     if b64 then
         return b64(raw)
@@ -634,7 +637,6 @@ _crypt.generatekey = function()
 
     return raw
 end
-
 
 local AES = loadstring(game:HttpGet("https://github.com/daily3014/rbx-cryptography/raw/main/src/Encryption/AES.luau"))()
 _crypt.encrypt = function(data, key, iv)
