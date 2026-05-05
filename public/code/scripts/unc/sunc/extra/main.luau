@@ -77,7 +77,6 @@ local function translate(t)
 end
 
 local function expect(got, expected, care_about_value, arg_num, message)
-    -- accept either a string shorthand ("function", "Instance" …) or a real value
     if type(expected) == "string" then
         expected = translate(expected)
     end
@@ -97,11 +96,42 @@ local function expect(got, expected, care_about_value, arg_num, message)
     end
 end
 
+local function _cloneref(object)
+    if setmetatable then
+        local proxy = {}
+        local mt = {
+            __index = object,
+            __newindex = function(_, k, v) object[k] = v end,
+            __tostring = function() return tostring(object) end,
+            __eq = function() return false end
+        }
+        return setmetatable(proxy, mt)
+    else
+        return object
+    end
+end
+local get = cloneref and cloneref or _cloneref
 local services = {
-    CoreGui = gethui and gethui() or game:GetService("CoreGui"),
-    RunService = game:GetService("RunService")
+    CollectionService = get(game:GetService("CollectionService")),
+    VirtualInputManager = get(game:GetService("VirtualInputManager")),
+    UserInputService = get(game:GetService("UserInputService")),
+    UGCValidationService = get(game:GetService("UGCValidationService")),
+    RbxAnalyticsService = get(game:GetService("RbxAnalyticsService")),
+    ReflectionService = get(game:GetService("ReflectionService")),
+    CoreGui = gethui and gethui() or get(game:GetService("CoreGui")),
+    ReplicatedStorage = get(game:GetService("ReplicatedStorage")),
+    Stats = get(game:GetService("Stats")),
+    CorePackages = get(game:GetService("CorePackages")),
+    RunService = get(game:GetService("RunService")),
+    Players = get(game:GetService("Players"))
 }
+local lp = services["Players"]["LocalPlayer"]
 
+--[[
+for _, item in ipairs(tests) do
+    table.insert(services, get(game:GetService(item)))
+end --]]
+  
 -- termexec (terminal)
 
 -- probbaly wont work so you have to manually download it
@@ -244,18 +274,7 @@ end
 add("cloneref", function(object)
     expect(object, "Instance", false, 1)
 
-    if setmetatable then
-        local proxy = {}
-        local mt = {
-            __index = object,
-            __newindex = function(_, k, v) object[k] = v end,
-            __tostring = function() return tostring(object) end,
-            __eq = function() return false end
-        }
-        return setmetatable(proxy, mt)
-    else
-        return object
-    end
+    return _cloneref(objecr)
 end)
 
 add("compareinstances", function(a, b)
@@ -1277,10 +1296,6 @@ do
     end
 end
 
--- actual raknet is very detected btw; I wouldnt use desync on a main
-
-local _raknet = {}
-
 local hooks, Packet = {}, {}
 Packet.__index = Packet
 
@@ -1638,7 +1653,7 @@ _helper.GetChildrenWithAttribute = function(parent, attr)
     return result
 end
 
-local collection = game:GetService("CollectionService")
+local collection = services["CollectionService"]
 
 _helper.GetChildrenWithTag = function(parent, tag)
     local result = {}
@@ -2065,18 +2080,28 @@ end)
 
 -- Input
 
-local vim = game:GetService("VirtualInputManager")
-local uis = game:GetService("UserInputService")
+local uis = services["UserInputService"]
+
+local active = false -- it exeucted somehow
+    -- maybe autoexec who cares ig
+
+uis.WindowFocused:Connect(function()
+    active = true
+end)
+
+uis.WindowFocusReleased:Connect(function()
+    active = false
+end)
+
+add("isrbxactive", function()
+    return active
+end)
 
 local mouse = uis:GetMouseLocation()
 uis.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement then
         mouse = uis:GetMouseLocation()
     end
-end)
-
-add("isrbxactive", function()
-    return uis.WindowFocused
 end)
 
 add("closerbx", function()
@@ -2086,6 +2111,8 @@ add("closeroblox", function()
     crash()
 end)
 
+
+local vim = services["VirtualInputManager"]
 add("mouse1press", function()
     vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, true, game, 0)
 end)
@@ -2128,7 +2155,6 @@ end)
 
 -- Instance
 
-local lp = game:GetService("Players").LocalPlayer
 local char = lp.Character
 local hrp = char.HumanoidRootPart
 
@@ -2251,8 +2277,7 @@ add("getcustomasset", function(path)
     return "rbxasset://" .. new
 end)
 
-local ugc = game:GetService("UGCValidationService")
-local reflect = game:GetService("ReflectionService")
+local reflect = services["ReflectionService"]
 
 add("getproperties", function(instance)
     expect(instance, "Instance", false, 1)
@@ -2268,6 +2293,7 @@ add("getproperties", function(instance)
     return out
 end)
 
+local ugc = services["UGCValidationService"]
 add("ishiddenproperty", function(object, property)
     return ugc:GetPropertyValue(object, property) ~= nil
 end)
@@ -2334,7 +2360,7 @@ add("getsimulationradius", function()
 end)
 
 add("gethui", function()
-    return cloneref(game:GetService("CoreGui")).RobloxGui
+    return services["Hui"]
 end)
 
 -- this is supposed to be like from the memory idk
@@ -2603,7 +2629,7 @@ alias({"set_hwid", "setmac"}, function(input)
     return sethwid(input)
 end)
 
-local anal = game:GetService("RbxAnalyticsService")
+local anal = services["RbxAnalyticsService"]
 add("gethwid", function()
     return shwid or crypt.hash(anal:GetClientId())
 end)
@@ -2852,21 +2878,21 @@ add("getfpscap", function()
 end)
 
 add("getping", function()
-    return game:GetService("Stats").FrameRateManager["AverageFPS"]:GetValue()
+    return services["Stats"].FrameRateManager["AverageFPS"]:GetValue()
 end)
 
 add("getfps", function()
     local fps2 = 0; local last = tick()
     
-    rs.RenderStepped:Wait()
+    services["RunService"].RenderStepped:Wait()
     fps2 = 1 / (tick() - last)
     
     return math.floor(fps2)
 end)
 
 -- thanks https://scriptblox.com/u/Salood
-add("getplatform", function()
-    return tostring(game:GetService("UserInputService"):GetPlatform()):split(".")[3]
+add("getplatform", function() 
+    return services["UserInputService"]:GetPlatform():split(".")[3]
 end)
 
 add("playanimation", function(animation)
@@ -3265,10 +3291,10 @@ local function test()
 
     local checks = {
         try(function() return game.Name end),
-        try(function() return game:GetService("CoreGui").Name end),
+        try(function() return services["CoreGui"].Name end),
         try(function() return game.DataCost end),
         try(function() return Instance.new("Player") end),
-        try(function() return game:GetService("CorePackages").Name end),
+        try(function() return services["CorePackages"].Name end),
         try(function() return Instance.new("SurfaceAppearance") end),
         try(function() Instance.new("MeshPart").MeshId = "" end)
     }
