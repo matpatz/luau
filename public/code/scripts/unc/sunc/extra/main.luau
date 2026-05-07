@@ -3584,13 +3584,15 @@ local docs = {
 local codeused = {
     "https://scriptblox.com/u/imjustanaIienguy (github.com/lunar0x4) -- hookmetamethod, hookfunction, filtergc, and other stuff",
     "https://scriptblox.com/script/Universal-Script-UNC-RENC-Functions-For-Nova-17623 -- used to find functions for implemenation",
-    "https://v3rm.net/threads/release-raknet-implementation.15622 -- completely made up docs"
+    "https://v3rm.net/threads/release-raknet-implementation.15622 -- completely made up docs",
+    "https://github.com/daily3014/rbx-cryptography",
+    "https://github.com/luau/UniversalSynSaveInstance"
 }
 
 print(string.format(
     "Documentation used: %s\nCode used: %s",
-    table.concat(docs, "\n\t, "),
-    table.concat(codeused, "\n\t, ")
+    table.concat(docs, "\n\t► "),
+    table.concat(codeused, "\n\t► ")
 ))
 
 -- 50/50 -- also removes more stuff than we added with tables -- who cares
