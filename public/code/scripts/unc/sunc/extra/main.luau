@@ -2104,13 +2104,9 @@ uis.InputChanged:Connect(function(input)
     end
 end)
 
-add("closerbx", function()
-    crash() -- see  raknet
-end)
-add("closeroblox", function()
+alias({"closerbx", "closeroblox"}, function()
     crash()
 end)
-
 
 local vim = services["VirtualInputManager"]
 add("mouse1press", function()
@@ -2296,6 +2292,9 @@ end)
 local ugc = services["UGCValidationService"]
 add("ishiddenproperty", function(object, property)
     return ugc:GetPropertyValue(object, property) ~= nil
+end)
+alias({"ishidden"}, function(obj, prop)
+    return ishiddenproperty(obj, prop)
 end)
 
 -- return if the property was even hidden
