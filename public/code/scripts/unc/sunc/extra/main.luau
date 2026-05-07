@@ -3,8 +3,8 @@
 local time = tick()
 local testing = false
 
-local cclosures = setmetatable({}, {__mode = "k"})
-local custom_closures = {}; local debug_override = setmetatable({}, {__mode = "k"})
+local cclosures = {}
+local custom_closures = {}; local debug_override = {}
 local function _newc(func)
     --expect(func, "function", false, 1)
 
@@ -302,7 +302,7 @@ add("getcallingscript", function()
     return table.find(game:GetDescendants(), s)
 end)
 
-local tback_ignore = setmetatable({}, {__mode = "k"})
+local tback_ignore = {}
 add("setstackhidden", function(func, hidden)
     tback_ignore[func] = hidden
 end)
@@ -2226,7 +2226,7 @@ add("setproximitypromptduration", function(pprompt, tset)
     pprompt.HoldDuration = tset
 end)
 
-local signal_store = setmetatable({}, {__mode = "k"})
+local signal_store = {}
 add("getconnections", function(signal)
     assert(typeof(signal) == "RBXScriptSignal", "expected RBXScriptSignal, got " .. typeof(signal))
     return signal_store[signal] or {}
