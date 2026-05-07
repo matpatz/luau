@@ -3575,14 +3575,14 @@ print(string.format(
 ))
 
 local docs = {
-    "potassium.pro",
-    "volt.bz",
-    "sunc.su",
+    "\n\t► https://potassium.pro",
+    "https://volt.bz",
+    "https://sunc.su",
     "https://celeryrblx.github.io/lua/rnet -- unused",
     "https://tesker-103.github.io/UNC-Documentation -- unused"
 }
 local codeused = {
-    "https://scriptblox.com/u/imjustanaIienguy (github.com/lunar0x4) -- hookmetamethod, hookfunction, filtergc, and other stuff",
+    "\n\t► https://scriptblox.com/u/imjustanaIienguy (github.com/lunar0x4) -- hookmetamethod, hookfunction, filtergc, and other stuff",
     "https://scriptblox.com/script/Universal-Script-UNC-RENC-Functions-For-Nova-17623 -- used to find functions for implemenation",
     "https://v3rm.net/threads/release-raknet-implementation.15622 -- completely made up docs",
     "https://github.com/daily3014/rbx-cryptography",
@@ -3590,8 +3590,9 @@ local codeused = {
 }
 
 print(string.format(
-    "Documentation used: %s\nCode used: %s",
+    "Documentation used:%s\nCode used: %s",
     table.concat(docs, "\n\t► "),
+    
     table.concat(codeused, "\n\t► ")
 ))
 
