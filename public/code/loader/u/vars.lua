@@ -1,19 +1,83 @@
-local v, s, get = {}, {players = "Players", workspace = "Workspace", rs = "RunService", core = "CoreGui", input = "UserInputService", rep = "ReplicatedStorage", lighting = "Lighting", vim = "VirtualInputManager", tcs = "TextChatService", analytics = "RbxAnalyticsService", marketplace = "MarketplaceService"},  (type(cloneref) == "function") and cloneref or function(x) return x end
+local _g, _s = game, {
+    ["players"] = "Players",
+    ["workspace"] = "Workspace",
+    ["run"] = "RunService",
+    ["core"] = "CoreGui",
+    ["input"] = "UserInputService",
+    ["rep"] = "ReplicatedStorage",
+    ["lighting"] = "Lighting",
+    ["vim"] = "VirtualInputManager",
+    ["text"] = "TextChatService",
+    ["analytics"] = "RbxAnalyticsService",
+    ["marketplace"] = "MarketplaceService",
+    ["teleport"] = "TeleportService",
+    ["http"] = "HttpService",
+    ["gui"] = "GuiService",
+    ["startergui"] = "StarterGui",
+    ["teams"] = "Teams",
+    ["sound"] = "SoundService",
+    ["collection"] = "CollectionService",
+    ["tween"] = "TweenService",
+    ["stats"] = "Stats",
+    ["debris"] = "Debris",
+    ["pathfinding"] = "PathfindingService",
+    ["insert"] = "InsertService",
+    ["context"] = "ContextActionService",
+    ["physics"] = "PhysicsService",
+    ["proximity"] = "ProximityPromptService",
+    ["group"] = "GroupService",
+    ["localization"] = "LocalizationService",
+    ["chat"] = "Chat",
+    ["voice"] = "VoiceChatService",
+    ["starterpack"] = "StarterPack",
+    ["starterplayer"] = "StarterPlayer",
+    ["material"] = "MaterialService",
+    ["asset"] = "AssetService",
+    ["scriptcontext"] = "ScriptContext",
+    ["content"] = "ContentProvider"
+}
 
-for short, name in pairs(s) do
-    local svc = get(game:GetService(name))
-    v[short] = svc
-
-    if short == "players" then
-        local lp = svc.LocalPlayer
-        local char = lp and lp.Character
-        v.player, v.char, v.hrp, v.cam = lp, char, char and char:FindFirstChild("HumanoidRootPart"), workspace.CurrentCamera
-    end
+local _clone = (typeof(cloneref) == "function" and cloneref) or function(x)
+    return x
 end
 
-return v
+local services = {}
+
+for alias, serviceName in next, _s do
+    services[alias] = _clone(_g:GetService(serviceName))
+end
+
+do
+    local lp = services["players"].LocalPlayer
+    local char = lp and lp.Character
+
+    services["player"] = lp
+    services["char"] = char
+    services["hum"] = char and char:FindFirstChildOfClass("Humanoid")
+    services["hrp"] = char and char:FindFirstChild("HumanoidRootPart")
+    services["cam"] = workspace.CurrentCamera
+    services["mouse"] = lp and lp:GetMouse()
+end
+
+services["players"].LocalPlayer.CharacterAdded:Connect(function(char)
+    services["char"] = char
+    services["hum"] = char:FindFirstChildOfClass("Humanoid")
+    services["hrp"] = char:FindFirstChild("HumanoidRootPart")
+end)
+
+return setmetatable(services, {
+    __index = function(_, k)
+        warn(("[services] unknown index -> %s"):format(tostring(k)))
+    end
+})
 
 --[[
-    local v = loadstring(game:HttpGet("https://website-iota-ivory-12.vercel.app/code/loader/u/vars.lua"))()
-    print(v.workspace)
---]]
+
+local services = loadstring(game:HttpGet(
+    "https://website-iota-ivory-12.vercel.app/code/loader/u/vars.lua"
+))()
+
+print(services["workspace"])
+print(services["hrp"])
+
+]]
