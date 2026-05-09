@@ -1,7 +1,7 @@
 local _g, _s = game, {
     ["players"] = "Players",
     ["workspace"] = "Workspace",
-    ["run"] = "RunService",
+    ["rs"] = "RunService",
     ["core"] = "CoreGui",
     ["input"] = "UserInputService",
     ["rep"] = "ReplicatedStorage",
