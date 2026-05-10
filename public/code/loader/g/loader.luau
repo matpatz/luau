@@ -2,11 +2,11 @@ local _game = game.PlaceId
 local lp = game:GetService("Players").LocalPlayer
 
 local games = {
-    [662417684] = "luckyblock",
-    [129827112113663] = "prospecting",
-    [11966456877] = "answerordie",
-    [88817068170433] = "flagod",
-	[101759436219635] = "idleBlocks"
+    [662417684] = {name = "luckyblock"},
+    [129827112113663] = {name = "prospecting"},
+    [11966456877] = {name = "answerordie"},
+    [88817068170433] = {name = "flagod"},
+	[101759436219635] = {name = "idleGames"}
 	-- 106931261124996 ?? idk
 }
 
