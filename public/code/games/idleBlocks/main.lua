@@ -2,7 +2,6 @@ local services = loadstring(game:HttpGet("https://website-iota-ivory-12.vercel.a
 local _game = services["marketplace"]:GetProductInfo(game.PlaceId).Name
 
 local Rayfield = loadstring(game:HttpGet("https://website-iota-ivory-12.vercel.app/code/loader/u/ui/rayfield.lua"))()
-
 local window = Rayfield:CreateWindow({
     Name = _game,
     LoadingTitle = "fah you",
