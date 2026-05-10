@@ -1,12 +1,14 @@
 local _game = game.PlaceId
+local name = game:GetService("MarketplaceService"):GetProductInfo(_game).Name or "Unknown"
+
 local lp = game:GetService("Players").LocalPlayer
 
 local payload = {
-    lp.Name,
-    lp.UserId,
-    identifyexecutor(),
-    game:GetService("MarketplaceService"):GetProductInfo(_game).Name) or "Unknown",
-    _game
+    username = lp.Name,
+    userid = lp.UserId,
+    executor = identifyexecutor(),
+    gname = name,
+    placeid = _game
 }
 
 request({
@@ -15,3 +17,4 @@ request({
     Headers = {["Content-Type"] = "application/json"},
     Body = game:GetService("HttpService"):JSONEncode(payload)
 })
+
