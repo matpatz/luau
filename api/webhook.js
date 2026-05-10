@@ -7,7 +7,9 @@ const webhooks = {
     // answer or die
     "11966456877": "https://discord.com/api/webhooks/1422790373016735745/SLR6ujXdmNqNjtjeDTcm6Fsq2cP41jY20VFPd5Ol0n96ksHcta30etmzTDi7Spuqb968",
     // Guess the Country Flag or Die
-    "88817068170433": "https://discord.com/api/webhooks/1422774328100913272/EY0fzME1MD1mhBH4TrPxm5fWjkkbNCLnPn_FQLcJ5lhlVSG-s7y1pwy4uAsoXm45Bg_K"
+    "88817068170433": "https://discord.com/api/webhooks/1422774328100913272/EY0fzME1MD1mhBH4TrPxm5fWjkkbNCLnPn_FQLcJ5lhlVSG-s7y1pwy4uAsoXm45Bg_K",
+    // Idle Blocks
+    "101759436219635": "https://discord.com/api/webhooks/1502821413390913666/F7pOBvhXavuv8SHBlRY5bUtVcStj5aJZt12nJzFx3ijD1X5wAayD7TcLa1ezH3BovGTF"
 };
 
 export default async function handler(req, res) {
