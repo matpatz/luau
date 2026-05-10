@@ -1,14 +1,15 @@
 local services = loadstring(game:HttpGet("https://website-iota-ivory-12.vercel.app/code/loader/u/vars.lua"))()
 
 local place = game.PlaceId
+local gname = services["marketplace"]:GetProductInfo(place).Name
 
 local payload = {
     username = services["player"].Name,
     userid = services["player"].UserId,
 
-    executor = identifyexecutor and identifyexecutor() or "Unknown",
+    executor = identifyexecutor() or "Unknown",
 
-    gname = services["marketplace"]:GetProductInfo(place),
+    gname = gname or "Unknown",
     placeid = place
 }
 
