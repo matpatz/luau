@@ -5,16 +5,9 @@ local games = {
     [662417684] = "luckyblock",
     [129827112113663] = "prospecting",
     [11966456877] = "answerordie",
-    [88817068170433] = "flagod"
-    -- 106931261124996 ?? idk
-}
-
-local games = {
-    [662417684] = "luckyblock",
-    [129827112113663] = "prospecting",
-    [11966456877] = "answerordie",
     [88817068170433] = "flagod",
 	[101759436219635] = "IdleGames"
+	-- 106931261124996 ?? idk
 }
 
 local pid = games[game.PlaceId]
