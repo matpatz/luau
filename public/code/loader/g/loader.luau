@@ -6,7 +6,7 @@ local games = {
     [129827112113663] = "prospecting",
     [11966456877] = "answerordie",
     [88817068170433] = "flagod",
-	[101759436219635] = "IdleGames"
+	[101759436219635] = "idleBlocks"
 	-- 106931261124996 ?? idk
 }
 
