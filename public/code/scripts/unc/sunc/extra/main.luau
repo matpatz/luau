@@ -1163,16 +1163,19 @@ _debug.getinfo = function(target)
     }
 end
 
-_debug.getproto = function()
+_debug.getproto = function(func)
+    expect(func, "function", false, 1)
     return nil
 end
 
-_debug.getprotos = function()
+_debug.getprotos = function(func)
+    expect(func, "function", false, 1)
     return {}
 end
 
+--return #debug.getprotos(func)
 _debug.getprotosize = function(func)
-    assert(typeof(func) == "function", "expected function")
+    expect(func, "function", false, 1)
 
     local count = 0
 
