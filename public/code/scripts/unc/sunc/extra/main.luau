@@ -350,6 +350,9 @@ add("restorefunction", function(func, hook)
     ishooked[func] = nil
     return hook
 end)
+alias({"getoriginalfunction"}, function(func, hook)
+	restorefunction(func, hook)
+end)
 
 add("securefunction", function(func)
     expect(func, "function", false, 1)
@@ -1166,6 +1169,24 @@ end
 
 _debug.getprotos = function()
     return {}
+end
+
+_debug.getprotosize = function(func)
+    assert(typeof(func) == "function", "expected function")
+
+    local count = 0
+
+    while true do
+        local ok, proto = pcall(debug.getproto, func, count + 1)
+
+        if not ok then
+            break
+        end
+
+        count += 1
+    end
+
+    return count
 end
 
 _debug.getcallstack = function()
