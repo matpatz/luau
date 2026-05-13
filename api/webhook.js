@@ -1,4 +1,5 @@
-// who cares ig
+// spam them all you want it has no affect on me
+//        feels the aura
 const webhooks = {
     // lucky block
     "662417684": "https://discord.com/api/webhooks/1489794802097852618/rS50RLlVMw3_7Lj5RFuPI5fNGaLwsyoc7c7NBf2Jnua8RzJg2x3QvD-qb9E3MtezdXfQ",
