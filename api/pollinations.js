@@ -15,13 +15,27 @@ module.exports = async (req, res) => {
         const timeoutId = setTimeout(() => controller.abort(), 8000);
 
         const response = await fetch(
-            `https://text.pollinations.ai/${encodeURIComponent(text)}?model=${model}&seed=${Math.floor(Math.random() * 9999)}&json=false`,
-            { method: "GET", signal: controller.signal }
+            "https://text.pollinations.ai/",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    messages: [{ role: "user", content: text }],
+                    model,
+                    seed: Math.floor(Math.random() * 9999),
+                    jsonMode: false
+                }),
+                signal: controller.signal
+            }
         );
 
         clearTimeout(timeoutId);
 
-        if (!response.ok) return res.status(500).send("-- api error");
+        if (!response.ok) {
+            const err = await response.text();
+            console.error("Pollinations error:", response.status, err);
+            return res.status(500).send("-- api error");
+        }
 
         const content = await response.text();
         res.send(content?.trim() || "-- no content returned");
