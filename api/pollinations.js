@@ -57,11 +57,11 @@ module.exports = async (req, res) => {
                 method: "POST",
                 headers: {
                     Authorization:
-                        `Bearer ${process.env.POLLINATIONS_TOKEN}`,
-
+                        `Bearer ${process.env.pollinations}`,
+        
                     "Content-Type": "application/json"
                 },
-
+        
                 body: JSON.stringify(payload)
             }
         );
