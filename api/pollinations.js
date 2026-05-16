@@ -1,7 +1,14 @@
 let rpm = 0;
 let lreset = Math.floor(Date.now() / 1000);
 
-async function prompt(text) {
+/**
+ * @param {string} text
+ * @param {Object} options
+ * @param {string} [options.model]
+ * @param {number} [options.temperature]
+ * @param {boolean|Object} [options.thinking]
+ */
+async function prompt(text, options = {}) {
     const now = Math.floor(Date.now() / 1000);
 
     if (now - lreset >= 60) {
@@ -15,23 +22,47 @@ async function prompt(text) {
 
     rpm++;
 
+    const {
+        model = "qwen-coder",
+        temperature,
+        thinking
+    } = options;
+
+    const body = {
+        model,
+        messages: [
+            {
+                role: "user",
+                content: text
+            }
+        ]
+    };
+
+    if (temperature !== undefined) {
+        body.temperature = temperature;
+    }
+
+    if (thinking !== undefined) {
+        body.thinking =
+            typeof thinking === "boolean"
+                ? {
+                    type: thinking ? "enabled" : "disabled"
+                }
+                : thinking;
+    }
+
     try {
-        const response = await fetch("https://gen.pollinations.ai/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${process.env.pollinations}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                model: "qwen-coder",
-                messages: [
-                    {
-                        role: "user",
-                        content: text
-                    }
-                ]
-            })
-        });
+        const response = await fetch(
+            "https://gen.pollinations.ai/v1/chat/completions",
+            {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${process.env.pollinations}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(body)
+            }
+        );
 
         const data = await response.json();
 
