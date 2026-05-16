@@ -2,47 +2,92 @@ module.exports = async (req, res) => {
     let body = req.body;
 
     if (typeof body === "string") {
-        try { body = JSON.parse(body); } catch { return res.status(400).send("-- invalid json"); }
+        try {
+            body = JSON.parse(body);
+        } catch {
+            return res.status(400).send("-- invalid json");
+        }
     }
 
-    if (!body) return res.status(400).send("-- missing body");
+    if (!body) {
+        return res.status(400).send("-- missing body");
+    }
 
-    const { text, model = "openai-fast" } = body;
-    if (!text) return res.status(400).send("-- missing text");
+    const {
+        text,
+        model = "openai-fast",
+        temperature,
+        thinking
+    } = body;
+
+    if (!text) {
+        return res.status(400).send("-- missing text");
+    }
 
     try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const payload = {
+            model,
+
+            messages: [
+                {
+                    role: "user",
+                    content: text
+                }
+            ]
+        };
+
+        if (temperature !== undefined) {
+            payload.temperature = temperature;
+        }
+
+        if (thinking !== undefined) {
+            payload.thinking =
+                typeof thinking === "boolean"
+                    ? {
+                        type: thinking
+                            ? "enabled"
+                            : "disabled"
+                    }
+                    : thinking;
+        }
 
         const response = await fetch(
-            "https://text.pollinations.ai/",
+            "https://gen.pollinations.ai/v1/chat/completions",
             {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    messages: [{ role: "user", content: text }],
-                    model,
-                    seed: Math.floor(Math.random() * 9999),
-                    jsonMode: false
-                }),
-                signal: controller.signal
+                headers: {
+                    Authorization:
+                        `Bearer ${process.env.POLLINATIONS_TOKEN}`,
+
+                    "Content-Type": "application/json"
+                },
+
+                body: JSON.stringify(payload)
             }
         );
 
-        clearTimeout(timeoutId);
+        const data = await response.json();
 
         if (!response.ok) {
-            const err = await response.text();
-            console.error("Pollinations error:", response.status, err);
-            return res.status(500).send("-- api error");
+            console.error(data);
+
+            return res
+                .status(response.status)
+                .send(data?.error?.message || "-- api error");
         }
 
-        const content = await response.text();
-        res.send(content?.trim() || "-- no content returned");
+        return res.send(
+            data?.choices?.[0]?.message?.content
+                ?.trim() ||
+
+            "-- no content returned"
+        );
 
     } catch (err) {
-        if (err.name === "AbortError") return res.status(504).send("-- timeout");
         console.error(err);
-        res.status(500).send("-- request failed");
+
+        return res
+            .status(500)
+            .send("-- request failed");
     }
 };
