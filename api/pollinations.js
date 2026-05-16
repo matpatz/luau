@@ -1,13 +1,6 @@
 let rpm = 0;
 let lreset = Math.floor(Date.now() / 1000);
 
-/**
- * @param {string} text
- * @param {Object} options
- * @param {string} [options.model]
- * @param {number} [options.temperature]
- * @param {boolean|Object} [options.thinking]
- */
 async function prompt(text, options = {}) {
     const now = Math.floor(Date.now() / 1000);
     if (now - lreset >= 60) {
@@ -18,68 +11,36 @@ async function prompt(text, options = {}) {
         return "-- ratelimited";
     }
     rpm++;
-    
-    const {
-        model = "qwen-coder",
-        temperature,
-        thinking
-    } = options;
-    
-    const body = {
-        model,
-        messages: [
-            {
-                role: "user",
-                content: text
-            }
-        ],
-        stream: false // Explicitly disable streaming for faster response
-    };
-    
-    if (temperature !== undefined) {
-        body.temperature = temperature;
-    }
-    if (thinking !== undefined) {
-        body.thinking =
-            typeof thinking === "boolean"
-                ? {
-                    type: thinking ? "enabled" : "disabled"
-                }
-                : thinking;
-    }
-    
+
+    const { model = "openai-fast", temperature, thinking } = options;
+
     try {
-        // Add timeout wrapper
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
-        
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+        const encoded = encodeURIComponent(text);
+        const modelParam = `model=${model}`;
+        const seedParam = `seed=${Math.floor(Math.random() * 9999)}`;
+
         const response = await fetch(
-            "https://gen.pollinations.ai/v1/chat/completions",
+            `https://text.pollinations.ai/${encoded}?${modelParam}&${seedParam}&json=false`,
             {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${process.env.pollinations}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(body),
+                method: "GET",
                 signal: controller.signal
             }
         );
-        
+
         clearTimeout(timeoutId);
-        
+
         if (!response.ok) {
             return "-- api error";
         }
-        
-        const data = await response.json();
-        return (
-            data?.choices?.[0]?.message?.content ||
-            "-- no content returned"
-        );
+
+        const content = await response.text();
+        return content?.trim() || "-- no content returned";
+
     } catch (err) {
-        if (err.name === 'AbortError') {
-            console.error('Request timeout');
+        if (err.name === "AbortError") {
             return "-- timeout";
         }
         console.error(err);
