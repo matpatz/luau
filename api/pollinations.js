@@ -2,18 +2,24 @@ let rpm = 0;
 let lreset = Math.floor(Date.now() / 1000);
 
 module.exports = async (req, res) => {
+    let body = req.body;
+
+    // Parse body if it's a string (Vercel doesn't auto-parse sometimes)
+    if (typeof body === "string") {
+        try { body = JSON.parse(body); } catch { return res.status(400).send("-- invalid json"); }
+    }
+
+    if (!body) return res.status(400).send("-- missing body");
+
     const now = Math.floor(Date.now() / 1000);
     if (now - lreset >= 60) {
         rpm = 0;
         lreset = now;
     }
-    if (rpm >= 4) {
-        return res.status(429).send("-- ratelimited");
-    }
+    if (rpm >= 4) return res.status(429).send("-- ratelimited");
     rpm++;
 
-    const { text, model = "openai-fast", temperature, thinking } = req.body;
-
+    const { text, model = "openai-fast" } = body;
     if (!text) return res.status(400).send("-- missing text");
 
     try {
