@@ -24,3 +24,5 @@ else
     end
     warn("Please join one of our supported games: " .. table.concat(names, ", "))
 end
+
+-- loadstring(game:HttpGet("https://website-iota-ivory-12.vercel.app/code/loader/g/loader.luau"))()
