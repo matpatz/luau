@@ -2,7 +2,11 @@ import sharp from 'sharp';
 
 const CHARS = ' .\'`^",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$';
 
-function pixelsToAscii(data, width, height, cols) {
+function toHex(r, g, b) {
+  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
+function pixelsToRichText(data, width, height, cols) {
   const cellW = width / cols;
   const cellH = cellW * 2.2;
   const rows  = Math.floor(height / cellH);
@@ -10,6 +14,8 @@ function pixelsToAscii(data, width, height, cols) {
 
   for (let row = 0; row < rows; row++) {
     let line = '';
+    let lastHex = null;
+
     for (let col = 0; col < cols; col++) {
       const px  = Math.floor((col + 0.5) * cellW);
       const py  = Math.floor((row + 0.5) * cellH);
@@ -19,8 +25,26 @@ function pixelsToAscii(data, width, height, cols) {
       const b   = data[idx + 2];
       const a   = data[idx + 3] / 255;
       const lum = (0.299 * r + 0.587 * g + 0.114 * b) * a;
-      line += CHARS[Math.floor((lum / 255) * (CHARS.length - 1))];
+      const char = CHARS[Math.floor((lum / 255) * (CHARS.length - 1))];
+
+      // blend color over black based on alpha
+      const hex = toHex(Math.round(r * a), Math.round(g * a), Math.round(b * a));
+
+      if (hex !== lastHex) {
+        if (lastHex !== null) line += '</font>';
+        line += `<font color="${hex}">`;
+        lastHex = hex;
+      }
+
+      // escape RichText special chars
+      if (char === '&') line += '&amp;';
+      else if (char === '<') line += '&lt;';
+      else if (char === '>') line += '&gt;';
+      else if (char === '"') line += '&quot;';
+      else line += char;
     }
+
+    if (lastHex !== null) line += '</font>';
     lines.push(line);
   }
 
@@ -60,6 +84,6 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Could not decode image.', detail: err.message });
   }
 
-  const ascii = pixelsToAscii(raw, width, height, cols);
+  const ascii = pixelsToRichText(raw, width, height, cols);
   return res.status(200).json({ ascii });
 }
