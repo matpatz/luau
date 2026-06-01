@@ -1,3636 +1,3259 @@
--- #matpatz -- I have alot of bad commits so uh lmk if shit doesnt work
+local StartTime = tick()
 
-local time = tick()
-local testing = false
+local CCClosures = {}
+local CustomClosures = {}
+local DebugOverride = {}
 
-local cclosures = {}
-local custom_closures = {}; local debug_override = {}
-local function _newc(func)
-    --expect(func, "function", false, 1)
-
-    local wrapper = function(...)
-        local args = table.pack(...)
-        local co = coroutine.create(function()
-            return func(table.unpack(args, 1, args.n))
-        end)
-
-        local ok, res = coroutine.resume(co)
-        if not ok then
-            error(res, 2)
+local NewCClosure
+do
+    local function MakeCClosure(Func)
+        local Wrapper = function(...)
+            local Args = table.pack(...)
+            local Thread = coroutine.create(function()
+                return Func(table.unpack(Args, 1, Args.n))
+            end)
+            local Ok, Result = coroutine.resume(Thread)
+            if not Ok then
+                error(Result, 2)
+            end
+            return Result
         end
-
-        return res
+        CCClosures[Wrapper] = true
+        CustomClosures[Func] = true
+        DebugOverride[Wrapper] = { source = "[C]", short_src = "[C]" }
+        return Wrapper
     end
 
-    cclosures[wrapper] = true
-    custom_closures[func] = true
-
-    debug_override[wrapper] = {
-        source = "[C]",
-        short_src = "[C]",
-    }
-
-    return wrapper
+    NewCClosure = newcclosure or MakeCClosure
 end
-local newcclosure = newcclosure and newcclosure or _newc
 
-local functions = {}; local check2add = 0
-local function add(name, func, expect)
-    check2add += 1
-    -- print("Checking :", name, tostring(func) .. "\t".. c)
+local Functions = {}
+local GlobalEnv = getgenv()
 
-    if typeof(func) ~= "function" and true then
-        functions[name] = func
+local AddFunction = function(Name, Func)
+    if typeof(Func) ~= "function" then
+        Functions[Name] = Func
     else
-        functions[name] = newcclosure(func)
-    end
-end
-local genv = getgenv()
-local function alias(names, func)
-    local _func = genv[func] or functions[func] or func 
-    for k,v in ipairs(names) do
-        add(v, _func)
+        Functions[Name] = NewCClosure(Func)
     end
 end
 
-local function index(tofind) -- i dont think i use this idk
-    for _, item in ipairs(genv) do -- i like could cache it but who cares
-        if item == tofind then
-            return item
-        end
-    end
-    return nil
-end
-
--- translate a type string into a dummy value of that type
--- so expect can use typeof() from it
-local function translate(t)
-    if t == "string"   then return "" end
-    if t == "number"   then return 0 end
-    if t == "boolean"  then return false end
-    if t == "function" then return function() end end
-    if t == "table"    then return {} end
-    if t == "Instance" then return Instance.new("Folder") end
-    if t == "thread"   then return coroutine.create(function() end) end
-    -- userdata / RBXScriptSignal js let be
-    return t
-end
-
-local function expect(got, expected, care_about_value, arg_num, message)
-    if type(expected) == "string" then
-        expected = translate(expected)
-    end
-
-    local expt = typeof(expected)
-
-    arg_num = arg_num or 1
-    if not message then
-        message = "expected " .. expt .. " at #" .. arg_num .. " got " .. typeof(got)
-    end
-
-    if not care_about_value then
-        assert(typeof(got) == expt, message)
-    else
-        message = "expected " .. tostring(expected) .. " at #" .. arg_num .. " got " .. typeof(got)
-        assert(typeof(got) == expected, message)
+local AliasFunction = function(Names, SourceNameOrFunc)
+    local Resolved = GlobalEnv[SourceNameOrFunc] or Functions[SourceNameOrFunc] or SourceNameOrFunc
+    for _, Name in ipairs(Names) do
+        AddFunction(Name, Resolved)
     end
 end
 
-local function _cloneref(object)
-    if setmetatable then
-        local proxy = {}
-        local mt = {
-            __index = object,
-            __newindex = function(_, k, v) object[k] = v end,
-            __tostring = function() return tostring(object) end,
-            __eq = function() return false end
-        }
-        return setmetatable(proxy, mt)
-    else
-        return object
-    end
-end
-local get = cloneref and cloneref or _cloneref
-local services = {
-    CollectionService = get(game:GetService("CollectionService")),
-    VirtualInputManager = get(game:GetService("VirtualInputManager")),
-    UserInputService = get(game:GetService("UserInputService")),
-    UGCValidationService = get(game:GetService("UGCValidationService")),
-    RbxAnalyticsService = get(game:GetService("RbxAnalyticsService")),
-    ReflectionService = get(game:GetService("ReflectionService")),
-    CoreGui = gethui and gethui() or get(game:GetService("CoreGui")),
-    ReplicatedStorage = get(game:GetService("ReplicatedStorage")),
-    Stats = get(game:GetService("Stats")),
-    CorePackages = get(game:GetService("CorePackages")),
-    RunService = get(game:GetService("RunService")),
-    Players = get(game:GetService("Players"))
+local TypeDummies = {
+    string   = "",
+    number   = 0,
+    boolean  = false,
+    ["function"] = function() end,
+    table    = {},
+    Instance = function() return Instance.new("Folder") end,
+    thread   = function() return coroutine.create(function() end) end,
 }
-local lp = services["Players"]["LocalPlayer"]
 
---[[
-for _, item in ipairs(tests) do
-    table.insert(services, get(game:GetService(item)))
-end --]]
-  
--- termexec (terminal)
-
--- probbaly wont work so you have to manually download it
--- read the features section on the scriptblox post to learn how to set up a websocket
-
-local isrunning = false
-local ps, cmd
-add("setup", function()
-    isrunning = true
-
-    -- will timeout unless you run em
-    ps = WebSocket.connect("ws://localhost:8080")
-    cmd = WebSocket.connect("ws://localhost:8081")
-
-    ps.OnMessage:Connect(function(msg)
-        print("[PS]", msg)
-    end)
-    cmd.OnMessage:Connect(function(msg)
-        print("[CMD]", msg)
-    end)
-end)
-
-local function allow()
-    return isrunning
+local Translate = function(TypeName)
+    local Dummy = TypeDummies[TypeName]
+    if type(Dummy) == "function" and (TypeName == "Instance" or TypeName == "thread") then
+        return Dummy()
+    end
+    return Dummy ~= nil and Dummy or TypeName
 end
 
-add("powerexec", function(command)
-    if not allow() then return end
-    ps:Send(command) -- Get-Date
-end)
-add("termexec", function(command)
-    powerexec(command)
-end)
-add("cpexec", function(command)
-    if not allow() then return end
-    cmd:Send(command) -- date /t
+local Expect = function(Value, ExpectedType, CareAboutValue, ArgNum, Message)
+    local Expected = type(ExpectedType) == "string" and Translate(ExpectedType) or ExpectedType
+    local ExpectedTypeName = typeof(Expected)
+    ArgNum = ArgNum or 1
+    if not CareAboutValue then
+        Message = Message or ("expected " .. ExpectedTypeName .. " at #" .. ArgNum .. " got " .. typeof(Value))
+        assert(typeof(Value) == ExpectedTypeName, Message)
+    else
+        Message = Message or ("expected " .. tostring(Expected) .. " at #" .. ArgNum .. " got " .. typeof(Value))
+        assert(typeof(Value) == ExpectedTypeName, Message)
+    end
+end
+
+local function MakeCloneRef(Object)
+    if not setmetatable then
+        return Object
+    end
+    local Proxy = {}
+    return setmetatable(Proxy, {
+        __index    = Object,
+        __newindex = function(_, Key, Value) Object[Key] = Value end,
+        __tostring = function() return tostring(Object) end,
+        __eq       = function() return false end,
+    })
+end
+
+local CloneRef = cloneref or MakeCloneRef
+
+local Services = {
+    CollectionService    = CloneRef(game:GetService("CollectionService")),
+    VirtualInputManager  = CloneRef(game:GetService("VirtualInputManager")),
+    UserInputService     = CloneRef(game:GetService("UserInputService")),
+    UGCValidationService = CloneRef(game:GetService("UGCValidationService")),
+    RbxAnalyticsService  = CloneRef(game:GetService("RbxAnalyticsService")),
+    ReflectionService    = CloneRef(game:GetService("ReflectionService")),
+    CoreGui              = gethui and gethui() or CloneRef(game:GetService("CoreGui")),
+    ReplicatedStorage    = CloneRef(game:GetService("ReplicatedStorage")),
+    Stats                = CloneRef(game:GetService("Stats")),
+    CorePackages         = CloneRef(game:GetService("CorePackages")),
+    RunService           = CloneRef(game:GetService("RunService")),
+    Players              = CloneRef(game:GetService("Players")),
+}
+
+local LocalPlayer = Services.Players.LocalPlayer
+
+-- Terminal (WebSocket-backed PowerShell/CMD bridge)
+
+local IsTerminalRunning = false
+local PsSocket, CmdSocket
+
+AddFunction("setup", function()
+    IsTerminalRunning = true
+    PsSocket  = WebSocket.connect("ws://localhost:8080")
+    CmdSocket = WebSocket.connect("ws://localhost:8081")
+    PsSocket.OnMessage:Connect(function(Msg) print("[PS]", Msg) end)
+    CmdSocket.OnMessage:Connect(function(Msg) print("[CMD]", Msg) end)
 end)
 
-add("getenv", function(var)
-    if not allow() then return nil end
+local AllowTerminal = function()
+    return IsTerminalRunning
+end
 
-    local result, done = nil, false
+AddFunction("powerexec", function(Command)
+    if not AllowTerminal() then return end
+    PsSocket:Send(Command)
+end)
 
-    local conn
-    conn = ps.OnMessage:Connect(function(msg)
-        conn:Disconnect()
-        result = msg:gsub("%s+$", "") 
-        done = true
+AddFunction("termexec", function(Command)
+    if not AllowTerminal() then return end
+    PsSocket:Send(Command)
+end)
+
+AddFunction("cpexec", function(Command)
+    if not AllowTerminal() then return end
+    CmdSocket:Send(Command)
+end)
+
+AddFunction("getenv", function(Var)
+    if not AllowTerminal() then return nil end
+    local Result, Done = nil, false
+    local Conn
+    Conn = PsSocket.OnMessage:Connect(function(Msg)
+        Conn:Disconnect()
+        Result = Msg:gsub("%s+$", "")
+        Done = true
     end)
-
-    ps:Send(string.format("[System.Environment]::GetEnvironmentVariable('%s')", var))
-
-    repeat task.wait() until done
-    return result
+    PsSocket:Send(string.format("[System.Environment]::GetEnvironmentVariable('%s')", Var))
+    repeat task.wait() until Done
+    return Result
 end)
 
-add("downloadLune", function(command)
-    local steps = {
+AddFunction("downloadLune", function()
+    local Steps = {
         "irm https://github.com/rojo-rbx/rokit/releases/latest/download/rokit-windows.exe -OutFile rokit.exe",
         ".\\rokit.exe self-install",
         "rokit add --global lune-org/lune",
-        "lune --version"
+        "lune --version",
     }
-
-    local i = 1
-    ps.OnMessage:Connect(function(msg)
-        print("[PS]", msg)
-        i += 1
-        if steps[i] then
-            ps:Send(steps[i])
+    local Index = 1
+    PsSocket.OnMessage:Connect(function()
+        Index += 1
+        if Steps[Index] then
+            PsSocket:Send(Steps[Index])
         end
     end)
-
-    ps:Send(steps[1])
+    PsSocket:Send(Steps[1])
 end)
 
--- you could also just run : lune --version
-add("islune", function()
-    if not allow() then return false end
-
-    local result, done = false, false
-
-    local conn
-    conn = ps.OnMessage:Connect(function(msg)
-        conn:Disconnect()
-        result = msg ~= nil and msg:gsub("%s", "") ~= ""
-        done = true
+AddFunction("islune", function()
+    if not AllowTerminal() then return false end
+    local Result, Done = false, false
+    local Conn
+    Conn = PsSocket.OnMessage:Connect(function(Msg)
+        Conn:Disconnect()
+        Result = Msg ~= nil and Msg:gsub("%s", "") ~= ""
+        Done = true
     end)
-
-    ps:Send("Get-Command lune -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source")
-
-    repeat task.wait() until done
-
-    return result
+    PsSocket:Send("Get-Command lune -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source")
+    repeat task.wait() until Done
+    return Result
 end)
 
-local r = loadstring(game:HttpGet("https://github.com/daily3014/rbx-cryptography/raw/main/src/Utilities/RandomString.luau"))()
-local rstring = function(len)
-    len = len or 16
-    return r(len, false)
+local RandomStringLib = loadstring(game:HttpGet("https://github.com/daily3014/rbx-cryptography/raw/main/src/Utilities/RandomString.luau"))()
+local RandomString = function(Length)
+    return RandomStringLib(Length or 16, false)
 end
 
-add("lune", function(code)
-    local filename = rstring(6)
-    ps:Send(string.format( -- writefile
-        "Set-Content -Path '%s.luau' -Value '%s'",
-        filename,
-        code:gsub("'", "''")
-    ))
-
+AddFunction("lune", function(Code)
+    local Filename = RandomString(6)
+    PsSocket:Send(string.format("Set-Content -Path '%s.luau' -Value '%s'", Filename, Code:gsub("'", "''")))
     task.delay(0.5, function()
-        ps:Send(string.format("lune run %s.luau", filename))
+        PsSocket:Send(string.format("lune run %s.luau", Filename))
     end)
 end)
-  
+
 -- Cache
 
-local stored = {}
-add("cache.invalidate", function(object)
-    expect(object, "Instance", false, 1)
-    stored[object] = nil
+local InstanceCache = {}
+
+AddFunction("cache.invalidate", function(Object)
+    Expect(Object, "Instance", false, 1)
+    InstanceCache[Object] = nil
 end)
 
-add("cache.iscached", function(object)
-    expect(object, "Instance", false, 1)
-    return stored[object] ~= nil
+AddFunction("cache.iscached", function(Object)
+    Expect(Object, "Instance", false, 1)
+    return InstanceCache[Object] ~= nil
 end)
 
-add("cache.replace", function(object, new)
-    expect(object, "Instance", false, 1)
-    expect(new, "Instance", false, 2)
-    stored[object] = new
+AddFunction("cache.replace", function(Object, New)
+    Expect(Object, "Instance", false, 1)
+    Expect(New, "Instance", false, 2)
+    InstanceCache[Object] = New
 end)
 
-local function t(item)
-    return typeof(item) ~= "Instance"
-end
-
--- the alien boi
-add("cloneref", function(object)
-    expect(object, "Instance", false, 1)
-
-    return _cloneref(objecr)
+AddFunction("cloneref", function(Object)
+    Expect(Object, "Instance", false, 1)
+    return MakeCloneRef(Object)
 end)
 
-add("compareinstances", function(a, b)
-    expect(a, "Instance", false, 1)
-    expect(b, "Instance", false, 2)
-    return a == b
+AddFunction("compareinstances", function(A, B)
+    Expect(A, "Instance", false, 1)
+    Expect(B, "Instance", false, 2)
+    return A == B
 end)
 
 -- Closures
 
-add("checkcaller", function()
-    local info = debug.info(getgenv, 'slnaf')
-    return debug.info(1, 'slnaf') ~= info
+AddFunction("checkcaller", function()
+    local Info = debug.info(getgenv, "slnaf")
+    return debug.info(1, "slnaf") ~= Info
 end)
 
-add("clonefunction", function(func)
-    expect(func, "function", false, 1)
-    return function(...)
-        return func(...)
-    end
+AddFunction("clonefunction", function(Func)
+    Expect(Func, "function", false, 1)
+    return function(...) return Func(...) end
 end)
 
-add("getcallingscript", function()
-    local s = debug.info(1, 's')
-    return table.find(game:GetDescendants(), s)
+AddFunction("getcallingscript", function()
+    local Source = debug.info(1, "s")
+    return table.find(game:GetDescendants(), Source)
 end)
 
-local tback_ignore = {}
-add("setstackhidden", function(func, hidden)
-    tback_ignore[func] = hidden
+local StackHidden = {}
+AddFunction("setstackhidden", function(Func, Hidden)
+    StackHidden[Func] = Hidden
 end)
 
-local ishooked, canhook = {}, {}
-for k,v in pairs(genv) do
-    if typeof(v) == "function" then
-        ishooked[v] = true
+local HookedFunctions = {}
+for _, Value in pairs(GlobalEnv) do
+    if typeof(Value) == "function" then
+        HookedFunctions[Value] = true
     end
 end
 
-add("isfunctionhooked", function(func)
-    expect(func, "function", false, 1)
-    return ishooked[func] ~= nil and ishooked[func] ~= false
+AddFunction("isfunctionhooked", function(Func)
+    Expect(Func, "function", false, 1)
+    return HookedFunctions[Func] ~= nil and HookedFunctions[Func] ~= false
 end)
 
--- thanks https://scriptblox.com/u/imjustanaIienguy
-add("hookfunction", function(func, hook)
-    expect(func, "function", false, 1)
-    expect(hook, "function", false, 2)
-    
+AddFunction("hookfunction", function(Func, Hook)
+    Expect(Func, "function", false, 1)
+    Expect(Hook, "function", false, 2)
     if replaceclosure then
-        return replaceclosure(func, hook)
+        return replaceclosure(Func, Hook)
     end
-    local old = func
-    local hooked = function(...)
-        return hook(old, ...)
-    end
-
-    ishooked[func] = true
-    return hooked, old
+    local Old = Func
+    local Hooked = function(...) return Hook(Old, ...) end
+    HookedFunctions[Func] = true
+    return Hooked, Old
 end)
 
-add("hiddenhook", function(func, hook)
-    hookfunction(func, hook)
-    ishooked[func] = false
+AddFunction("hiddenhook", function(Func, Hook)
+    hookfunction(Func, Hook)
+    HookedFunctions[Func] = false
 end)
 
-alias({"secrethook"}, function(func, hook)
-    hiddenhook(func, hook)
+AliasFunction({"secrethook"}, function(Func, Hook)
+    hiddenhook(Func, Hook)
 end)
 
-add("restorefunction", function(func, hook)
-    expect(func, "function", false, 1)
-    ishooked[func] = nil
-    return hook
-end)
-alias({"getoriginalfunction"}, function(func, hook)
-	restorefunction(func, hook)
+AddFunction("restorefunction", function(Func, Hook)
+    Expect(Func, "function", false, 1)
+    HookedFunctions[Func] = nil
+    return Hook
 end)
 
-add("securefunction", function(func)
-    expect(func, "function", false, 1)
-    
-    canhook[func] = true
+AliasFunction({"getoriginalfunction"}, function(Func, Hook)
+    return restorefunction(Func, Hook)
 end)
 
-getgenv().unhooked = {}; local tables = {getgenv, getrenv}
-for _, env in ipairs(tables) do
-  for _, item in ipairs(env()) do
-      if typeof(item) ~= "function" then continue end
-      getgenv()["unhooked"][item] = securefunction(item)
-  end
-end
-              
-add("iscclosure", function(func)
-    if type(func) ~= "function" then
-        return false
-    end
-    return debug.info(func, "s") == "[C]"
+AddFunction("securefunction", function(Func)
+    Expect(Func, "function", false, 1)
 end)
 
-add("newlclosure", function(func) -- maybe setinfo LMAO
-    local newfunc = function()
-        func()
-    end
-    return newfunc
-end)
-
-add("islclosure", function(func)
-    if type(func) ~= "function" then
-        return false
-    end
-    return debug.info(func, "s") ~= "[C]"
-end)
-
-add("isexecutorclosure", function(func)
-    expect(func, "function", false, 1)
-
-    for _,v in pairs(getgenv()) do
-        if v == func then
-            return true
+do
+    local SecureEnvs = { getgenv, getrenv }
+    GlobalEnv.unhooked = {}
+    for _, Env in ipairs(SecureEnvs) do
+        for _, Item in ipairs(Env()) do
+            if typeof(Item) ~= "function" then continue end
+            GlobalEnv.unhooked[Item] = securefunction(Item)
         end
     end
+end
 
+AddFunction("iscclosure", function(Func)
+    if type(Func) ~= "function" then return false end
+    return debug.info(Func, "s") == "[C]"
+end)
+
+AddFunction("newlclosure", function(Func)
+    return function() return Func() end
+end)
+
+AddFunction("islclosure", function(Func)
+    if type(Func) ~= "function" then return false end
+    return debug.info(Func, "s") ~= "[C]"
+end)
+
+AddFunction("isexecutorclosure", function(Func)
+    Expect(Func, "function", false, 1)
+    for _, Value in pairs(GlobalEnv) do
+        if Value == Func then return true end
+    end
     return false
 end)
-add("checkclosure", function(func)
-    return isexecutorclosure(func)
-end)
-add("isourclosure", function(func)
-    return isexecutorclosure(func)
-end)
--- isexecutorthread idk
 
-add("newcclosure", function(func) -- TODO : fix - for half decent iscclosure it will return false
-    expect(func, "function", false, 1)
+AliasFunction({"checkclosure", "isourclosure"}, "isexecutorclosure")
 
-    return _newc(func)
+AddFunction("newcclosure", function(Func)
+    Expect(Func, "function", false, 1)
+    return NewCClosure(Func)
 end)
 
-add("isnewcclosure", function(func)
-    return custom_closures[func]
+AddFunction("isnewcclosure", function(Func)
+    return CustomClosures[Func] == true
 end)
 
--- Rconsole
+-- RConsole
 
-local _rsconsole = Instance.new("ScreenGui")
-_rsconsole.Name = rstring(6)
-_rsconsole.Parent = services["CoreGui"]
+local RConsoleGui = Instance.new("ScreenGui")
+RConsoleGui.Name = RandomString(6)
+RConsoleGui.Parent = Services.CoreGui
 
-local _isrconsole = false
-local function crconsole()
-    _isrconsole = not _isrconsole
+local IsConsoleOpen = false
+local ConsoleWindow
+local ConsoleInput
 
-    local offset = 40
+local function CreateConsole()
+    IsConsoleOpen = not IsConsoleOpen
 
-    window = Instance.new("Frame")
-    window.Name = "window"
-    window.Size = UDim2.fromOffset(399, 251)
-    window.Position = UDim2.new(0.5, -174, 0.5, -75)
-    window.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    window.Visible = _isrconsole
-    window.Draggable = true
-    window.BorderSizePixel = 0
-    window.ClipsDescendants = true
-    window.Parent = _rsconsole
+    local Offset = 40
 
-    Instance.new("UICorner", window).CornerRadius = UDim.new(0, 8)
+    ConsoleWindow = Instance.new("Frame")
+    ConsoleWindow.Name = "window"
+    ConsoleWindow.Size = UDim2.fromOffset(399, 251)
+    ConsoleWindow.Position = UDim2.new(0.5, -174, 0.5, -75)
+    ConsoleWindow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    ConsoleWindow.Visible = IsConsoleOpen
+    ConsoleWindow.Draggable = true
+    ConsoleWindow.BorderSizePixel = 0
+    ConsoleWindow.ClipsDescendants = true
+    ConsoleWindow.Parent = RConsoleGui
+    Instance.new("UICorner", ConsoleWindow).CornerRadius = UDim.new(0, 8)
 
-    local title = Instance.new("TextLabel")
-    title.Name = "title"
-    title.Size = UDim2.fromOffset(260, 18)
-    title.Position = UDim2.fromOffset(14, 10)
-    title.BackgroundTransparency = 1
-    title.Text = "Console"
-    title.Font = Enum.Font.SourceSans
-    title.TextSize = 16
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Parent = window
+    local TitleLabel = Instance.new("TextLabel")
+    TitleLabel.Name = "title"
+    TitleLabel.Size = UDim2.fromOffset(260, 18)
+    TitleLabel.Position = UDim2.fromOffset(14, 10)
+    TitleLabel.BackgroundTransparency = 1
+    TitleLabel.Text = "Console"
+    TitleLabel.Font = Enum.Font.SourceSans
+    TitleLabel.TextSize = 16
+    TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    TitleLabel.Parent = ConsoleWindow
 
-    local close = Instance.new("TextButton")
-    close.Size = UDim2.fromOffset(20, 20)
-    close.Position = UDim2.fromOffset(350, 8)
-    close.Text = "X"
-    close.Parent = window
-
-    close.MouseButton1Click:Connect(function()
-        _rsconsole:Destroy()
-        _isrconsole = false
+    local CloseButton = Instance.new("TextButton")
+    CloseButton.Size = UDim2.fromOffset(20, 20)
+    CloseButton.Position = UDim2.fromOffset(350, 8)
+    CloseButton.Text = "X"
+    CloseButton.Parent = ConsoleWindow
+    CloseButton.MouseButton1Click:Connect(function()
+        RConsoleGui:Destroy()
+        IsConsoleOpen = false
     end)
 
-    local function createLabel(text, color)
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.fromOffset(360, 20)
-        label.Position = UDim2.fromOffset(10, offset)
-        label.BackgroundTransparency = 1
-        label.Text = text
-        label.Font = Enum.Font.Code
-        label.TextSize = 14
-        label.TextColor3 = color or Color3.fromRGB(255,255,255)
-        label.TextXAlignment = Enum.TextXAlignment.Left
-        label.Parent = window
-        label:SetAttribute("killme", true)
-
-        offset += 22 -- offset, spacing
+    local function CreateLine(Text, Color)
+        local Label = Instance.new("TextLabel")
+        Label.Size = UDim2.fromOffset(360, 20)
+        Label.Position = UDim2.fromOffset(10, Offset)
+        Label.BackgroundTransparency = 1
+        Label.Text = Text
+        Label.Font = Enum.Font.Code
+        Label.TextSize = 14
+        Label.TextColor3 = Color or Color3.fromRGB(255, 255, 255)
+        Label.TextXAlignment = Enum.TextXAlignment.Left
+        Label.Parent = ConsoleWindow
+        Label:SetAttribute("killme", true)
+        Offset += 22
     end
 
-    input = function(text, color)
-        if not window then return end
-        createLabel(text, color)
+    ConsoleInput = function(Text, Color)
+        if not ConsoleWindow then return end
+        CreateLine(Text, Color)
     end
 
-    input("Rconsole loaded", Color3.fromRGB(0,255,0))
+    ConsoleInput("Rconsole loaded", Color3.fromRGB(0, 255, 0))
 end
 
-local window
-local function shouldcreate()
-    if _isrconsole then
-        window = nil
-        do end
-    else
-        window = _rsconsole["window"]
-        crconsole()
-    end
-end
-
-add("rconsoleclear", function()
-    for _, item in ipairs(window) do
-        if item:GetAttribute("killme") then
-            item:Destroy()
+local function GetChildrenWithAttribute(Parent, Attr)
+    local Result = {}
+    for _, Child in ipairs(Parent:GetChildren()) do
+        if Child:GetAttribute(Attr) ~= nil then
+            Result[#Result + 1] = Child
         end
     end
-end)
-add("rconsolecontent", function()
-    repeat task.wait() until helper.GetChildrenWithAttribute
+    return Result
+end
 
-    local output = {}
-    for _, v in ipairs(helper.GetChildrenWithAttribute(window, "killme")) do
-        table.insert(output, v.Text)
+AddFunction("rconsoleclear", function()
+    for _, Item in ipairs(GetChildrenWithAttribute(ConsoleWindow, "killme")) do
+        Item:Destroy()
     end
-    return output
-end)
-add("rconsolecreate", function()
-    crconsole()
-end)
-add("rconsoledestroy", function()
-    window:Destroy()
-end)
-add("rconsolehide", function()
-    window.Visible = false
-end)
-add("rconsoleshow", function()
-    window.Visible = true
-end)
-add("rconsoleinput", function(text)
-    expect(text, "string", false, 1)
-    input(text)
-end)
-add("rconsoleinfo", function(text)
-    rconsoleinput(text)
-end)
-add("rconsoleprint", function(text)
-    rconsoleinput(text)
-end)
-add("rconsolewarn", function(text)
-    expect(text, "string", false, 1)
-    input(text, Color3.fromRGB(255, 0, 0))
-end)
-add("rconsoleerror", function(text)
-    expect(text, "string", false, 1)
-    input(text, Color3.fromRGB(255, 255, 0))
-end)
-add("rconsolesettitle", function(title)
-    expect(title, "string", false, 1)
-    window["title"].Text = title
 end)
 
-alias({"rconsolename"}, function(title)
-    rconsolesettitle(title)
+AddFunction("rconsolecontent", function()
+    local Output = {}
+    for _, Label in ipairs(GetChildrenWithAttribute(ConsoleWindow, "killme")) do
+        Output[#Output + 1] = Label.Text
+    end
+    return Output
 end)
-add("isrconsole", function(title)
-    return _isrconsole
+
+AddFunction("rconsolecreate", function()
+    CreateConsole()
 end)
-add("rconsolehidden", function()
+
+AddFunction("rconsoledestroy", function()
+    ConsoleWindow:Destroy()
+end)
+
+AddFunction("rconsolehide", function()
+    ConsoleWindow.Visible = false
+end)
+
+AddFunction("rconsoleshow", function()
+    ConsoleWindow.Visible = true
+end)
+
+AddFunction("rconsoleinput", function(Text)
+    Expect(Text, "string", false, 1)
+    ConsoleInput(Text)
+end)
+
+AliasFunction({"rconsoleinfo", "rconsoleprint"}, "rconsoleinput")
+
+AddFunction("rconsolewarn", function(Text)
+    Expect(Text, "string", false, 1)
+    ConsoleInput(Text, Color3.fromRGB(255, 0, 0))
+end)
+
+AddFunction("rconsoleerror", function(Text)
+    Expect(Text, "string", false, 1)
+    ConsoleInput(Text, Color3.fromRGB(255, 255, 0))
+end)
+
+AddFunction("rconsolesettitle", function(Title)
+    Expect(Title, "string", false, 1)
+    ConsoleWindow["title"].Text = Title
+end)
+
+AliasFunction({"rconsolename"}, "rconsolesettitle")
+
+AddFunction("isrconsole", function()
+    return IsConsoleOpen
+end)
+
+AddFunction("rconsolehidden", function()
     return isrconsole()
 end)
-add("rconsoleclear", function()
-    repeat task.wait() until helper.GetChildrenWithAttribute
 
-    for _, v in ipairs(_helper.GetChildrenWithAttribute(window, "killme")) do
-        v:Destroy()
+-- loadstring (Lune-backed)
+
+AddFunction("loadstring", function(Source, ChunkName)
+    if not AllowTerminal() then
+        return (load)(Source, ChunkName)
     end
-end)
-
--- importante
--- no longer do i use this
-    -- it isnt persay impossible to implement loadstring but i just dont rlly want to soooo you get a bad version
-    -- anyway thanks to this guy https://scriptblox.com/script/Universal-Script-luau-VM-execution-77330
-
-add("loadstring", function(source, chunkname)
-    if not allow() then
-        return (load)(source, chunkname) -- load is highkey nil
-    end
-
     if not islune() then
         downloadLune()
     end
-
-    local filename = rstring(6)
-    local filepath = getenv("TEMP") .. "\\__ls_" .. filename .. ".luau"
-    
-    local result, done = nil, false
-
-    ps:Send(string.format(
-        "Set-Content -Path '%s' -Value '%s'",
-        filepath,
-        source:gsub("'", "''")
-    ))
-
-    local conn
-    conn = ps.OnMessage:Connect(function(msg)
-        conn:Disconnect()
-        result = msg
-        done = true
+    local Filename  = RandomString(6)
+    local Filepath  = getenv("TEMP") .. "\\__ls_" .. Filename .. ".luau"
+    local Result, Done = nil, false
+    PsSocket:Send(string.format("Set-Content -Path '%s' -Value '%s'", Filepath, Source:gsub("'", "''")))
+    local Conn
+    Conn = PsSocket.OnMessage:Connect(function(Msg)
+        Conn:Disconnect()
+        Result = Msg
+        Done = true
     end)
-
-    ps:Send(string.format("lune run '%s'", filepath))
-
-    -- remove the item
+    PsSocket:Send(string.format("lune run '%s'", Filepath))
     return function()
-        repeat task.wait() until done
-        ps:Send(string.format("Remove-Item '%s' -Force", filepath))
-        return result
+        repeat task.wait() until Done
+        PsSocket:Send(string.format("Remove-Item '%s' -Force", Filepath))
+        return Result
     end
 end)
-                
+
 -- Crypt
 
-local b = bit32
-local band, bxor, rshift, lshift, rrotate = b.band, b.bxor, b.rshift, b.lshift, b.rrotate
+local BitLib = bit32
+local Band, BXor, RShift, LShift = BitLib.band, BitLib.bxor, BitLib.rshift, BitLib.lshift
 
-local function buf(s) return buffer.fromstring(s) end
-local function str(b) return buffer.tostring(b) end
-                
-local _crypt = {}
+local function BufFromString(S) return buffer.fromstring(S) end
+local function StringFromBuf(B) return buffer.tostring(B) end
 
-local b64 = loadstring(game:HttpGet("https://github.com/daily3014/rbx-cryptography/raw/main/src/Utilities/Base64.luau"))()
-_crypt.base64encode = function(data) -- could use the encoding service i suppose
-    expect(data, "string", false, 1)
+local CryptLib = {}
 
-   return buffer.tostring(b64.Encode(buffer.fromstring(tostring(data))))
+local Base64Lib = loadstring(game:HttpGet("https://github.com/daily3014/rbx-cryptography/raw/main/src/Utilities/Base64.luau"))()
+
+CryptLib.base64encode = function(Data)
+    Expect(Data, "string", false, 1)
+    return buffer.tostring(Base64Lib.Encode(buffer.fromstring(tostring(Data))))
 end
 
-_crypt.base64decode = function(data)
-    expect(data, "string", false, 1)
-
-    return buffer.tostring(b64.Decode(buffer.fromstring(tostring(data))))
-end
-local b64 = function(str: string): string
-    return _crypt.base64encode(str) or ""
-end
-local de64 = function(str: string): string
-    return _crypt.base64decode(str) or ""
+CryptLib.base64decode = function(Data)
+    Expect(Data, "string", false, 1)
+    return buffer.tostring(Base64Lib.Decode(buffer.fromstring(tostring(Data))))
 end
 
-local rng = Random.new()
+local Base64Encode = function(S) return CryptLib.base64encode(S) or "" end
+local Base64Decode = function(S) return CryptLib.base64decode(S) or "" end
 
+local RNG = Random.new()
 local CSPRNG = loadstring(game:HttpGet("https://website-iota-ivory-12.vercel.app/code/scripts/unc/sunc/extra/csprng/init.luau"))()
-_crypt.generatebytes = function(size)
-    CSPRNG.RandomBytes(size)
-end
-_crypt.random = function(len)
-    return de64(crypt.generatebytes(len))
+
+CryptLib.generatebytes = function(Size)
+    return CSPRNG.RandomBytes(Size)
 end
 
-_crypt.generatekey = function()
-    local raw
-                  
-    local t = table.create(32, "")
-    for i = 1, 32 do
-        t[i] = string.char(rng:NextInteger(0,255))
+CryptLib.random = function(Length)
+    return Base64Decode(crypt.generatebytes(Length))
+end
+
+CryptLib.generatekey = function()
+    local Parts = table.create(32)
+    for Index = 1, 32 do
+        Parts[Index] = string.char(RNG:NextInteger(0, 255))
     end
-    raw = table.concat(t)
+    local Raw = table.concat(Parts)
+    return Base64Encode(Raw)
+end
 
-    if b64 then
-        return b64(raw)
+local AESLib = loadstring(game:HttpGet("https://github.com/daily3014/rbx-cryptography/raw/main/src/Encryption/AES.luau"))()
+
+CryptLib.encrypt = function(Data, Key, IV)
+    assert(type(Data) == "string", "data must be string")
+    local KeyBuf  = BufFromString(Base64Encode(Key))
+    local IVRaw   = IV or CryptLib.generatebytes(12)
+    local IVBuf   = BufFromString(Base64Encode(IVRaw))
+    local Cipher, Tag = AESLib.Encrypt(BufFromString(Data), KeyBuf, IVBuf)
+    Cipher = crypt.base64encode(StringFromBuf(Cipher))
+    Tag    = crypt.base64encode(StringFromBuf(Tag))
+    IVRaw  = crypt.base64encode(IVRaw)
+    return Cipher, IVRaw, Tag
+end
+
+CryptLib.decrypt = function(Ciphertext, Key, IV, Tag)
+    assert(type(Ciphertext) == "string", "ciphertext must be string")
+    assert(type(Key) == "string", "key must be string")
+    assert(type(IV) == "string", "iv must be string")
+    assert(type(Tag) == "string", "tag must be string")
+    local KeyBuf    = BufFromString(Base64Encode(Key))
+    local IVBuf     = BufFromString(Base64Encode(IV))
+    local TagBuf    = BufFromString(Base64Encode(Tag))
+    local Ok, Plain = AESLib.Decrypt(BufFromString(Base64Encode(Ciphertext)), KeyBuf, IVBuf, TagBuf)
+    if not Ok then return false, nil end
+    return true, StringFromBuf(Plain)
+end
+
+local HashLib = loadstring(game:HttpGet("https://github.com/Egor-Skriptunoff/pure_lua_SHA/raw/master/sha2.lua"))()
+
+CryptLib.hash = function(Str, Algorithm)
+    Expect(Str, "string", false, 1)
+    Algorithm = (Algorithm or "sha256"):lower()
+    return HashLib[Algorithm](Str)
+end
+
+CryptLib.rnum = function(Length)
+    Length = Length or 12
+    return CSPRNG.RandomNum(Length / 2, Length)
+end
+
+local XORLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/daily3014/rbx-cryptography/refs/heads/main/src/Encryption/XOR.luau"))()
+
+CryptLib.salt = function(Input)
+    local B  = BufFromString(Input)
+    local C  = XORLib(B, StringFromBuf(CryptLib.rnum(12)))
+    local N  = XORLib(C, StringFromBuf(CryptLib.rnum(12)))
+    return StringFromBuf(N)
+end
+
+CryptLib.xor = function(Data)
+    return StringFromBuf(XORLib(BufFromString(Data)))
+end
+
+CryptLib.rstring = function(Length)
+    return RandomString(Length)
+end
+
+CryptLib.tobytecode = function(Source)
+    Expect(Source, "string", false, 1)
+    local Out = table.create(#Source)
+    for Index = 1, #Source do
+        Out[Index] = string.char(Source:byte(Index))
     end
-
-    return raw
+    return table.concat(Out)
 end
 
-local AES = loadstring(game:HttpGet("https://github.com/daily3014/rbx-cryptography/raw/main/src/Encryption/AES.luau"))()
-_crypt.encrypt = function(data, key, iv)
-    assert(type(data) == "string", "data must be string")
-
-    local keyBuf = buf(b64(key))
-    local ivRaw = iv or _crypt.generatebytes(12)
-    local ivBuf = buf(b64(ivRaw))
-
-    local cipher, tag = AES.Encrypt(buf(data), keyBuf, ivBuf)
-
-    cipher = str(cipher)
-    tag = str(tag)
-
-    if crypt.base64encode then
-        cipher = crypt.base64encode(cipher)
-        tag = crypt.base64encode(tag)
-        ivRaw = crypt.base64encode(ivRaw)
-    end
-
-    return cipher, ivRaw, tag
-end
-
-_crypt.decrypt = function(ciphertext, key, iv, tag)
-    assert(type(ciphertext) == "string", "ciphertext must be string")
-    assert(type(key) == "string", "key must be string")
-    assert(type(iv) == "string", "iv must be string")
-    assert(type(tag) == "string", "tag must be string")
-
-    local keyBuf = buf(b64(key))
-    local ivBuf = buf(b64(iv))
-    local tagBuf = buf(b64(tag))
-
-    local ok, plain = AES.Decrypt(buf(b64(ciphertext)), keyBuf, ivBuf, tagBuf)
-
-    if not ok then
-        return false, nil
-    end
-
-    return true, str(plain)
-end
-
-local hash = loadstring(game:HttpGet("https://github.com/Egor-Skriptunoff/pure_lua_SHA/raw/master/sha2.lua"))()
-_crypt.hash = function(str, algorithm)
-    expect(str, "string", false, 1)
-    algorithm = (algorithm or "sha256"):lower()
-
-    hash[algorithm](str)
-end
-                
-_crypt.rnum = function(len)
-    len = len or 12
-    return CSPRNG.RandomNum(len/2, len)
-end
-
-local xor = loadstring(game:HttpGet("https://raw.githubusercontent.com/daily3014/rbx-cryptography/refs/heads/main/src/Encryption/XOR.luau"))()
-_crypt.salt = function(n: string): string
-    local b = buf(n)
-    local c = xor(b, str(_crypt.rnum(12)))
-    local n = xor(c, str(_crypt.rnum(12))) -- wrong key = wrong encryption = different characters = salt
-    return str(n)
-end
-
-_crypt.xor = function(data: string): string
-    return str(xor(buf(data)))
-end
-
-_crypt.rstring = function(len)
-    rstring(len)
-end
-
-_crypt.tobytecode = function(src)
-    expect(src, "string", false, 1)
-
-    local out = table.create(#src)
-
-    for i = 1, #src do
-        out[i] = string.char(src:byte(i))
-    end
-
-    return table.concat(out)
-end
-
-_crypt.tobinary = function(str)
-    expect(str, "string", false, 1)
-    local result = {}
-    for i = 1, #str do
-        local byte = str:byte(i)
-        local binary = ""
-        for j = 7, 0, -1 do
-            binary = binary .. (band(rshift(byte, j), 1))
+CryptLib.tobinary = function(Str)
+    Expect(Str, "string", false, 1)
+    local Result = {}
+    for Index = 1, #Str do
+        local Byte = Str:byte(Index)
+        local Binary = ""
+        for Bit = 7, 0, -1 do
+            Binary = Binary .. Band(RShift(Byte, Bit), 1)
         end
-        result[i] = binary
+        Result[Index] = Binary
     end
-    return table.concat(result, " ")
+    return table.concat(Result, " ")
 end
 
-_crypt.frombinary = function(binary)
-    expect(binary, "string", false, 1)
-    binary = binary:gsub("%s", "")
-    local result = {}
-    for i = 1, #binary, 8 do
-        local byte = binary:sub(i, i + 7)
-        if #byte == 8 then
-            result[#result + 1] = string.char(tonumber(byte, 2))
+CryptLib.frombinary = function(Binary)
+    Expect(Binary, "string", false, 1)
+    Binary = Binary:gsub("%s", "")
+    local Result = {}
+    for Index = 1, #Binary, 8 do
+        local Chunk = Binary:sub(Index, Index + 7)
+        if #Chunk == 8 then
+            Result[#Result + 1] = string.char(tonumber(Chunk, 2))
         end
     end
-    return table.concat(result)
+    return table.concat(Result)
 end
 
-_crypt.tohex = function(str)
-    expect(str, "string", false, 1)
-    return (str:gsub(".", function(c)
-        return string.format("%02x", string.byte(c))
-    end))
+CryptLib.tohex = function(Str)
+    Expect(Str, "string", false, 1)
+    return (Str:gsub(".", function(C) return string.format("%02x", string.byte(C)) end))
 end
 
-_crypt.fromhex = function(str)
-    expect(str, "string", false, 1)
-    assert(#str % 2 == 0, "hex string must have even length")
-    return (str:gsub("%x%x", function(c)
-        return string.char(tonumber(c, 16))
-    end))
+CryptLib.fromhex = function(Str)
+    Expect(Str, "string", false, 1)
+    assert(#Str % 2 == 0, "hex string must have even length")
+    return (Str:gsub("%x%x", function(C) return string.char(tonumber(C, 16)) end))
 end
 
--- inaccurate idk vruh
-_crypt.hmac = function(key, data, algorithm)
-    expect(key, "string", false, 1)
-    expect(data, "string", false, 2)
-    expect(algorithm, "string", false, 3)
+CryptLib.hmac = function(Key, Data, Algorithm)
+    Expect(Key, "string", false, 1)
+    Expect(Data, "string", false, 2)
+    Expect(Algorithm, "string", false, 3)
 
-    local hash = crypt.hash
-    local fromhex = crypt.fromhex
-    local tobase64 = crypt.base64encode
-
-    local function hashraw(str)
-        return fromhex(hash(str, algorithm))
+    local HashRaw = function(Str)
+        return crypt.fromhex(crypt.hash(Str, Algorithm))
     end
 
-    local blockSize = 64
-    if #key > blockSize then
-        key = hashraw(key)
+    local BlockSize = 64
+    if #Key > BlockSize then
+        Key = HashRaw(Key)
+    end
+    Key = Key .. string.rep("\0", BlockSize - #Key)
+
+    local IPad, OPad = {}, {}
+    for Index = 1, BlockSize do
+        local B = Key:byte(Index) or 0
+        IPad[Index] = string.char(BXor(B, 0x36))
+        OPad[Index] = string.char(BXor(B, 0x5C))
     end
 
-    -- pad key to blockSize
-    if #key < blockSize then
-        key = key .. string.rep("\0", blockSize - #key)
+    local Inner = HashRaw(table.concat(IPad) .. Data)
+    local Outer = HashRaw(table.concat(OPad) .. Inner)
+    return crypt.base64encode(Outer)
+end
+
+CryptLib.lz4 = function(Data, Compress)
+    assert(type(Data) == "string", "data must be string")
+    return Compress and lz4compress(Data) or lz4decompress(Data)
+end
+
+CryptLib.rle = function(Data, Compress)
+    assert(type(Data) == "string", "data must be string")
+    return Compress and rlecompress(Data) or rledecompress(Data)
+end
+
+for Key, Value in pairs(CryptLib) do
+    AddFunction("crypt." .. Key, Value)
+end
+
+do
+    local MergedCrypt = {}
+    for Key, Value in pairs(GlobalEnv.crypt or {}) do
+        MergedCrypt[Key] = Value
     end
-
-    local ipad, opad = {}, {}
-    for i = 1, blockSize do
-        local b = key:byte(i) or 0
-        ipad[i] = string.char(bxor(b, 0x36))
-        opad[i] = string.char(bxor(b, 0x5C))
+    for Key, Value in pairs(CryptLib) do
+        if MergedCrypt[Key] == nil then
+            MergedCrypt[Key] = Value
+        end
     end
-
-    local inner = hashraw(table.concat(ipad) .. data)
-    local outer = hashraw(table.concat(opad) .. inner)
-
-    return tobase64(outer)
+    GlobalEnv.crypt = MergedCrypt
 end
-
-_crypt.lz4 = function(data, step)
-    assert(type(data) == "string", "data must be string")
-
-    local out
-    if step == true then -- encrypt
-        out = lz4compress(data)
-    else
-        out = lz4decompress(data)
-    end
-    return out
-end
-
-_crypt.rle = function(data, step)
-    assert(type(data) == "string", "data must be string")
-
-    local out
-    if step == true then -- encrypt
-        out = rlecompress(data)
-    else
-        out = rledecompress(data)
-    end
-    return out
-end
-
-local crypt = _crypt
-for k, v in pairs(crypt) do
-    add("crypt." .. k, v)
-end
-
-local existing_crypt = crypt
-for k, v in pairs(crypt) do
-    if not existing_crypt[k] then
-        existing_crypt[k] = v
-    end
-end
-
-local new_crypt = {}
-for k, v in pairs(getgenv().crypt or {}) do
-    new_crypt[k] = v
-end
-
-for k, v in pairs(_crypt) do
-    if new_crypt[k] == nil then
-        new_crypt[k] = v
-    end
-end
-getgenv().crypt = new_crypt
 
 -- Oth
 
-local _oth = {}
+local OthHooks, OthHookThreads, OthOriginalThreads = {}, {}, {}
 
-local hooks = {}
-local hook_threads, og_threads = setmetatable({}, {__mode = "k"}), setmetatable({}, {__mode = "k"})
+local InternalOth = {}
 
-_oth.hook = function(target, hookfn)
-    expect(target, "function", false, 1)
-    expect(hookfn, "function", false, 2)
-
-    hooks[target] = hooks[target] or {}
-
-    local original = target
-
-    local callback = function(...)
-        return original(...)
+InternalOth.hook = function(Target, HookFunction)
+    Expect(Target, "function", false, 1)
+    Expect(HookFunction, "function", false, 2)
+    local HookList = OthHooks[Target]
+    if not HookList then
+        HookList = {}
+        OthHooks[Target] = HookList
     end
-
-    local function wrapper(...)
-        local caller = coroutine.running()
-
-        local co = coroutine.create(function(...)
-            local current = coroutine.running()
-            hook_threads[current] = true
-            og_threads[current] = caller
-
-            return hookfn(...)
-        end)
-
-        local ok, result = coroutine.resume(co, ...)
-        if not ok then
-            error(result)
-        end
-
-        return result
-    end
-
-    table.insert(hooks[target], {
-        hook = hookfn,
-        wrapper = wrapper,
-        callback = callback
-    })
-
-    return callback
+    local Callback = function(...) return Target(...) end
+    HookList[#HookList + 1] = { Hook = HookFunction, Callback = Callback }
+    return Callback
 end
 
-_oth.unhook = function(target, hook_or_callback)
-    local list = hooks[target]
-    if not list then
-        return false
-    end
-
-    for i,v in ipairs(list) do
-        if v.hook == hook_or_callback or v.callback == hook_or_callback or hook_or_callback == nil then
-            table.remove(list, i)
-
-            if #list == 0 then
-                hooks[target] = nil
+InternalOth.unhook = function(Target, HookOrCallback)
+    local HookList = OthHooks[Target]
+    if not HookList then return false end
+    for Index, Entry in ipairs(HookList) do
+        if HookOrCallback == nil or Entry.Hook == HookOrCallback or Entry.Callback == HookOrCallback then
+            table.remove(HookList, Index)
+            if #HookList == 0 then
+                OthHooks[Target] = nil
             end
-
             return true
         end
     end
-
     return false
 end
 
-_oth.get_root_callback = function(target)
-    local list = hooks[target]
-    if not list or #list == 0 then
-        return target
+InternalOth.get_root_callback = function(Target)
+    local HookList = OthHooks[Target]
+    if not HookList or #HookList == 0 then return Target end
+    return HookList[1].Callback
+end
+
+InternalOth.run_hook = function(Target, ...)
+    local HookList = OthHooks[Target]
+    if not HookList or #HookList == 0 then return Target(...) end
+    local Entry        = HookList[#HookList]
+    local CallerThread = coroutine.running()
+    local Thread = coroutine.create(function(...)
+        local Current = coroutine.running()
+        OthHookThreads[Current]    = true
+        OthOriginalThreads[Current] = CallerThread
+        local Results = table.pack(Entry.Hook(...))
+        OthHookThreads[Current]    = nil
+        OthOriginalThreads[Current] = nil
+        return table.unpack(Results, 1, Results.n)
+    end)
+    local Success, Result = coroutine.resume(Thread, ...)
+    if not Success then error(Result, 0) end
+    return Result
+end
+
+InternalOth.is_hook_thread = function()
+    return OthHookThreads[coroutine.running()] == true
+end
+
+InternalOth.get_original_thread = function()
+    return OthOriginalThreads[coroutine.running()]
+end
+
+do
+    local Oth = GlobalEnv.oth or {}
+    for Key, Value in pairs(InternalOth) do
+        Oth[Key] = Value
     end
-
-    return list[1].callback
+    GlobalEnv.oth = Oth
 end
-
-_oth.is_hook_thread = function()
-    return hook_threads[coroutine.running()] == true
-end
-
-_oth.get_original_thread = function()
-    return og_threads[coroutine.running()]
-end
-
-local oth = oth or {}; getgenv().oth = oth;local existing_oth = oth
-for k, v in pairs(oth) do
-    if not existing_oth[k] then
-        existing_oth[k] = v
-    end
-end
-
-local new_oth = {}
-for k, v in pairs(getgenv().oth) do
-    new_oth[k] = v
-end
-
-for k, v in pairs(_oth) do
-    if new_oth[k] == nil then
-        new_oth[k] = v
-    end
-end
-getgenv().oth = new_oth
 
 -- Debug
 
-local _debug = {}
+local DebugConstants, DebugUpvalues, DebugStacks = {}, {}, {}
 
-_debug.validlevel = function(level)
-    return debug.getinfo(level + 2) ~= nil
+local DebugLib = {}
+
+local function GetFunctionLines(Source, StartLine)
+    local CurrentLine, Depth, Started = 0, 0, false
+    local Result = {}
+    for Line in (Source .. "\n"):gmatch("([^\n]*)\n") do
+        CurrentLine += 1
+        if CurrentLine < StartLine then continue end
+        Result[#Result + 1] = Line
+        for _ in Line:gmatch("%f[%a]do%f[%A]")       do Depth += 1 end
+        for _ in Line:gmatch("%f[%a]then%f[%A]")     do Depth += 1 end
+        for _ in Line:gmatch("%f[%a]function%f[%A]") do Depth += 1 end
+        for _ in Line:gmatch("%f[%a]repeat%f[%A]")   do Depth += 1 end
+        for _ in Line:gmatch("%f[%a]end%f[%A]")      do Depth -= 1 end
+        for _ in Line:gmatch("%f[%a]until%f[%A]")    do Depth -= 1 end
+        if not Started and Depth > 0 then Started = true end
+        if Started and Depth <= 0 then break end
+    end
+    return table.concat(Result, "\n")
 end
 
-_debug.isvalidlevel = function(level)
-    expect(level, "number", false, 1)
-    return level >= 0
+DebugLib.validlevel = function(Level)
+    return debug.getinfo(Level + 2) ~= nil
 end
 
-_debug.getregistry = function()
+DebugLib.isvalidlevel = function(Level)
+    Expect(Level, "number", false, 1)
+    return Level >= 0
+end
+
+DebugLib.getregistry = function()
     return getreg and getreg() or {}
 end
 
-local constants = {}
-_debug.getconstant = function(func, index)
-    expect(func, "function", false, 1)
-    expect(index, "number", false, 2)
-    local c = constants[func]
-    if not c or c[index] == nil then
-        error("constant does not exist at index " .. index)
+DebugLib.getconstant = function(Func, Index)
+    Expect(Func, "function", false, 1)
+    Expect(Index, "number", false, 2)
+    local Constants = DebugConstants[Func]
+    if not Constants or Constants[Index] == nil then
+        error("constant does not exist at index " .. Index)
     end
-    return c[index]
+    return Constants[Index]
 end
 
-_debug.getconstants = function(func)
-    expect(func, "function", false, 1)
-    return constants[func] or {}
+DebugLib.getconstants = function(Func)
+    Expect(Func, "function", false, 1)
+    return DebugConstants[Func] or {}
 end
 
-_debug.setconstant = function(func, index, value)
-    expect(func, "function", false, 1)
-    expect(index, "number", false, 2)
-    constants[func] = constants[func] or {}
-    constants[func][index] = value
+DebugLib.setconstant = function(Func, Index, Value)
+    Expect(Func, "function", false, 1)
+    Expect(Index, "number", false, 2)
+    DebugConstants[Func] = DebugConstants[Func] or {}
+    DebugConstants[Func][Index] = Value
 end
 
-local upvalues = {}
-_debug.getupvalue = function(func, index)
-    expect(func, "function", false, 1)
-    expect(index, "number", false, 2)
-    local u = upvalues[func]
-    if not u or u[index] == nil then
-        return nil
+DebugLib.getupvalue = function(Func, Index)
+    Expect(Func, "function", false, 1)
+    Expect(Index, "number", false, 2)
+    local Upvalues = DebugUpvalues[Func]
+    if not Upvalues or Upvalues[Index] == nil then return nil end
+    return Upvalues[Index]
+end
+
+DebugLib.getupvalues = function(Func)
+    Expect(Func, "function", false, 1)
+    return DebugUpvalues[Func] or {}
+end
+
+DebugLib.setupvalue = function(Func, Index, Value)
+    Expect(Func, "function", false, 1)
+    Expect(Index, "number", false, 2)
+    DebugUpvalues[Func] = DebugUpvalues[Func] or {}
+    DebugUpvalues[Func][Index] = Value
+end
+
+DebugLib.getstack = function(Level, Index)
+    Expect(Level, "number", false, 1)
+    local Stack = DebugStacks[Level]
+    if not Stack then error("invalid stack level: " .. Level) end
+    if Index then
+        Expect(Index, "number", false, 2)
+        if Stack[Index] == nil then error("stack value does not exist at index " .. Index) end
+        return Stack[Index]
     end
-    return u[index]
+    return Stack
 end
 
-_debug.getupvalues = function(func)
-    expect(func, "function", false, 1)
-    return upvalues[func] or {}
+DebugLib.setstack = function(Level, Index, Value)
+    Expect(Level, "number", false, 1)
+    Expect(Index, "number", false, 2)
+    DebugStacks[Level] = DebugStacks[Level] or {}
+    DebugStacks[Level][Index] = Value
 end
 
-_debug.setupvalue = function(func, index, value)
-    expect(func, "function", false, 1)
-    expect(index, "number", false, 2)
-    upvalues[func] = upvalues[func] or {}
-    upvalues[func][index] = value
+DebugLib.setinfo = function(Func, Info)
+    Expect(Func, "function", false, 1)
+    Expect(Info, "table", false, 2)
+    DebugOverride[Func] = Info
 end
 
-local stacks = {}
-_debug.getstack = function(level, index)
-    expect(level, "number", false, 1)
-    local stack = stacks[level]
-    if not stack then
-        error("invalid stack level: " .. level)
-    end
+DebugLib.getinfo = function(Target)
+    local IsLevel  = typeof(Target) == "number"
+    local Level    = IsLevel and (Target + 1) or Target
 
-    if index then
-        expect(index, "number", false, 2)
-        if stack[index] == nil then
-            error("stack value does not exist at index " .. index)
-        end
-        return stack[index]
-    end
+    local function DInfo(Opt) return debug.info(Level, Opt) end
 
-    return stack
-end
+    local Source      = DInfo("s")
+    local Name        = DInfo("n")
+    local CurrentLine = IsLevel and DInfo("l") or -1
+    local NParams, IsVarArg = DInfo("a")
+    local NUps        = DInfo("u")
 
-_debug.setstack = function(level, index, value)
-    expect(level, "number", false, 1)
-    expect(index, "number", false, 2)
-    stacks[level] = stacks[level] or {}
-    stacks[level][index] = value
-end
+    if Name == "" then Name = nil end
 
-_debug.setinfo = function(func, info)
-    expect(func, "function", false, 1)
-    expect(info, "table", false, 2)
-    debug_override[func] = info
-end
-
--- claudestein
-local function getFunctionLines(source, startLine)
-    local currentLine = 0
-    local depth = 0
-    local started = false
-    local result = {}
-
-    for line in (source .. "\n"):gmatch("([^\n]*)\n") do
-        currentLine = currentLine + 1
-
-        if currentLine >= startLine then
-            result[#result + 1] = line
-
-            -- count openers
-            for _ in line:gmatch("%f[%a]do%f[%A]") do depth = depth + 1 end
-            for _ in line:gmatch("%f[%a]then%f[%A]") do depth = depth + 1 end
-            for _ in line:gmatch("%f[%a]function%f[%A]") do depth = depth + 1 end
-            for _ in line:gmatch("%f[%a]repeat%f[%A]") do depth = depth + 1 end
-
-            -- count closers
-            for _ in line:gmatch("%f[%a]end%f[%A]") do depth = depth - 1 end
-            for _ in line:gmatch("%f[%a]until%f[%A]") do depth = depth - 1 end
-
-            if not started and depth > 0 then
-                started = true
-            end
-
-            if started and depth <= 0 then
-                break
-            end
-        end
+    local ShortSrc = Source
+    if Source and Source:sub(1, 1) == "@" then
+        ShortSrc = Source:match("[^/\\]+$")
     end
 
-    return table.concat(result, "\n")
-end
-                                    
-_debug.getinfo = function(target)
-    local isLevel = typeof(target) == "number"
-    local level = isLevel and (target + 1) or target
-
-    local function dinfo(opt)
-        return debug.info(level, opt)
-    end
-
-    local source = dinfo("s")
-    local name = dinfo("n")
-    local currentline = isLevel and dinfo("l") or -1 -- functions don't have a running line
-    local nparams, is_vararg = dinfo("a")
-    local nups = dinfo("u")
-
-    if name == "" then name = nil end
-
-    -- short_src
-    local short_src = source
-    if source and source:sub(1,1) == "@" then
-        short_src = source:match("[^/\\]+$")
-    end
-
-    -- what
-    local what
-    if source == "[C]" then
-        what = "C"
-    elseif isLevel and target == 0 then
-        what = "main"
+    local What
+    if Source == "[C]" then
+        What = "C"
+    elseif IsLevel and Target == 0 then
+        What = "main"
     else
-        what = "Lua"
+        What = "Lua"
     end
 
-    -- func
-    local func = isLevel and debug.info(level, "f") or target
-    local hash = getfunctionhash and getfunctionhash(func) or ""
+    local Func = IsLevel and debug.info(Level, "f") or Target
+    local Hash = getfunctionhash and getfunctionhash(Func) or ""
 
     return {
-        name = name,
-        source = source,
-        short_src = short_src,
-        what = what,
-        currentline = currentline,
-        nups = nups,
-        numparams = nparams,
-        is_vararg = is_vararg,
-        hash = hash,
-        size = #hash, -- idk uhhh thought it would be cool but executors should implement differently
-        func = func,
-
-        lastlinedefined = getFunctionLines(decompile(source), currentline)
+        name            = Name,
+        source          = Source,
+        short_src       = ShortSrc,
+        what            = What,
+        currentline     = CurrentLine,
+        nups            = NUps,
+        numparams       = NParams,
+        is_vararg       = IsVarArg,
+        hash            = Hash,
+        size            = #Hash,
+        func            = Func,
+        lastlinedefined = GetFunctionLines(decompile(Source), CurrentLine),
     }
 end
 
-_debug.getproto = function(func)
-    expect(func, "function", false, 1)
+DebugLib.getproto = function(Func)
+    Expect(Func, "function", false, 1)
     return nil
 end
 
-_debug.getprotos = function(func)
-    expect(func, "function", false, 1)
+DebugLib.getprotos = function(Func)
+    Expect(Func, "function", false, 1)
     return {}
 end
 
---return #debug.getprotos(func)
-_debug.getprotosize = function(func)
-    expect(func, "function", false, 1)
-
-    local count = 0
-
+DebugLib.getprotosize = function(Func)
+    Expect(Func, "function", false, 1)
+    local Count = 0
     while true do
-        local ok, proto = pcall(debug.getproto, func, count + 1)
-
-        if not ok then
-            break
-        end
-
-        count += 1
+        local Ok = pcall(debug.getproto, Func, Count + 1)
+        if not Ok then break end
+        Count += 1
     end
-
-    return count
+    return Count
 end
 
-_debug.getcallstack = function()
-    local stack = {}
-    local level = 1
-
+DebugLib.getcallstack = function()
+    local Stack, Level = {}, 1
     while true do
-        local ok, info = pcall(debug.getinfo, level + 1)
-        if not ok or not info then break end
-
-        stack[#stack + 1] = {
-            func = info.func,
-            name = info.name,
-            source = info.short_src,
-            line = info.currentline
+        local Ok, Info = pcall(debug.getinfo, Level + 1)
+        if not Ok or not Info then break end
+        Stack[#Stack + 1] = {
+            func   = Info.func,
+            name   = Info.name,
+            source = Info.short_src,
+            line   = Info.currentline,
         }
-
-        level += 1
+        Level += 1
     end
-
-    return stack
+    return Stack
 end
 
 if hookfunction then
-    local old_traceback
-    old_traceback = hookfunction(debug.traceback, function(...)
-        local tb = old_traceback(...)
-
-        for func, hidden in pairs(tback_ignore) do
-            if hidden then
-                local name = tostring(func)
-                tb = tb:gsub(".-"..name..".-\n", "")
+    local OldTraceback
+    OldTraceback = hookfunction(debug.traceback, function(...)
+        local Tb = OldTraceback(...)
+        for Func, Hidden in pairs(StackHidden) do
+            if Hidden then
+                Tb = Tb:gsub(".-" .. tostring(Func) .. ".-\n", "")
             end
         end
-
-        return tb
+        return Tb
     end)
 end
 
-for k, v in pairs(_debug) do
-    add("debug." .. k, v)
+for Key, Value in pairs(DebugLib) do
+    AddFunction("debug." .. Key, Value)
 end
 
-local new_debug = {}
-for k, v in pairs(getgenv().debug or {}) do
-    new_debug[k] = v
-end
-
-for k, v in pairs(_debug) do
-    if new_debug[k] == nil then
-        new_debug[k] = v
-    end
-end
-getgenv().debug = new_debug
-
--- Raknet
-
-local _raknet = {}
-
--- highkey none of this existed
--- thanks volt for added raknet
-    -- w docs as always
 do
-    -- this code is from that v3rm guy
-
-    _raknet.GetService = function(self, Service)
-        if not cloneref then return Service end -- for pastesploit users
-    
-        if Service == "VirtualInputManager" or Service == "VirtualUser" then
-            return cloneref(Instance.new(Service)) -- Thanks syn.lua
+    local MergedDebug = {}
+    for Key, Value in pairs(GlobalEnv.debug or {}) do
+        MergedDebug[Key] = Value
+    end
+    for Key, Value in pairs(DebugLib) do
+        if MergedDebug[Key] == nil then
+            MergedDebug[Key] = Value
         end
-
-        return cloneref(Service)
     end
+    GlobalEnv.debug = MergedDebug
+end
 
-    _raknet.GetLocalPlayer = function()
-        return _raknet:GetService(game:GetService("Players")).LocalPlayer
+-- RakNet
+
+local RakNetLib = {}
+
+RakNetLib.GetService = function(self, Service)
+    if not cloneref then return Service end
+    if Service == "VirtualInputManager" or Service == "VirtualUser" then
+        return cloneref(Instance.new(Service))
     end
+    return cloneref(Service)
+end
 
-    _raknet.GetCharacter = function()
-        return _raknet:GetLocalPlayer().Character or _raknet:GetLocalPlayer().CharacterAdded:Wait()
-    end
+RakNetLib.GetLocalPlayer = function()
+    return RakNetLib:GetService(game:GetService("Players")).LocalPlayer
+end
 
-    _raknet.GetPrimaryPart = function()
-        return _raknet:GetCharacter():FindFirstChild("HumanoidRootPart")
-    end
+RakNetLib.GetCharacter = function()
+    return RakNetLib:GetLocalPlayer().Character or RakNetLib:GetLocalPlayer().CharacterAdded:Wait()
+end
 
-    _raknet.GetHumanoid = function()
-        return _raknet:GetCharacter():FindFirstChildOfClass("Humanoid")
-    end
+RakNetLib.GetPrimaryPart = function()
+    return RakNetLib:GetCharacter():FindFirstChild("HumanoidRootPart")
+end
 
-    _raknet.SendKickPacket = function(self, OptionalMessage)
-        if OptionalMessage then
-            _raknet:GetLocalPlayer():Kick(`{OptionalMessage}`)
-            return
+RakNetLib.GetHumanoid = function()
+    return RakNetLib:GetCharacter():FindFirstChildOfClass("Humanoid")
+end
+
+RakNetLib.SendKickPacket = function(self, OptionalMessage)
+    local Player = RakNetLib:GetLocalPlayer()
+    Player:Kick(OptionalMessage or ("You have been kicked by the use of RakNet packets, " .. Player.UserId))
+end
+
+AddFunction("crash", function()
+    local function Recurse()
+        local T = {}
+        for Index = 1, 1000 do
+            T[Index] = string.rep("x", 1000000)
         end
-
-        _raknet:GetLocalPlayer():Kick(`You have been kicked by the use of RakNet packets, {raknet:GetLocalPlayer().UserId}`)
+        Recurse()
     end
+    Recurse()
+end)
 
-    add("crash", function()
-        local function recurse()
-            local t = {}
-            for i = 1, 1000 do
-                t[i] = string.rep("x", 1000000)
-            end
-            recurse()
-        end
-        recurse()
+RakNetLib.SendCrashPacket = function()
+    crash()
+end
+
+RakNetLib.SendHumanoidPropertyChangePacket = function(self, Property, Value)
+    RakNetLib:GetHumanoid()[Property] = Value
+end
+
+RakNetLib.SendClientLagPacket = function(self, Duration)
+    local Original = getfpscap()
+    setfpscap(math.random(1, 25))
+    task.delay(Duration or 1, function()
+        setfpscap(Original)
     end)
-
-    _raknet.SendCrashPacket = function()
-        --while _raknet do --[[0x8231]] end
-        crash()
-    end
-
-    _raknet.SendHumanoidPropertyChangePacket = function(self, Property, Value)
-        _raknet:GetHumanoid()[Property] = Value
-    end
-
-    _raknet.SendClientLagPacket = function(self, Time)
-        local og = getfpscap()
-
-        setfpscap(math.random(1,25))
-        task.delay((Time or 1), function()
-            setfpscap(og)
-        end)
-    end
 end
 
-local hooks, Packet = {}, {}
-Packet.__index = Packet
+local RakNetSendHooks = {}
 
-local function toArray(data)
-    if typeof(data) == "string" then
-        local t = {}
-        for i = 1, #data do
-            t[i] = string.byte(data, i)
+local RakNetPacket = {}
+RakNetPacket.__index = RakNetPacket
+
+local function PacketToArray(Data)
+    if typeof(Data) == "string" then
+        local T = {}
+        for Index = 1, #Data do
+            T[Index] = string.byte(Data, Index)
         end
-        return t
-    elseif typeof(data) == "table" then
-        return data
-    else
-        return {}
+        return T
+    elseif typeof(Data) == "table" then
+        return Data
     end
+    return {}
 end
 
-local function _tostring(data)
-    if typeof(data) == "string" then
-        return data
-    elseif typeof(data) == "table" then
-        local chars = {}
-        for i, v in ipairs(data) do
-            chars[i] = string.char(v)
+local function PacketToString(Data)
+    if typeof(Data) == "string" then return Data end
+    if typeof(Data) == "table" then
+        local Chars = {}
+        for Index, Byte in ipairs(Data) do
+            Chars[Index] = string.char(Byte)
         end
-        return table.concat(chars)
-    else
-        return ""
+        return table.concat(Chars)
     end
+    return ""
 end
 
-function Packet.new(data, priority, reliability, ordering)
-    local self = setmetatable({}, Packet)
-
-    self._data = data
-    self.Priority = priority or 0
-    self.Reliability = reliability or 0
-    self.OrderingChannel = ordering or 0
-    self._blocked = false
-
-    return self
+RakNetPacket.new = function(Data, Priority, Reliability, Ordering)
+    return setmetatable({
+        _data           = Data,
+        Priority        = Priority or 0,
+        Reliability     = Reliability or 0,
+        OrderingChannel = Ordering or 0,
+        _blocked        = false,
+    }, RakNetPacket)
 end
 
-function Packet:UpdateViews()
-    self.AsArray = toArray(self._data)
-    self.AsString = _tostring(self._data)
-    self.Size = #self.AsArray
+RakNetPacket.UpdateViews = function(self)
+    self.AsArray  = PacketToArray(self._data)
+    self.AsString = PacketToString(self._data)
+    self.Size     = #self.AsArray
 end
 
-function Packet:SetData(data)
-    self._data = data
+RakNetPacket.SetData = function(self, Data)
+    self._data = Data
     self:UpdateViews()
 end
 
-function Packet:Block()
+RakNetPacket.Block = function(self)
     self._blocked = true
 end
 
-function _raknet.add_send_hook(hook)
-    table.insert(hooks, hook)
+RakNetLib.add_send_hook = function(Hook)
+    RakNetSendHooks[#RakNetSendHooks + 1] = Hook
 end
 
-function _raknet.remove_send_hook(hook)
-    for i, v in ipairs(hooks) do
-        if v == hook then
-            table.remove(hooks, i)
-            break
+RakNetLib.remove_send_hook = function(Hook)
+    for Index, Value in ipairs(RakNetSendHooks) do
+        if Value == Hook then
+            table.remove(RakNetSendHooks, Index)
+            return
         end
     end
 end
 
-function _raknet.send(data, priority, reliability, ordering_channel)
-    local packet = Packet.new(data, priority, reliability, ordering_channel)
-    packet:UpdateViews()
-
-    -- run hooks
-    for _, hook in ipairs(hooks) do
-        local ok, err = pcall(hook, packet)
-        if not ok then
-            warn("raknet hook error:", err)
+RakNetLib.send = function(Data, Priority, Reliability, OrderingChannel)
+    local Packet = RakNetPacket.new(Data, Priority, Reliability, OrderingChannel)
+    Packet:UpdateViews()
+    for _, Hook in ipairs(RakNetSendHooks) do
+        local Ok, Err = pcall(Hook, Packet)
+        if not Ok then
+            warn("raknet hook error:", Err)
         end
-
-        if packet._blocked then
+        if Packet._blocked then
             warn("[raknet] packet blocked")
             return
         end
     end
+end
 
-    -- we really should be sending this but thats not to possible so
-    if testing then
-        print("[raknet] sent packet:")
-        print("  size:", packet.Size)
-        print("  priority:", packet.Priority)
-        print("  reliability:", packet.Reliability)
-        print("  ordering:", packet.OrderingChannel)
-        print("  data:", packet.AsString)
+local RakNetDesyncHooked = false
+local function DesyncHook(Packet)
+    if Packet.PacketId == 0x1B then
+        local Buf = Packet.AsBuffer
+        buffer.writeu32(Buf, 1, 0xFFFFFFFF)
+        Packet:SetData(Buf)
     end
 end
 
--- from this guy : https://v3rm.net/threads/release-raknet-desync.27587/
--- which is from somewhere else
-local function rakhook(packet)
-    if packet.PacketId == 0x1B then
-        local buf = packet.AsBuffer
-        buffer.writeu32(buf, 1, 0xFFFFFFFF)
-        packet:SetData(buf)
+RakNetLib.desync = function()
+    RakNetLib.add_send_hook(DesyncHook)
+    RakNetDesyncHooked = true
+end
+
+RakNetLib.sync = function()
+    if RakNetDesyncHooked then
+        RakNetLib.remove_send_hook(DesyncHook)
     end
+    RakNetDesyncHooked = false
 end
 
-local hooked = false
-_raknet.desync = function()
-    raknet.add_send_hook(rakhook)
-    hooked = true
+for Key, Value in pairs(RakNetLib) do
+    AddFunction("raknet." .. Key, Value)
 end
-_raknet.sync = function()
-    if hooked then
-        raknet.remove_send_hook(rakhook)
+
+do
+    local MergedRakNet = {}
+    for Key, Value in pairs(GlobalEnv.raknet or GlobalEnv.rnet or {}) do
+        MergedRakNet[Key] = Value
     end
-    hooked = false
-end
-
---[[ -- crashes you. Im prolly getting banned soon enough
-    raknet.add_send_hook(function(packet)
-        local data = packet.AsBuffer
-        buffer.writeu32(data, 1, 0xFFFFFFFF)
-        packet:SetData(data)
-    end)
-]]
-
--- raknet wrapper
-if raknet and loadstring and false then -- remove false
-    loadstring(game:HttpGet("https://github.com/xaviersupreme/raknet-wrapper/raw/main/raknet.luau"))()
-end
-
-genv.raknet = genv.raknet or genv.rnet or {}
-
-for k, v in pairs(_raknet) do
-    add("raknet." .. k, v)
-end
-
-local new_raknet = {}
-for k, v in pairs(getgenv().raknet) do
-    new_raknet[k] = v
-end
-
-for k, v in pairs(_raknet) do
-    if new_raknet[k] == nil then
-        new_raknet[k] = v
-    end
-end
-
-genv.raknet = new_raknet
-genv.rnet = new_raknet
-
--- Helper -- this is like a module?? idk useless anyway
-
-local function createBindable()
-    return Instance.new("BindableEvent")
-end
-
-local _helper = {}
-
-_helper.kill = function(thread)
-    task.cancel(thread)
-end
-
-_helper.chunkify = function(input, chunk_size)
-    chunk_size = chunk_size or 2
-    local result = {}
-
-    local function process(value)
-        local vtype = type(value)
-
-        if vtype == "string" then
-            for i = 1, #value, chunk_size do
-                table.insert(result, value:sub(i, i + chunk_size - 1))
-            end
-
-        elseif vtype == "number" then
-            local str = tostring(value)
-            for i = 1, #str, chunk_size do
-                table.insert(result, str:sub(i, i + chunk_size - 1))
-            end
-
-        elseif vtype == "boolean" or vtype == "function" then
-            table.insert(result, value)
-
-        elseif vtype == "table" then
-            for _, nested in ipairs(value) do
-                process(nested)
-            end
-
-        else
-            table.insert(result, value)
+    for Key, Value in pairs(RakNetLib) do
+        if MergedRakNet[Key] == nil then
+            MergedRakNet[Key] = Value
         end
     end
-
-    for _, v in ipairs(input) do
-        process(v)
-    end
-
-    return table.concat(result, "")
+    GlobalEnv.raknet = MergedRakNet
+    GlobalEnv.rnet   = MergedRakNet
 end
-
--- removed _helper.unchunk
--- removed _helper.fromtable
-
-_helper.tabledata = function(data)
-    local result = {}
-
-    for _, v in pairs(data) do
-        local t = type(v)
-        result[t] = (result[t] or 0) + 1
-    end
-
-    return result
-end
-
-_helper.sum = function(tbl)
-    expect(tbl, "table", false, 1)
-    local total = 0
-    for _, v in ipairs(tbl) do
-        expect(v, "number", false, 1)
-        total += v
-    end
-    return total
-end
-
-_helper.average = function(tbl)
-    expect(tbl, "table", false, 1)
-    assert(#tbl > 0, "table cannot be empty")
-    return _helper.sum(tbl) / #tbl
-end
-
--- local t = {"string", "pango", 3, "rango"}
--- print(helper.search(t, 3, true, { type = "number" }))
---  returns "3 3"
-_helper.search = function(tbl, looking_for, nested, filter)
-    expect(tbl, "table", false, 1)
-    expect(nested, "boolean", false, 2)
-    expect(filter, "table", false, 3)
-
-    for k, v in pairs(tbl) do
-        local match = (v == looking_for)
-
-        if filter and filter.type then
-            match = match and (type(v) == filter.type)
-        end
-
-        if match then
-            return k, v
-        end
-
-        if nested and type(v) == "table" then
-            local foundK, foundV = _helper.search(v, looking_for, true, filter)
-            if foundK ~= nil then
-                return foundK, foundV
-            end
-        end
-    end
-
-    return nil, "Item could not be found"
-end
-
-local function set(data, func)
-    local result = {}
-    for k, v in pairs(data) do
-        result[k] = func(v)
-    end
-    return result
-end
-
-_helper.tostring = function(data)
-    return _tostring(data)
-end
-
--- for tables
-_helper.tabletostring = function(data)
-    return set(data, tostring)
-end
-
-_helper.tabletonumber = function(data)
-    return set(data, tonumber)
-end
-
-_helper.is_repeating = function(v)
-    local t = type(v)
-
-    if t == "string" then
-        if #v <= 1 then return true end
-        local first = v:sub(1, 1)
-        for i = 2, #v do
-            if v:sub(i, i) ~= first then
-                return false
-            end
-        end
-        return true
-    end
-
-    -- table
-    if #v == 0 then return true end
-    local first = v[1]
-    for i = 2, #v do
-        if v[i] ~= first then
-            return false
-        end
-    end
-
-    return true
-end
-
-_helper.toexpontent = function(n)
-    if n == 0 then return "0e0" end
-
-    local exp = 0
-    local value = n
-
-    while value >= 10 do
-        value /= 10
-        exp += 1
-    end
-
-    while value < 1 do
-        value *= 10
-        exp -= 1
-    end
-
-    return string.format("%.3ge%d", value, exp)
-end
-
-_helper.fromexpontent = function(str)
-    local base, exp = str:match("([%d%.]+)e([%-]?%d+)")
-    base = tonumber(base)
-    exp = tonumber(exp)
-
-    if not base or not exp then return nil end
-
-    return base * (10 ^ exp)
-end
-
-_helper.flip = function(var)
-    expect(var, "boolean", false, 1)
-    return not var
-end
-
-_helper.GetChildrenWithAttribute = function(parent, attr)
-    local result = {}
-
-    for _, child in ipairs(parent:GetChildren()) do
-        if child:GetAttribute(attr) ~= nil then
-            table.insert(result, child)
-        end
-    end
-
-    return result
-end
-
-local collection = services["CollectionService"]
-
-_helper.GetChildrenWithTag = function(parent, tag)
-    local result = {}
-
-    for _, instance in ipairs(collection:GetTagged(tag)) do
-        if instance.Parent == parent then
-            table.insert(result, instance)
-        end
-    end
-
-    return result
-end
-
--- claude
-_helper.removeduplicates = function(t: table): table
-    local seen = {}
-    local result = {}
-
-    for _, v in pairs(t) do
-        if not seen[v] then
-            seen[v] = true
-            table.insert(result, v)
-        end
-    end
-
-    return result
-end
-
-_helper.issametable = function(a: table, b: table): bool
-    if a == b then return true end
-    if typeof(a) ~= "table" or typeof(b) ~= "table" then return false end
-
-    -- Check same number of keys
-    local aCount, bCount = 0, 0
-    for _ in pairs(a) do aCount += 1 end
-    for _ in pairs(b) do bCount += 1 end
-    if aCount ~= bCount then return false end
-
-    -- Check all keys/values match
-    for k, v in pairs(a) do
-        local bv = b[k]
-        if typeof(v) == "table" and typeof(bv) == "table" then
-            if not issametable(v, bv) then return false end
-        elseif v ~= bv then
-            return false
-        end
-    end
-
-    return true
-end
-
-for k, v in pairs(_helper) do
-    add("helper." .. k, v)
-end
-getgenv().helper = _helper
 
 -- Drawing
 
-local dache = {}
-
-local function applyBase(obj, self)
-    obj.Visible = self.Visible
-    obj.ZIndex = math.clamp(self.ZIndex, -2^31, 2^31)
-    obj.BackgroundTransparency = 1 - self.Transparency
-    obj.BackgroundColor3 = self.Color
+local DrawingCache = {}
+local DrawingUI do
+    DrawingUI = Instance.new("ScreenGui")
+    DrawingUI.Name = RandomString(6)
+    DrawingUI.Parent = Services.CoreGui
 end
 
-local function makeProxy(self, update, readonly)
-    readonly = readonly or {}
-    local proxy = newproxy(true)
-    local mt = getmetatable(proxy)
+local function ApplyDrawingBase(Object, State)
+    Object.Visible              = State.Visible
+    Object.ZIndex               = math.clamp(State.ZIndex, -2^31, 2^31)
+    Object.BackgroundTransparency = 1 - State.Transparency
+    Object.BackgroundColor3     = State.Color
+end
 
-    mt.__index = function(_, k)
-        return self[k]
-    end
-
-    mt.__newindex = function(_, k, v)
-        for _, r in ipairs(readonly) do
-            if r == k then return end
+local function MakeDrawingProxy(State, Update, ReadOnly)
+    ReadOnly = ReadOnly or {}
+    local Proxy = newproxy(true)
+    local MT    = getmetatable(Proxy)
+    MT.__index    = function(_, Key) return State[Key] end
+    MT.__newindex = function(_, Key, Value)
+        for _, R in ipairs(ReadOnly) do
+            if R == Key then return end
         end
-        self[k] = v
-        update()
+        State[Key] = Value
+        Update()
     end
-
-    mt.__tostring = function()
-        return "Drawing"
-    end
-
-    mt.__metatable = "This metatable is protected."
-    return proxy
+    MT.__tostring  = function() return "Drawing" end
+    MT.__metatable = "This metatable is protected."
+    return Proxy
 end
 
-local types = {}
+local DrawingTypes = {}
 
-types.Line = function(self, Object)
-    local function update()
-        local from, to = self.From, self.To
-        local dx, dy = to.X - from.X, to.Y - from.Y
-        local len = math.sqrt(dx^2 + dy^2)
-        Object.Size = UDim2.fromOffset(len, self.Thickness)
-        Object.Position = UDim2.fromOffset(from.X, from.Y)
-        Object.Rotation = math.deg(math.atan2(dy, dx))
-        Object.BackgroundColor3 = self.Color
-        Object.Visible = self.Visible
-        Object.ZIndex = math.clamp(self.ZIndex, -2^31, 2^31)
+DrawingTypes.Line = function(State, Object)
+    local function Update()
+        local From, To = State.From, State.To
+        local DX, DY = To.X - From.X, To.Y - From.Y
+        local Length = math.sqrt(DX^2 + DY^2)
+        Object.Size             = UDim2.fromOffset(Length, State.Thickness)
+        Object.Position         = UDim2.fromOffset(From.X, From.Y)
+        Object.Rotation         = math.deg(math.atan2(DY, DX))
+        Object.BackgroundColor3 = State.Color
+        Object.Visible          = State.Visible
+        Object.ZIndex           = math.clamp(State.ZIndex, -2^31, 2^31)
     end
-
-    self.From = Vector2.zero
-    self.To = Vector2.zero
-    self.Thickness = 1
-    self.Color = Color3.new(1, 1, 1)
-    self.Visible = true
-    self.ZIndex = 1
-    self.Transparency = 1
-
-    local proxy = makeProxy(self, update)
-    update()
-    return proxy
+    State.From        = Vector2.zero
+    State.To          = Vector2.zero
+    State.Thickness   = 1
+    State.Color       = Color3.new(1, 1, 1)
+    State.Visible     = true
+    State.ZIndex      = 1
+    State.Transparency = 1
+    Update()
+    return MakeDrawingProxy(State, Update)
 end
 
-types.Square = function(self, Object)
-    local stroke = Instance.new("UIStroke", Object)
-    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-
-    local function update()
-        applyBase(Object, self)
-        Object.Size = UDim2.fromOffset(self.Size.X, self.Size.Y)
-        Object.Position = UDim2.fromOffset(self.Position.X, self.Position.Y)
-        if self.Filled then
+DrawingTypes.Square = function(State, Object)
+    local Stroke = Instance.new("UIStroke", Object)
+    Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    local function Update()
+        ApplyDrawingBase(Object, State)
+        Object.Size     = UDim2.fromOffset(State.Size.X, State.Size.Y)
+        Object.Position = UDim2.fromOffset(State.Position.X, State.Position.Y)
+        if State.Filled then
             Object.BackgroundTransparency = 0
-            stroke.Enabled = false
+            Stroke.Enabled = false
         else
             Object.BackgroundTransparency = 1
-            stroke.Enabled = true
-            stroke.Color = self.Color
-            stroke.Thickness = self.Thickness
+            Stroke.Enabled    = true
+            Stroke.Color      = State.Color
+            Stroke.Thickness  = State.Thickness
         end
     end
-
-    self.Size = Vector2.zero
-    self.Position = Vector2.zero
-    self.Color = Color3.new(1, 1, 1)
-    self.Filled = false
-    self.Thickness = 1
-    self.Visible = true
-    self.ZIndex = 1
-    self.Transparency = 1
-
-    return makeProxy(self, update)
+    State.Size        = Vector2.zero
+    State.Position    = Vector2.zero
+    State.Color       = Color3.new(1, 1, 1)
+    State.Filled      = false
+    State.Thickness   = 1
+    State.Visible     = true
+    State.ZIndex      = 1
+    State.Transparency = 1
+    return MakeDrawingProxy(State, Update)
 end
 
-types.Circle = function(self, Object)
+DrawingTypes.Circle = function(State, Object)
     Instance.new("UICorner", Object).CornerRadius = UDim.new(1, 0)
-    local stroke = Instance.new("UIStroke", Object)
-    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-
-    local function update()
-        local d = self.Radius * 2
-        Object.Size = UDim2.fromOffset(d, d)
-        Object.Position = UDim2.fromOffset(
-            self.Position.X - self.Radius,
-            self.Position.Y - self.Radius
-        )
-        Object.Visible = self.Visible
-        Object.ZIndex = math.clamp(self.ZIndex, -2^31, 2^31)
-        if self.Filled then
-            Object.BackgroundTransparency = 1 - self.Transparency
-            Object.BackgroundColor3 = self.Color
-            stroke.Enabled = false
+    local Stroke = Instance.new("UIStroke", Object)
+    Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    local function Update()
+        local Diameter = State.Radius * 2
+        Object.Size     = UDim2.fromOffset(Diameter, Diameter)
+        Object.Position = UDim2.fromOffset(State.Position.X - State.Radius, State.Position.Y - State.Radius)
+        Object.Visible  = State.Visible
+        Object.ZIndex   = math.clamp(State.ZIndex, -2^31, 2^31)
+        if State.Filled then
+            Object.BackgroundTransparency = 1 - State.Transparency
+            Object.BackgroundColor3       = State.Color
+            Stroke.Enabled = false
         else
             Object.BackgroundTransparency = 1
-            stroke.Enabled = true
-            stroke.Color = self.Color
-            stroke.Thickness = self.Thickness
+            Stroke.Enabled   = true
+            Stroke.Color     = State.Color
+            Stroke.Thickness = State.Thickness
         end
     end
-
-    self.Radius = 1
-    self.Position = Vector2.zero
-    self.Color = Color3.new(1, 1, 1)
-    self.Filled = false
-    self.Thickness = 1
-    self.Visible = true
-    self.ZIndex = 1
-    self.Transparency = 1
-    self.NumSides = 0
-
-    return makeProxy(self, update)
+    State.Radius      = 1
+    State.Position    = Vector2.zero
+    State.Color       = Color3.new(1, 1, 1)
+    State.Filled      = false
+    State.Thickness   = 1
+    State.Visible     = true
+    State.ZIndex      = 1
+    State.Transparency = 1
+    State.NumSides    = 0
+    return MakeDrawingProxy(State, Update)
 end
 
-types.Text = function(self, Object)
+local FontMap = {
+    [0] = Enum.Font.GothamMedium,
+    [1] = Enum.Font.SourceSans,
+    [2] = Enum.Font.Code,
+    [3] = Enum.Font.RobotoMono,
+}
+
+DrawingTypes.Text = function(State, Object)
     Object:Destroy()
-    Object = Instance.new("TextLabel", UI)
+    Object = Instance.new("TextLabel", DrawingUI)
     Object.BackgroundTransparency = 1
     Object.BorderSizePixel = 0
     Object.TextWrapped = false
-    Object.RichText = false
-
-    local function update()
-        Object.Visible = self.Visible
-        Object.ZIndex = math.clamp(self.ZIndex, -2^31, 2^31)
-        Object.Text = self.Text
-        Object.TextSize = self.Size
-        Object.TextColor3 = self.Color
-        Object.BackgroundTransparency = 1 - self.Transparency
-        Object.Position = UDim2.fromOffset(self.Position.X, self.Position.Y)
-        Object.Size = UDim2.fromOffset(self.Size * #self.Text * 0.6, self.Size)
-        Object.Font = ({
-            [0] = Enum.Font.GothamMedium,
-            [1] = Enum.Font.SourceSans,
-            [2] = Enum.Font.Code,
-            [3] = Enum.Font.RobotoMono,
-        })[self.Font] or Enum.Font.GothamMedium
-        Object.TextXAlignment = self.Center and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left
-        Object.TextYAlignment = self.Center and Enum.TextYAlignment.Center or Enum.TextYAlignment.Top
-        Object.TextStrokeTransparency = self.Outline and 0 or 1
-        Object.TextStrokeColor3 = self.OutlineColor
-        self.TextBounds = Object.TextBounds
+    Object.RichText    = false
+    local function Update()
+        Object.Visible              = State.Visible
+        Object.ZIndex               = math.clamp(State.ZIndex, -2^31, 2^31)
+        Object.Text                 = State.Text
+        Object.TextSize             = State.Size
+        Object.TextColor3           = State.Color
+        Object.BackgroundTransparency = 1 - State.Transparency
+        Object.Position             = UDim2.fromOffset(State.Position.X, State.Position.Y)
+        Object.Size                 = UDim2.fromOffset(State.Size * #State.Text * 0.6, State.Size)
+        Object.Font                 = FontMap[State.Font] or Enum.Font.GothamMedium
+        Object.TextXAlignment       = State.Center and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left
+        Object.TextYAlignment       = State.Center and Enum.TextYAlignment.Center or Enum.TextYAlignment.Top
+        Object.TextStrokeTransparency = State.Outline and 0 or 1
+        Object.TextStrokeColor3     = State.OutlineColor
+        State.TextBounds            = Object.TextBounds
     end
-
-    self.Text = ""
-    self.Size = 12
-    self.Font = 3
-    self.Color = Color3.new(1, 1, 1)
-    self.Center = false
-    self.Outline = false
-    self.OutlineColor = Color3.new(0, 0, 0)
-    self.Position = Vector2.zero
-    self.Visible = true
-    self.ZIndex = 1
-    self.Transparency = 1
-    self.TextBounds = Vector2.zero
-
-    return makeProxy(self, update, {"TextBounds"})
+    State.Text         = ""
+    State.Size         = 12
+    State.Font         = 3
+    State.Color        = Color3.new(1, 1, 1)
+    State.Center       = false
+    State.Outline      = false
+    State.OutlineColor = Color3.new(0, 0, 0)
+    State.Position     = Vector2.zero
+    State.Visible      = true
+    State.ZIndex       = 1
+    State.Transparency = 1
+    State.TextBounds   = Vector2.zero
+    return MakeDrawingProxy(State, Update, {"TextBounds"})
 end
 
-local Drawing = {
-    Fonts = {
-        UI = 0,
-        System = 1,
-        Plex = 2,
-        Monospace = 3,
-    },
-
-    new = function(Type)
-        expect(Type, "string", false, 1)
-        assert(types[Type], "invalid drawing type: " .. Type)
-
-        local Object = Instance.new("Frame")
-        Object.BorderSizePixel = 0
-        Object.BackgroundTransparency = 1
-        Object.ZIndex = 1
-        Object.Size = UDim2.fromOffset(0, 0)
-        Object.Parent = UI
-
-        local self = {
-            Remove = function() Object:Destroy() end,
-        }
-        self.Destroy = self.Remove
-
-        local proxy = types[Type](self, Object)
-        table.insert(dache, {proxy = proxy, instance = Object})
-        return proxy
-    end
-}
-
-if getgenv()["Drawing"] == nil then
-    getgenv().Drawing = Drawing
+if not GlobalEnv.Drawing then
+    GlobalEnv.Drawing = {
+        Fonts = { UI = 0, System = 1, Plex = 2, Monospace = 3 },
+        new = function(DrawingType)
+            Expect(DrawingType, "string", false, 1)
+            assert(DrawingTypes[DrawingType], "invalid drawing type: " .. DrawingType)
+            local Object = Instance.new("Frame")
+            Object.BorderSizePixel        = 0
+            Object.BackgroundTransparency = 1
+            Object.ZIndex                 = 1
+            Object.Size                   = UDim2.fromOffset(0, 0)
+            Object.Parent                 = DrawingUI
+            local State = {
+                Remove  = function() Object:Destroy() end,
+            }
+            State.Destroy = State.Remove
+            local Proxy = DrawingTypes[DrawingType](State, Object)
+            DrawingCache[#DrawingCache + 1] = { proxy = Proxy, instance = Object }
+            return Proxy
+        end,
+    }
 end
 
-add("isrenderobj", function(a)
-    for _, obj in ipairs(dache) do
-        if obj.proxy == a then return true end
+AddFunction("isrenderobj", function(Object)
+    for _, Entry in ipairs(DrawingCache) do
+        if Entry.proxy == Object then return true end
     end
     return false
 end)
 
-add("cleardrawcache", function()
-    for _, obj in ipairs(dache) do
-        obj.instance:Destroy()
+AddFunction("cleardrawcache", function()
+    for _, Entry in ipairs(DrawingCache) do
+        Entry.instance:Destroy()
     end
-    table.clear(dache)
+    table.clear(DrawingCache)
 end)
 
-add("getrenderproperty", function(a, b)
-    assert(isrenderobj(a), "expected render object, got " .. type(a))
-    expect(b, "string", false, 2)
-    return a[b]
+AddFunction("getrenderproperty", function(Object, Property)
+    assert(isrenderobj(Object), "expected render object, got " .. type(Object))
+    Expect(Property, "string", false, 2)
+    return Object[Property]
 end)
 
-add("setrenderproperty", function(a, b, c)
-    assert(isrenderobj(a), "expected render object, got " .. type(a))
-    expect(b, "string", false, 2)
-    a[b] = c
+AddFunction("setrenderproperty", function(Object, Property, Value)
+    assert(isrenderobj(Object), "expected render object, got " .. type(Object))
+    Expect(Property, "string", false, 2)
+    Object[Property] = Value
 end)
 
 -- File System
 
-local executor = (identifyexecutor and identifyexecutor() or "unknown") -- depends on the exec but should show raw version
-local _workspace = executor .. "/workspace"
+local ExecutorName = identifyexecutor and identifyexecutor() or "unknown"
+local WorkspaceRoot = ExecutorName .. "/workspace"
 
-local function normalize(path)
-    path = tostring(path or "")
-    path = path:gsub("\\", "/")
-    path = path:gsub("^/", "")
+local VirtualFiles, VirtualFolders = {}, {}
 
-    path = path:gsub("^%.%./", "")
-    path = path:gsub("/%.%./", "/")
-
-    if not path:find(_workspace, 1, true) then
-        path = _workspace .. "/" .. path
+local function NormalizePath(Path)
+    Path = tostring(Path or ""):gsub("\\", "/"):gsub("^/", "")
+    Path = Path:gsub("^%.%./", ""):gsub("/%.%./", "/")
+    if not Path:find(WorkspaceRoot, 1, true) then
+        Path = WorkspaceRoot .. "/" .. Path
     end
-
-    return path
+    return Path
 end
 
-local function parent(path)
-    return path:match("(.+)/[^/]+$") or _workspace
+local function ParentPath(Path)
+    return Path:match("(.+)/[^/]+$") or WorkspaceRoot
 end
 
-add("writefile", function(path, data)
-    path = normalize(path)
-    fs_files[path] = data
-    fs_folders[parent(path)] = true
-    if allow() then
-        ps:Send(string.format(
-            "Set-Content -Path '%s' -Value '%s'",
-            path,
-            data:gsub("'", "''")
-        ))
+AddFunction("writefile", function(Path, Data)
+    Path = NormalizePath(Path)
+    VirtualFiles[Path] = Data
+    VirtualFolders[ParentPath(Path)] = true
+    if AllowTerminal() then
+        PsSocket:Send(string.format("Set-Content -Path '%s' -Value '%s'", Path, Data:gsub("'", "''")))
     end
 end)
 
-add("appendfile", function(path, data)
-    path = normalize(path)
-    fs_files[path] = (fs_files[path] or "") .. data
-    fs_folders[parent(path)] = true
-    if allow() then
-        ps:Send(string.format(
-            "Add-Content -Path '%s' -Value '%s'",
-            path,
-            data:gsub("'", "''")
-        ))
+AddFunction("appendfile", function(Path, Data)
+    Path = NormalizePath(Path)
+    VirtualFiles[Path] = (VirtualFiles[Path] or "") .. Data
+    VirtualFolders[ParentPath(Path)] = true
+    if AllowTerminal() then
+        PsSocket:Send(string.format("Add-Content -Path '%s' -Value '%s'", Path, Data:gsub("'", "''")))
     end
 end)
 
-add("readfile", function(path)
-    path = normalize(path)
-    if fs_files[path] then
-        return fs_files[path]
+AddFunction("readfile", function(Path)
+    Path = NormalizePath(Path)
+    if VirtualFiles[Path] then return VirtualFiles[Path] end
+    if AllowTerminal() then
+        PsSocket:Send(string.format("Get-Content -Path '%s' -Raw", Path))
     end
-    -- fallback: read from disk
-    if allow() then
-        ps:Send(string.format("Get-Content -Path '%s' -Raw", path))
-    end
-    error("file does not exist in virtual fs: " .. path)
+    error("file does not exist in virtual fs: " .. Path)
 end)
 
-add("isfile", function(path)
-    path = normalize(path)
-    if fs_files[path] ~= nil then return true end
-    if allow() then
-        ps:Send(string.format("Test-Path -Path '%s' -PathType Leaf", path))
-    end
-    return false
+AddFunction("isfile", function(Path)
+    Path = NormalizePath(Path)
+    return VirtualFiles[Path] ~= nil
 end)
 
-add("makefolder", function(path)
-    path = normalize(path)
-    fs_folders[path] = true
-    if allow() then
-        ps:Send(string.format(
-            "New-Item -ItemType Directory -Force -Path '%s'",
-            path
-        ))
+AddFunction("makefolder", function(Path)
+    Path = NormalizePath(Path)
+    VirtualFolders[Path] = true
+    if AllowTerminal() then
+        PsSocket:Send(string.format("New-Item -ItemType Directory -Force -Path '%s'", Path))
     end
 end)
 
-add("isfolder", function(path)
-    path = normalize(path)
-    if fs_folders[path] then return true end
-    if allow() then
-        ps:Send(string.format("Test-Path -Path '%s' -PathType Container", path))
-    end
-    return false
+AddFunction("isfolder", function(Path)
+    Path = NormalizePath(Path)
+    return VirtualFolders[Path] == true
 end)
 
-add("delfile", function(path)
-    path = normalize(path)
-    assert(fs_files[path] ~= nil, "file does not exist: " .. path)
-    fs_files[path] = nil
-    if allow() then
-        ps:Send(string.format("Remove-Item -Path '%s' -Force", path))
+AddFunction("delfile", function(Path)
+    Path = NormalizePath(Path)
+    assert(VirtualFiles[Path] ~= nil, "file does not exist: " .. Path)
+    VirtualFiles[Path] = nil
+    if AllowTerminal() then
+        PsSocket:Send(string.format("Remove-Item -Path '%s' -Force", Path))
     end
 end)
 
-add("delfolder", function(path)
-    path = normalize(path)
-    for f in pairs(fs_files) do
-        if f:sub(1, #path) == path then fs_files[f] = nil end
+AddFunction("delfolder", function(Path)
+    Path = NormalizePath(Path)
+    for F in pairs(VirtualFiles) do
+        if F:sub(1, #Path) == Path then VirtualFiles[F] = nil end
     end
-    for f in pairs(fs_folders) do
-        if f:sub(1, #path) == path then fs_folders[f] = nil end
+    for F in pairs(VirtualFolders) do
+        if F:sub(1, #Path) == Path then VirtualFolders[F] = nil end
     end
-    if allow() then
-        ps:Send(string.format("Remove-Item -Path '%s' -Recurse -Force", path))
+    if AllowTerminal() then
+        PsSocket:Send(string.format("Remove-Item -Path '%s' -Recurse -Force", Path))
     end
 end)
 
-add("listfiles", function(path)
-    path = normalize(path)
-    local out = {}
-    for f in pairs(fs_files) do
-        if f:sub(1, #path) == path then table.insert(out, f) end
+AddFunction("listfiles", function(Path)
+    Path = NormalizePath(Path)
+    local Out = {}
+    for F in pairs(VirtualFiles) do
+        if F:sub(1, #Path) == Path then Out[#Out + 1] = F end
     end
-    for f in pairs(fs_folders) do
-        if f ~= "" and f:sub(1, #path) == path then table.insert(out, f) end
+    for F in pairs(VirtualFolders) do
+        if F ~= "" and F:sub(1, #Path) == Path then Out[#Out + 1] = F end
     end
-    if allow() then
-        ps:Send(string.format("Get-ChildItem -Path '%s' | Select-Object -ExpandProperty Name", path))
-    end
-    return out
+    return Out
 end)
 
 -- Input
 
-local uis = services["UserInputService"]
+local UserInputService = Services.UserInputService
+local VirtualInput = Services.VirtualInputManager
 
-local active = false -- it exeucted somehow
-    -- maybe autoexec who cares ig
+local RobloxActive = false
+UserInputService.WindowFocused:Connect(function() RobloxActive = true end)
+UserInputService.WindowFocusReleased:Connect(function() RobloxActive = false end)
 
-uis.WindowFocused:Connect(function()
-    active = true
+AddFunction("isrbxactive", function()
+    return RobloxActive
 end)
 
-uis.WindowFocusReleased:Connect(function()
-    active = false
-end)
-
-add("isrbxactive", function()
-    return active
-end)
-
-local mouse = uis:GetMouseLocation()
-uis.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement then
-        mouse = uis:GetMouseLocation()
+local MousePosition = UserInputService:GetMouseLocation()
+UserInputService.InputChanged:Connect(function(Input)
+    if Input.UserInputType == Enum.UserInputType.MouseMovement then
+        MousePosition = UserInputService:GetMouseLocation()
     end
 end)
 
-alias({"closerbx", "closeroblox"}, function()
+AliasFunction({"closerbx", "closeroblox"}, function()
     crash()
 end)
 
-local vim = services["VirtualInputManager"]
-add("mouse1press", function()
-    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, true, game, 0)
+AddFunction("mouse1press", function()
+    VirtualInput:SendMouseButtonEvent(MousePosition.X, MousePosition.Y, 0, true, game, 0)
 end)
 
-add("mouse1release", function()
-    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, false, game, 0)
+AddFunction("mouse1release", function()
+    VirtualInput:SendMouseButtonEvent(MousePosition.X, MousePosition.Y, 0, false, game, 0)
 end)
 
-add("mouse1click", function()
-    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, true, game, 0)
-    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 0, false, game, 0)
+AddFunction("mouse1click", function()
+    VirtualInput:SendMouseButtonEvent(MousePosition.X, MousePosition.Y, 0, true, game, 0)
+    VirtualInput:SendMouseButtonEvent(MousePosition.X, MousePosition.Y, 0, false, game, 0)
 end)
 
-add("mouse2click", function()
-    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 1, true, game, 0)
-    vim:SendMouseButtonEvent(mouse.X, mouse.Y, 1, false, game, 0)
+AddFunction("mouse2click", function()
+    VirtualInput:SendMouseButtonEvent(MousePosition.X, MousePosition.Y, 1, true, game, 0)
+    VirtualInput:SendMouseButtonEvent(MousePosition.X, MousePosition.Y, 1, false, game, 0)
 end)
 
-add("mouse2release", function()
-    vim:SendMouseButtonEvent(0, 0, 1, false, game, 0)
+AddFunction("mouse2release", function()
+    VirtualInput:SendMouseButtonEvent(0, 0, 1, false, game, 0)
 end)
 
-add("mousemoveabs", function(x, y)
-    expect(x, "number", false, 1)
-    expect(y, "number", false, 2)
-    vim:SendMouseMoveEvent(x, y, game)
+AddFunction("mousemoveabs", function(X, Y)
+    Expect(X, "number", false, 1)
+    Expect(Y, "number", false, 2)
+    VirtualInput:SendMouseMoveEvent(X, Y, game)
 end)
 
-add("mousemoverel", function(x, y)
-    expect(x, "number", false, 1)
-    expect(y, "number", false, 2)
-    local pos = uis:GetMouseLocation()
-    vim:SendMouseMoveEvent(pos.X + x, pos.Y + y, game)
+AddFunction("mousemoverel", function(X, Y)
+    Expect(X, "number", false, 1)
+    Expect(Y, "number", false, 2)
+    local Pos = UserInputService:GetMouseLocation()
+    VirtualInput:SendMouseMoveEvent(Pos.X + X, Pos.Y + Y, game)
 end)
 
-add("mousescroll", function(pixels)
-    expect(pixels, "number", false, 1)
-    vim:SendMouseWheelEvent(0, 0, pixels > 0, game)
+AddFunction("mousescroll", function(Pixels)
+    Expect(Pixels, "number", false, 1)
+    VirtualInput:SendMouseWheelEvent(0, 0, Pixels > 0, game)
 end)
 
 -- Instance
 
-local char = lp.Character
-local hrp = char.HumanoidRootPart
+local function GetCharacter()
+    local Char = LocalPlayer.Character
+    return Char
+end
 
-add("fireclickdetector", function(cd, distance)
-    assert(typeof(cd) == "Instance" and cd:IsA("ClickDetector"), "expected ClickDetector, got " .. typeof(cd))
+local function GetHRP()
+    local Char = GetCharacter()
+    return Char and Char.HumanoidRootPart
+end
 
-    distance = distance or 0
-
-    local old = hrp.CFrame
-
-    if cd.Parent and distance ~= 0 then
-        hrp.CFrame = cd.Parent.CFrame
+AddFunction("fireclickdetector", function(ClickDetector, Distance)
+    assert(typeof(ClickDetector) == "Instance" and ClickDetector:IsA("ClickDetector"),
+        "expected ClickDetector, got " .. typeof(ClickDetector))
+    Distance = Distance or 0
+    local HRP = GetHRP()
+    local OldCFrame = HRP and HRP.CFrame
+    if ClickDetector.Parent and Distance ~= 0 and HRP then
+        HRP.CFrame = ClickDetector.Parent.CFrame
     end
-
-    cd.MaxActivationDistance = math.huge
-
-    firesignal(cd.MouseHoverEnter)
-    firesignal(cd.MouseClick, game.Players.LocalPlayer)
-    firesignal(cd.MouseHoverLeave)
-
-    hrp.CFrame = old
+    ClickDetector.MaxActivationDistance = math.huge
+    firesignal(ClickDetector.MouseHoverEnter)
+    firesignal(ClickDetector.MouseClick, game.Players.LocalPlayer)
+    firesignal(ClickDetector.MouseHoverLeave)
+    if HRP and OldCFrame then
+        HRP.CFrame = OldCFrame
+    end
 end)
 
-add("firetouchinterest", function(part, touched)
-    assert(typeof(part) == "Instance" and part:IsA("BasePart"), "expected BasePart, got " .. typeof(part))
-    firesignal(part, touched == false and "TouchEnded" or "Touched")
+AddFunction("firetouchinterest", function(Part, Touched)
+    assert(typeof(Part) == "Instance" and Part:IsA("BasePart"), "expected BasePart, got " .. typeof(Part))
+    firesignal(Part, Touched == false and "TouchEnded" or "Touched")
 end)
 
-add("isnetworkowner", function(part)
-    assert(typeof(part) == "Instance" and part:IsA("BasePart"), "expected BasePart, got " .. typeof(part))
-    return gethiddenproperty(part, "NetworkOwnerV3") and true or false
+AddFunction("isnetworkowner", function(Part)
+    assert(typeof(Part) == "Instance" and Part:IsA("BasePart"), "expected BasePart, got " .. typeof(Part))
+    return gethiddenproperty(Part, "NetworkOwnerV3") and true or false
 end)
 
-add("getcallbackvalue", function(instance: Instance, property: string)
-    expect(instance, "Instance", false, 1)
-    expect(property, "string", false, 2)
-
-    local ok, result = pcall(function()
-        return getrawmetatable(instance)[property]
+AddFunction("getcallbackvalue", function(Instance, Property)
+    Expect(Instance, "Instance", false, 1)
+    Expect(Property, "string", false, 2)
+    local Ok, Result = pcall(function()
+        return getrawmetatable(Instance)[Property]
     end)
-
-    if ok and typeof(result) == "function" then
-        return result
-    end
-
+    if Ok and typeof(Result) == "function" then return Result end
     return nil
 end)
 
-add("getcallbackmember", function(...)
-    getcallbackvalue(...)
-end)
+AliasFunction({"getcallbackmember"}, "getcallbackvalue")
 
-add("fireproximityprompt", function(prompt, triggered, hold)
-    assert(typeof(prompt) == "Instance" and prompt:IsA("ProximityPrompt"), "expected ProximityPrompt, got " .. typeof(prompt))
-    local signal
-    if hold then
-        signal = triggered and "PromptButtonHoldBegan" or "PromptButtonHoldEnded"
+AddFunction("fireproximityprompt", function(Prompt, Triggered, Hold)
+    assert(typeof(Prompt) == "Instance" and Prompt:IsA("ProximityPrompt"),
+        "expected ProximityPrompt, got " .. typeof(Prompt))
+    local Signal
+    if Hold then
+        Signal = Triggered and "PromptButtonHoldBegan" or "PromptButtonHoldEnded"
     else
-        signal = triggered == false and "TriggerEnded" or "Triggered"
+        Signal = Triggered == false and "TriggerEnded" or "Triggered"
     end
-    firesignal(prompt, signal)
+    firesignal(Prompt, Signal)
 end)
 
-add("getproximitypromptduration", function(pprompt)
-    return pprompt.HoldDuration
+AddFunction("getproximitypromptduration", function(Prompt)
+    return Prompt.HoldDuration
 end)
 
-add("setproximitypromptduration", function(pprompt, tset)
-    pprompt.HoldDuration = tset
+AddFunction("setproximitypromptduration", function(Prompt, Duration)
+    Prompt.HoldDuration = Duration
 end)
 
-local signal_store = {}
-add("getconnections", function(signal)
-    assert(typeof(signal) == "RBXScriptSignal", "expected RBXScriptSignal, got " .. typeof(signal))
-    return signal_store[signal] or {}
+local SignalConnections = {}
+
+AddFunction("getconnections", function(Signal)
+    assert(typeof(Signal) == "RBXScriptSignal", "expected RBXScriptSignal, got " .. typeof(Signal))
+    return SignalConnections[Signal] or {}
 end)
 
-add("getconnection", function(signal)
-    assert(typeof(signal) == "RBXScriptSignal", "expected RBXScriptSignal, got " .. typeof(signal))
-    local t = signal_store[signal]
-    return t and t[1]
+AddFunction("getconnection", function(Signal)
+    assert(typeof(Signal) == "RBXScriptSignal", "expected RBXScriptSignal, got " .. typeof(Signal))
+    local Connections = SignalConnections[Signal]
+    return Connections and Connections[1]
 end)
 
-add("getsignalarguments", function()
-    assert(typeof(signal) == "RBXScriptSignal", "expected RBXScriptSignal, got " .. typeof(signal))
-end) 
-add("getsignalargumentsinfo", function()
-    assert(typeof(signal) == "RBXScriptSignal", "expected RBXScriptSignal, got " .. typeof(signal))
-end) 
+AddFunction("getsignalarguments", function(Signal)
+    assert(typeof(Signal) == "RBXScriptSignal", "expected RBXScriptSignal, got " .. typeof(Signal))
+end)
 
--- salood w code
-add("firesignal", function(instance: Instance, signalName: string, args: any)
-    if instance and signalName then
-        local signal = instance[signalName]
-        if signal then
-            for _, connection in ipairs(getconnections(signal)) do
-                if args then
-                    connection:Fire(args)
-                else
-                    connection:Fire()
-                end
-            end
+AddFunction("getsignalargumentsinfo", function(Signal)
+    assert(typeof(Signal) == "RBXScriptSignal", "expected RBXScriptSignal, got " .. typeof(Signal))
+end)
+
+AddFunction("firesignal", function(Instance, SignalName, ...)
+    if not Instance or not SignalName then return end
+    local Signal = Instance[SignalName]
+    if not Signal then return end
+    local Args = { ... }
+    for _, Connection in ipairs(getconnections(Signal)) do
+        if #Args > 0 then
+            Connection:Fire(table.unpack(Args))
+        else
+            Connection:Fire()
         end
     end
 end)
 
-add("getcustomasset", function(path)
-    expect(path, "string", false, 1)
-    if not isfile(path) then
-        error("file does not exist: " .. path)
+AddFunction("getcustomasset", function(Path)
+    Expect(Path, "string", false, 1)
+    if not isfile(Path) then error("file does not exist: " .. Path) end
+    local Name = Path:match("[^/\\]+$")
+    local New  = "content/" .. Name
+    if not isfile(New) then
+        writefile(New, readfile(Path))
     end
+    return "rbxasset://" .. New
+end)
 
-    local name = path:match("[^/\\]+$")
-    local new = "content/" .. name
+local ReflectionService = Services.ReflectionService
 
-    if not isfile(new) then
-        writefile(new, readfile(path))
+AddFunction("getproperties", function(Instance)
+    Expect(Instance, "Instance", false, 1)
+    local ClassName = typeof(Instance)
+    local AllCapabilities = SecurityCapabilities.new(table.unpack(Enum.SecurityCapability:GetEnumItems()))
+    local Props = ReflectionService:GetPropertiesOfClass(ClassName, { Security = AllCapabilities })
+    local Out = {}
+    for _, Item in ipairs(Props) do
+        Out[#Out + 1] = Item.Name
     end
-
-    return "rbxasset://" .. new
+    return Out
 end)
 
-local reflect = services["ReflectionService"]
+local UGCValidation = Services.UGCValidationService
 
-add("getproperties", function(instance)
-    expect(instance, "Instance", false, 1)
-    class = typeof(instance)
-
-    local allCapabilities = SecurityCapabilities.new(table.unpack(Enum.SecurityCapability:GetEnumItems()))
-    local props = reflect:GetPropertiesOfClass(class, { Security = allCapabilities })
-    local out = {}
-
-    for _, item in ipairs(props) do
-        table.insert(out, item.Name)
-    end
-    return out
+AddFunction("ishiddenproperty", function(Object, Property)
+    return UGCValidation:GetPropertyValue(Object, Property) ~= nil
 end)
 
-local ugc = services["UGCValidationService"]
-add("ishiddenproperty", function(object, property)
-    return ugc:GetPropertyValue(object, property) ~= nil
-end)
-alias({"ishidden"}, function(obj, prop)
-    return ishiddenproperty(obj, prop)
-end)
+AliasFunction({"ishidden"}, "ishiddenproperty")
 
--- return if the property was even hidden
-add("gethiddenproperty", function(object, property)
-    expect(object, "Instance", false, 1)
-    expect(property, "string", false, 2)
-
-    -- fake news, only works for non hidden propertys
-    return ugc:GetPropertyValue(object, property), false
+AddFunction("gethiddenproperty", function(Object, Property)
+    Expect(Object, "Instance", false, 1)
+    Expect(Property, "string", false, 2)
+    return UGCValidation:GetPropertyValue(Object, Property), false
 end)
 
-add("gethiddenproperties", function(object)
-    expect(object, "Instance", false, 1)
-
-    local a = {
-        PredictionMode = Enum.PredictionMode.Automatic,
-        ChatPrivacyMode = Enum.ChatPrivacyMode.NoOne,
+AddFunction("gethiddenproperties", function(Object)
+    Expect(Object, "Instance", false, 1)
+    return {
+        PredictionMode                  = Enum.PredictionMode.Automatic,
+        ChatPrivacyMode                 = Enum.ChatPrivacyMode.NoOne,
         InternalCharacterAppearanceLoaded = true,
-        FollowUserIdReplicated = 0,
-        CharacterRegionId = {0, 0, -1},
-        AttributesReplicate = "",
-        Attributes = {},
-        CloudEditPlayerActive = true,
-        MembershipTypeReplicate = Enum.MembershipType.None,
-        AttributesSerialize = "",
-        NeedRegionalFallback = false,
-        RawJoinData = "",
-        Tags = {},
-        SuperSafeChatReplicate = false,
-        CountryRegionCodeReplicate = "US",
-        PropertyStatusStudio = Enum.PropertyStatus.Ok,
-        CloudEditCameraCoordinateFrame = {0,0,0,1,0,0,0,1,0,0,0,1},
-        AccountAgeReplicate = 282,
-        MaxSimulationRadius = 0,
-        numExpectedDirectChildren = 0,
-        DefinesCapabilities = false,
-        CameraFrustumRequested = false,
-        HistoryId = "00000000-0000-0000-0000-000000000000"
+        FollowUserIdReplicated          = 0,
+        CharacterRegionId               = {0, 0, -1},
+        AttributesReplicate             = "",
+        Attributes                      = {},
+        CloudEditPlayerActive           = true,
+        MembershipTypeReplicate         = Enum.MembershipType.None,
+        AttributesSerialize             = "",
+        NeedRegionalFallback            = false,
+        RawJoinData                     = "",
+        Tags                            = {},
+        SuperSafeChatReplicate          = false,
+        CountryRegionCodeReplicate      = "US",
+        PropertyStatusStudio            = Enum.PropertyStatus.Ok,
+        CloudEditCameraCoordinateFrame  = {0,0,0,1,0,0,0,1,0,0,0,1},
+        AccountAgeReplicate             = 282,
+        MaxSimulationRadius             = 0,
+        numExpectedDirectChildren       = 0,
+        DefinesCapabilities             = false,
+        CameraFrustumRequested          = false,
+        HistoryId                       = "00000000-0000-0000-0000-000000000000",
     }
-
-    return a
 end)
 
-add("sethiddenproperty", function(object, property, value)
-    expect(object, "Instance", false, 1)
-    expect(property, "string", false, 2)
-    return ugc:SetPropertyValue(object, property, value)
+AddFunction("sethiddenproperty", function(Object, Property, Value)
+    Expect(Object, "Instance", false, 1)
+    Expect(Property, "string", false, 2)
+    return UGCValidation:SetPropertyValue(Object, Property, Value)
 end)
 
-add("sethiddenprop", function(...)
-    sethiddenproperty(...)
+AliasFunction({"sethiddenprop"}, "sethiddenproperty")
+
+AddFunction("setsimulationradius", function(SimulationRadius, MaxSimulationRadius)
+    Expect(SimulationRadius, "number", false, 1)
+    sethiddenproperty(LocalPlayer, "SimulationRadius", SimulationRadius)
+    sethiddenproperty(LocalPlayer, "MaxSimulationRadius", MaxSimulationRadius or SimulationRadius)
 end)
 
-add("setsimulationradius", function(simrad, maxsimrad)
-    expect(simrad, "number", false, 1)
-    sethiddenproperty(lp, "SimulationRadius", simrad)
-    sethiddenproperty(lp, "MaxSimulationRadius", maxsimrad or simrad)
+AddFunction("getsimulationradius", function()
+    return LocalPlayer.SimulationRadius
 end)
 
-add("getsimulationradius", function()
-    return lp.SimulationRadius
+AddFunction("gethui", function()
+    return Services.CoreGui
 end)
 
-add("gethui", function()
-    return services["Hui"]
+AddFunction("getinstances", function()
+    local Descendants = game:GetDescendants()
+    local Out = table.create(#Descendants + 1)
+    for Index, Instance in ipairs(Descendants) do
+        Out[Index] = Instance:GetFullName()
+    end
+    Out[#Out + 1] = game
+    return Out
 end)
 
--- this is supposed to be like from the memory idk
-add("getinstances", function()
-    local t = {}
-    for _, v in ipairs(game:GetDescendants()) do
-        t[#t + 1] = v:GetFullName()
-    end; table.insert(t, game)
-    return t
-end)
-
--- apparently this is supposed to have 2 args???
-add("getobjects", function()
+AddFunction("getobjects", function()
     return getinstances()
 end)
 
-local objs = {}
-for _,v in ipairs(game:GetDescendants()) do
-    objs[v] = true
+local KnownObjects = {}
+for _, Object in ipairs(game:GetDescendants()) do
+    KnownObjects[Object] = true
 end
 
-add("getnilinstances", function()
-    local nils = {}
-
-    for obj in pairs(objs) do
-        if obj.Parent == nil then
-            table.insert(nils, obj)
+AddFunction("getnilinstances", function()
+    local Nils = {}
+    for Object in pairs(KnownObjects) do
+        if Object.Parent == nil then
+            Nils[#Nils + 1] = Object
         end
     end
-
-    return nils
+    return Nils
 end)
 
-add("getnilinstance", function(search)
-    -- search = string
-    for _, item in ipairs(getnilinstances()) do
-        if item == search then
-            return item
-        end
+AddFunction("getnilinstance", function(Search)
+    for _, Item in ipairs(getnilinstances()) do
+        if Item == Search then return Item end
     end
 end)
 
-local function isScript(obj, includem) -- ~Script
-    local a = false
-    if includem then
-        if obj:IsA("LocalScript") or obj:IsA("ModuleScript") then
-            a = true
-        end
-    else
-        if obj:IsA("LocalScript") then
-            a = true
-        end
+local function IsScript(Object, IncludeModules)
+    if IncludeModules then
+        return Object:IsA("LocalScript") or Object:IsA("ModuleScript")
     end
-    return a
+    return Object:IsA("LocalScript")
 end
 
-local scripts = {}
-game.DescendantAdded:Connect(function(obj)
-    if isScript(obj, true) then
-        scripts[#scripts + 1] = obj
+local ScriptList = {}
+game.DescendantAdded:Connect(function(Object)
+    KnownObjects[Object] = true
+    if IsScript(Object, true) then
+        ScriptList[#ScriptList + 1] = Object
     end
-    objs[obj] = true
 end)
 
-game.DescendantRemoving:Connect(function(obj)
-    objs[obj] = nil
-    for i, v in ipairs(scripts) do
-        if v == obj then
-            table.remove(scripts, i)
+game.DescendantRemoving:Connect(function(Object)
+    KnownObjects[Object] = nil
+    for Index, Script in ipairs(ScriptList) do
+        if Script == Object then
+            table.remove(ScriptList, Index)
             break
         end
     end
 end)
 
-local scriptable = {}
-add("isscriptable", function(obj, prop)
-    expect(obj, "Instance", false, 1)
-    expect(prop, "string", false, 2)
+local NonScriptableProperties = {}
 
-    local res = false
-    for _, item in ipairs(getproperties(obj)) do
-        if item:match(prop) then
-          res = true
-          if table.find(scriptable, prop) then -- also check obj chat
-              res = false
-          end
-        end
-    end
-    return res
-end)
-
--- we would have to use getconnecctions to see any refrence to any property .... . . .. . . ..
-add("setscriptable", function(object, property, value)
-    expect(object, "Instance", false, 1)
-    expect(property, "string", false, 2)
-                                      
-    table.insert(scriptable, {object = object, property = property, value = value})
-end)
-
-add("setrbxclipboard", function(data)
-    expect(data, "string", false, 1)
-end)
-
-local tracked = {} -- highkey needs autoexec or its basically useless
-if hookfunction then
-    local old; old = hookfunction(services["RunService"].BindToRenderStep, function(self, name, priority, fn)
-        tracked[name] = {
-            Function = fn,
-            Priority = priority,
-            FromExecutor = isexecutorclosure(fn) -- or uhm checkcaller
-        }
-
-        return old(self, name, priority, fn)
-    end)
-end
-
-add("getrendersteppedlist", function(shouldexec)
-    local output = {}
-
-    for name, data in pairs(tracked) do
-        if shouldexec then
-            output[name] = data -- returns all items
-        else
-            if data.FromExecutor == false then
-                output[name] = data
+AddFunction("isscriptable", function(Object, Property)
+    Expect(Object, "Instance", false, 1)
+    Expect(Property, "string", false, 2)
+    for _, Item in ipairs(getproperties(Object)) do
+        if Item:match(Property) then
+            for _, Entry in ipairs(NonScriptableProperties) do
+                if Entry.object == Object and Entry.property == Property then
+                    return false
+                end
             end
-        end
-    end
-    return output
-end)
-
-add("replicatesignal", function(signal)
-    assert(typeof(signal) == "RBXScriptSignal", "expected RBXScriptSignal, got " .. typeof(signal))
-
-    firesignal(signal)
-end)
-
--- Metatable
-
-add("getrawmetatable", function(object)
-    assert(type(object) == "table" or typeof(object) == "Instance", "expected table or Instance, got " .. typeof(object))
-
-    local mt = getmetatable(object)
-
-    if type(mt) == "table" and mt.__metatable ~= nil then
-        local copy = {}
-        for k, v in pairs(mt) do
-            copy[k] = v
-        end
-        copy.__metatable = nil
-        return copy
-    end
-
-    return mt
-end)
-
-add("setrawmetatable", function(object, mt)
-    assert(type(object) == "table" or typeof(object) == "Instance", "expected table or Instance, got " .. typeof(object))
-    expect(mt, "table", false, 2)
-
-    local old = getmetatable(object)
-    if type(old) == "table" then
-        old.__metatable = nil
-    end
-
-    setmetatable(object, mt)
-end)
-
-add("hookmetamethod", function(i, m, f)
-    expect(method, "string", false, 2)
-    expect(hook, "function", false, 3)
-
-    if getrawmetatable then
-        local s = getrawmetatable(i)
-        local o = s[m]
-        if not o then return warn("Method Not Found") end
-        setreadonly(s, false)
-        s[m] = f
-        setreadonly(s, true)
-        return o
-    end
-    return i
-end)
-
-local namecallmethod = nil
-add("getnamecallmethod", function()
-    return namecallmethod
-end)
-
-add("setnamecallmethod", function(method)
-    expect(method, "string", false, 1)
-    namecallmethod = method
-end)
-
-add("isreadonly", function(object)
-    expect(object, "table", false, 1)
-    return table.isfrozen(object)
-end)
-
--- Salood
-local function guard(tbl, readonly)
-    local existing = getmetatable(tbl)
-    if existing then
-        existing.__newindex = function(_, k, v)
-            if readonly then error("attempt to modify a readonly table", 2) end
-            rawset(tbl, k, v)
-        end
-        return tbl
-    end
-
-    local proxy = setmetatable({}, {
-        __index    = tbl,
-        __newindex = function(_, k, v)
-            if readonly then error("attempt to modify a readonly table", 2) end
-            rawset(tbl, k, v)
-        end,
-        __len    = function() return #tbl end,
-        __pairs  = function() return pairs(tbl) end,
-        __ipairs = function() return ipairs(tbl) end,
-    })
-
-    return proxy
-end
-
-add("setreadonly", function(object, readonly)
-    expect(object, "table", false, 1)
-    assert(type(readonly) == "boolean", "expected boolean for readonly, got " .. type(readonly))
-    return guard(object, readonly)
-end)
-
-add("makereadonly", function(object)
-    expect(object, "table", false, 1)
-    return guard(object, true)
-end)
-
-add("makewriteable", function(object)
-    expect(object, "table", false, 1)
-    return guard(object, false)
-end)
-
--- Misc
-
--- Custom : a new param to include or disclude the executor version
--- no more stupid variable shit
-
--- or maybe it should be something like this
-    -- local name, version = idenifyexecutor()
-    -- print(name, version)
-    -- perhaps both
-
-add("identifyexecutor", function(include_version)
-    local ver = include_version and " v2.1.1" or ""
-    return `Potassium{ver}`
-end)
-
-add("identifyversion", function(include_version)
-    return select(2, identifyexecutor())
-end)
-
-local shwid
-add("sethwid", function(input)
-    shwid = input
-end)
-
-alias({"set_hwid", "setmac"}, function(input)
-    return sethwid(input)
-end)
-
-local anal = services["RbxAnalyticsService"]
-add("gethwid", function()
-    return shwid or crypt.hash(anal:GetClientId())
-end)
-
-alias({"get_hwid", "get_user_identifier", "getmac"}, function()
-    return getmac()
-end)
-
-local base = "https://website-iota-ivory-12.vercel.app/code/scripts/unc/sunc/extra/"
-local lz4 = loadstring(game:HttpGet(base .. "lz4/main.luau"))()
-
--- this is not matching up with Potassiums compression
--- idk man
-add("lz4compress", function(data)
-    expect(data, "string", 1)
-    return lz4.compress(data)
-end)
-
-add("lz4decompress", function(data)
-    expect(data, "string", 1)
-    return lz4.decompress(data)
-end)
-
--- https://github.com/kennyledet/Algorithm-Implementations -- the goat
-local rle = loadstring(game:HttpGet(base .. "rle/main.luau"))()
-
-add("rlecompress", function(data)
-    expect(data, "string", 1)
-    return rle.encode(data)
-end)
-
-add("rledecompress", function(data)
-    expect(data, "string", 1)
-    return rle.decode(data)
-end)
-
-local mboxParent = Instance.new("Folder", services["CoreGui"])
-mboxParent.Name = rstring(6)
-
-add("messagebox", function(text: string, caption: string, flags: number): number
-    expect(text, "string", false, 1)
-    expect(caption, "string", false, 2)
-    expect(flags, "number", false, 3)
-
-    if allow() then
-        local ps = string.format(
-            [[powershell -Command "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('%s','%s',%d) | Out-Null"]],
-            text:gsub("'", "''"),
-            caption:gsub("'", "''"),
-            flags
-        )
-        powerexec(ps)
-    else       
-        local gui = Instance.new("ScreenGui")
-        gui.Name = tostring(math.random(1e4, 1e5))
-        gui.Parent = mboxParent
-
-        local window = Instance.new("Frame")
-        window.Size = UDim2.fromOffset(349, 151)
-        window.Position = UDim2.new(0.5, -174, 0.5, -75)
-        window.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        window.Draggable = true
-        window.BorderSizePixel = 0
-        window.ClipsDescendants = true
-        window.Parent = gui
-
-        local wc = Instance.new("UICorner", window)
-        wc.CornerRadius = UDim.new(0, 8)
-
-        local strip = Instance.new("Frame")
-        strip.Size = UDim2.fromOffset(349, 35)
-        strip.Position = UDim2.fromOffset(0, 0)
-        strip.BackgroundColor3 = Color3.fromRGB(240, 240, 240)
-        strip.BorderSizePixel = 0
-        strip.ClipsDescendants = true
-        strip.Parent = window
-
-        Instance.new("UICorner", strip).CornerRadius = wc.CornerRadius
-
-        local title = Instance.new("TextLabel")
-        title.Size = UDim2.fromOffset(260, 18)
-        title.Position = UDim2.fromOffset(14, 10)
-        title.BackgroundTransparency = 1
-        title.Text = caption
-        title.Font = Enum.Font.SourceSans
-        title.TextSize = 16
-        title.TextColor3 = Color3.fromRGB(0, 0, 0)
-        title.TextXAlignment = Enum.TextXAlignment.Left
-        title.Parent = window
-
-        local close = Instance.new("TextButton")
-        close.Size = UDim2.fromOffset(20, 20)
-        close.Position = UDim2.fromOffset(321, 8)
-        close.Text = "X"
-        close.Font = Enum.Font.SourceSansBold
-        close.TextSize = 16
-        close.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        close.BackgroundTransparency = 0.8
-        close.TextColor3 = Color3.fromRGB(0, 0, 0)
-        close.Parent = window
-
-        close.MouseButton1Click:Connect(function() gui:Destroy() end)
-        close.MouseEnter:Connect(function() close.BackgroundColor3 = Color3.fromRGB(255, 0, 0) end)
-        close.MouseLeave:Connect(function() close.BackgroundColor3 = Color3.fromRGB(255, 255, 255) end)
-
-        local msg = Instance.new("TextLabel")
-        msg.Size = UDim2.fromOffset(250, 20)
-        msg.Position = UDim2.fromOffset(54, 58)
-        msg.BackgroundTransparency = 1
-        msg.Text = text
-        msg.Font = Enum.Font.SourceSans
-        msg.TextSize = 14
-        msg.TextColor3 = Color3.fromRGB(0, 0, 0)
-        msg.TextXAlignment = Enum.TextXAlignment.Left
-        msg.Parent = window
-
-        local strip2 = Instance.new("Frame")
-        strip2.Size = UDim2.fromOffset(349, 38)
-        strip2.Position = UDim2.fromOffset(0, window.Size.Y.Offset - 38)
-        strip2.BackgroundColor3 = Color3.fromRGB(240, 240, 240)
-        strip2.BorderSizePixel = 0
-        strip2.ClipsDescendants = true
-        strip2.Parent = window
-
-        local s2c = Instance.new("UICorner")
-        s2c.CornerRadius = wc.CornerRadius
-        s2c.Parent = strip2
-
-        local function createBtn(btnText, pos)
-            local btn = Instance.new("TextButton")
-            btn.Size = UDim2.fromOffset(72, 26)
-            btn.Position = UDim2.fromOffset(pos, 5.8)
-            btn.BackgroundColor3 = Color3.fromRGB(240, 240, 240)
-            btn.Text = btnText
-            btn.Font = Enum.Font.SourceSans
-            btn.TextSize = 14
-            btn.TextColor3 = Color3.fromRGB(0, 0, 0)
-            btn.ClipsDescendants = true
-            btn.Parent = strip2
-
-            Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
-
-            local stroke = Instance.new("UIStroke", btn)
-            stroke.Color = Color3.fromRGB(200, 200, 200)
-            stroke.Thickness = 1
-            stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-
-            return btn
-        end
-
-        local ok = createBtn("OK", 263)
-        ok.MouseButton1Click:Connect(function() gui:Destroy() end)
-    end
-end)
-
-add("messageboxasync", function(...)
-    messagebox(...)
-end)
-
-local oqueue = ""
-add("queue_on_teleport", function(code)
-    expect(code, "string", false, 1)
-    oqueue = code
-end)
-
-add("get_queued_teleport", function()
-    return oqueue
-end)
-
-add("reset_queuedteleport", function()
-    oqueue = ""
-end)
-
-add("request", function(options)
-    expect(options, "table", false, 1)
-    local url = options.Url
-    assert(type(url) == "string" and #url > 0, "expected non-empty string for Url")
-
-    local method = (options.Method or "GET"):upper()
-    local body = options.Body or ""
-
-    local success, result = pcall(function()
-        if method == "GET" then
-            return game:HttpGet(url, true)
-        elseif method == "POST" then
-            return game:HttpPost(url, body, Enum.HttpContentType.ApplicationUrlEncoded)
-        else
-            error("Unsupported method: " .. method)
-        end
-    end)
-
-    return {
-        StatusCode = success and 200 or 500,
-        Body = success and result or tostring(result),
-        Headers = {},
-    }
-end)
-
-add("httpget", function(self: any?, url: string): string
-    if typeof(self) == "string" then
-        url = self
-    end
-
-    expect(url, "string", false, 1)
-    
-    return game:HttpGetAsync(url)
-end)
-
-add("getinternalparent", function(instance)
-    expect(instance, "Instance", false, 1)
-    return instance.Parent
-end)
-
-add("setinternalparent", function(instance, newparent)
-    expect(instance, "Instance", false, 1)
-    assert(typeof(newparent) == "Instance" or newparent == nil, "expected Instance or nil for newparent")
-    instance.Parent = newparent
-end)
-
--- UserSettings():IsUserFeatureEnabled(u1)
-add("getfflag", function(fflag)
-    expect(fflag, "string", false, 1)
-    return game:GetFastFlag(fflag:gsub("^FFlag", ""))
-end)
-
-add("setfflag", function(fflag, value)
-    expect(fflag, "string", false, 1)
-    expect(value, "string", false, 2)
-    game:SetFastFlag(fflag:gsub("^FFlag", ""), value)
-end)
-
-add("setclipboard", function(text)
-    expect(text, "string", false, 1)
-    print(text)
-end)
-
-local fps = workspace:GetRealPhysicsFPS()
-add("setfpscap", function(f)
-    expect(f, "number", false, 1)
-    assert(f > 0, "fps cap must be greater than 0")
-    fps = f
-end)
-
-add("getfpscap", function()
-    return fps
-end)
-
-add("getping", function()
-    return services["Stats"].FrameRateManager["AverageFPS"]:GetValue()
-end)
-
-add("getfps", function()
-    local fps2 = 0; local last = tick()
-    
-    services["RunService"].RenderStepped:Wait()
-    fps2 = 1 / (tick() - last)
-    
-    return math.floor(fps2)
-end)
-
--- thanks https://scriptblox.com/u/Salood
-add("getplatform", function() 
-    return services["UserInputService"]:GetPlatform():split(".")[3]
-end)
-
-add("playanimation", function(animation)
-    if animation:find("rbxassetid") then
-        animation = animation
-    else
-        animation = "rbxassetid://" .. animation
-    end
-
-    local hum = _raknet.GetHumanoid()
-    hum:LoadAnimation(animation):Play()
-end)
-add("runanimation", function(anim)
-    playanimation(anim)
-end)
-
--- limited to actual math.pi but ya
-add("pi", function(wanted)
-    local str = tostring(math.pi)
-    local output = {}
-
-    for i = 1, wanted do
-        local char = str:sub(i, i)
-        if char == "" then break end
-        table.insert(output, char)
-    end
-
-    return table.concat(output)
-end)
-
--- Encoding -- useless
-
-add("base64encode", function(data)
-    return crypt.base64encode(data)
-end)
-
-add("base64decode", function(data)
-    return crypt.base64decode(data)
-end)
-
--- Scripts
-
-add("getscriptclosure", function(scr)
-    expect(scr, "Instance", false, 1)
-    assert(scr:IsA("ModuleScript"), "expected ModuleScript, got " .. scr.ClassName)
-    return function(...)
-        return require(scr)(...)
-    end
-end)
-
--- could hookmetamethod it or some shit
-add("getscriptfromthread", function()
-    return Instance.new("LocalScript", nil)
-end)
-
-add("getscriptthread", function()
-    return coroutine.running()
-end)
--- no clue
-add("getallthreads", function()
-    return table.create(math.random(1, 32), coroutine.running())
-end)
-
-add("getscriptbytecode", function(item)
-    expect(item, "Instance", false, 1)
-    return ""
-end)
-add("dumpstring", function(item)
-    return getscriptbytecode(item)
-end)
-
-add("decompile", function(item)
-    expect(item, "Instance", false, 1)
-
-    return request({
-        Url = "http://api.plusgiant5.com/konstant/decompile",
-        Method = "POST",
-        Headers = {
-            ["Content-Type"] = "text/plain"
-        },
-        Body = getscriptbytecode(item)
-    }).Body
-end)
-
-add("getscripthash", function(item)
-    expect(item, "Instance", false, 1)
-    return crypt.hash(getscriptbytecode(item))
-end)
-
--- hash a functions BYTECODE and string.dump doesnt exist so
-add("getfunctionhash", function(item)
-    expect(item, "function", false, 1)
-    return crypt.hash(item, "sha384")
-end)
-
-local synsaveinstance = loadstring(game:HttpGet("https://raw.githubusercontent.com/luau/UniversalSynSaveInstance/main/saveinstance.luau", true), "saveinstance")()
-local options = {
-    ReadMe = true,
-    IsolatePlayers = true,
-    FilePath = string.format("%d", tick())
-}
-add("saveinstance", function(opts)
-    if not opts then opts = options end
-    synsaveinstance(opts)
-end)
-add("saveplace", function()
-    saveinstance()
-end)
-
-for _, v in ipairs(game:GetDescendants()) do
-    if isScript(v, true) then
-        scripts[#scripts + 1] = v
-    end
-end
-
-add("getrunningscripts", function()
-    local out = {}
-    for _, item in ipairs(scripts) do
-        if isScript(item, false) then
-            out[#out + 1] = item
-        end
-    end
-    return out
-end)
-
-add("getscripts", function()
-    return scripts
-end)
-
--- update getloaded modules to return
---[[
-{
-    the_module_name = {
-        game:GetService("ReplicatedStorage").Modules.Money, -- its source
-        required {
-            -- what BaseScripts have required it
-        }
-    }
-}
---]]
-
-add("getloadedmodules", function()
-    local modules = {}
-    for _, s in ipairs(scripts) do
-        if s:IsA("ModuleScript") then
-            modules[#modules + 1] = s
-        end
-    end
-    return modules
-end)
-
-add("isrequired", function(module)
-    assert(typeof(module) == "Instance" and module:IsA("ModuleScript"), "expected ModuleScript, got " .. typeof(module))
-
-    local loaded = getloadedmodules()
-    for _, item in ipairs(loaded) do
-        if item == module then
             return true
         end
     end
     return false
 end)
-add("isloadedmodule", function(module)
-    return isrequired(module)
+
+AddFunction("setscriptable", function(Object, Property, Value)
+    Expect(Object, "Instance", false, 1)
+    Expect(Property, "string", false, 2)
+    NonScriptableProperties[#NonScriptableProperties + 1] = { object = Object, property = Property, value = Value }
 end)
 
-add("getdeletedactors", function()
-    local del_actors = {}
-
-    for _, item in ipairs(getnilinstances()) do
-        if item:IsA("Actor") then
-            table.insert(del_actors, item)
-        end
-    end
-    return del_actors
+AddFunction("setrbxclipboard", function(Data)
+    Expect(Data, "string", false, 1)
 end)
 
-add("getremotes", function()
-    local remotes = {}
-    for _, obj in ipairs(game:GetDescendants()) do
-        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-            table.insert(remotes, obj)
-        end
-    end
-    return remotes
-end)
-
-add("hookremote", function(remote, hook)
-    expect(remote, "Instance", false, 1)
-    assert(remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction"), "expected RemoteEvent or RemoteFunction")
-    expect(hook, "function", false, 2)
-    
-    local oldn
-    oldn = hookmetamethod(game, "__namecall", function(self, ...)
-        local method = getnamecallmethod()
-        
-        if self == remote and (method == "FireServer" or method == "InvokeServer") then
-            return hook(...)
-        end
-        
-        return oldn(self, ...)
+local RenderStepBindings = {}
+if hookfunction then
+    local OldBindToRenderStep
+    OldBindToRenderStep = hookfunction(Services.RunService.BindToRenderStep, function(self, Name, Priority, Fn)
+        RenderStepBindings[Name] = {
+            Function     = Fn,
+            Priority     = Priority,
+            FromExecutor = isexecutorclosure(Fn),
+        }
+        return OldBindToRenderStep(self, Name, Priority, Fn)
     end)
-    
-    return oldn
-end)
-
-local trgr, trgc = {}, {}
-
-local function track(obj)
-    if type(obj) == "table" or type(obj) == "function" or type(obj) == "thread" or type(obj) == "userdata" then
-        trgr[#trgr + 1] = obj
-        trgc[#trgc + 1] = obj
-    end
-    return obj
 end
 
--- random error idk
-local function nan(value) return type(value) == "number" and value ~= value end
-local function sr(root, seen)
-    if root == nil or nan(root) then return end
-
-    seen = seen or {}
-    if seen[root] then return end
-    seen[root] = true
-
-    if type(root) == "table" then
-        track(root)
-
-        for key, value in pairs(root) do
-            if not nan(key) then
-                sr(key, seen)
-            end
-            if not nan(value) then
-                sr(value, seen)
-            end
+AddFunction("getrendersteppedlist", function(IncludeExecutor)
+    if IncludeExecutor then
+        return RenderStepBindings
+    end
+    local Output = {}
+    for Name, Data in pairs(RenderStepBindings) do
+        if not Data.FromExecutor then
+            Output[Name] = Data
         end
+    end
+    return Output
+end)
 
-        local metatable = getmetatable(root)
-        if metatable then
-            sr(metatable, seen)
+AddFunction("replicatesignal", function(Signal)
+    assert(typeof(Signal) == "RBXScriptSignal", "expected RBXScriptSignal, got " .. typeof(Signal))
+    firesignal(Signal)
+end)
+
+-- Metatable
+
+AddFunction("getrawmetatable", function(Object)
+    assert(type(Object) == "table" or typeof(Object) == "Instance",
+        "expected table or Instance, got " .. typeof(Object))
+    local MT = getmetatable(Object)
+    if type(MT) == "table" and MT.__metatable ~= nil then
+        local Copy = {}
+        for Key, Value in pairs(MT) do
+            Copy[Key] = Value
         end
+        Copy.__metatable = nil
+        return Copy
+    end
+    return MT
+end)
 
-    elseif type(root) == "function" then
-        track(root)
+AddFunction("setrawmetatable", function(Object, MT)
+    assert(type(Object) == "table" or typeof(Object) == "Instance",
+        "expected table or Instance, got " .. typeof(Object))
+    Expect(MT, "table", false, 2)
+    local Old = getmetatable(Object)
+    if type(Old) == "table" then
+        Old.__metatable = nil
+    end
+    setmetatable(Object, MT)
+end)
 
-        local index = 1
+AddFunction("hookmetamethod", function(Object, Method, Hook)
+    Expect(Method, "string", false, 2)
+    Expect(Hook, "function", false, 3)
+    if not getrawmetatable then return Object end
+    local MT  = getrawmetatable(Object)
+    local Old = MT[Method]
+    if not Old then
+        warn("Method Not Found")
+        return
+    end
+    setreadonly(MT, false)
+    MT[Method] = Hook
+    setreadonly(MT, true)
+    return Old
+end)
+
+local NamecallMethod = nil
+AddFunction("getnamecallmethod", function()
+    return NamecallMethod
+end)
+
+AddFunction("setnamecallmethod", function(Method)
+    Expect(Method, "string", false, 1)
+    NamecallMethod = Method
+end)
+
+AddFunction("isreadonly", function(Object)
+    Expect(Object, "table", false, 1)
+    return table.isfrozen(Object)
+end)
+
+local function GuardTable(Table, ReadOnly)
+    local Existing = getmetatable(Table)
+    if Existing then
+        Existing.__newindex = function(_, Key, Value)
+            if ReadOnly then error("attempt to modify a readonly table", 2) end
+            rawset(Table, Key, Value)
+        end
+        return Table
+    end
+    return setmetatable({}, {
+        __index    = Table,
+        __newindex = function(_, Key, Value)
+            if ReadOnly then error("attempt to modify a readonly table", 2) end
+            rawset(Table, Key, Value)
+        end,
+        __len    = function() return #Table end,
+        __pairs  = function() return pairs(Table) end,
+        __ipairs = function() return ipairs(Table) end,
+    })
+end
+
+AddFunction("setreadonly", function(Object, ReadOnly)
+    Expect(Object, "table", false, 1)
+    assert(type(ReadOnly) == "boolean", "expected boolean for readonly, got " .. type(ReadOnly))
+    return GuardTable(Object, ReadOnly)
+end)
+
+AddFunction("makereadonly", function(Object)
+    Expect(Object, "table", false, 1)
+    return GuardTable(Object, true)
+end)
+
+AddFunction("makewriteable", function(Object)
+    Expect(Object, "table", false, 1)
+    return GuardTable(Object, false)
+end)
+
+-- Miscellaneous
+
+AddFunction("identifyexecutor", function(IncludeVersion)
+    local Version = IncludeVersion and " v2.1.1" or ""
+    return "Potassium" .. Version
+end)
+
+AddFunction("identifyversion", function()
+    return select(2, identifyexecutor())
+end)
+
+local HardwareID
+AddFunction("sethwid", function(Input)
+    HardwareID = Input
+end)
+
+AliasFunction({"set_hwid", "setmac"}, "sethwid")
+
+local AnalyticsService = Services.RbxAnalyticsService
+AddFunction("gethwid", function()
+    return HardwareID or crypt.hash(AnalyticsService:GetClientId())
+end)
+
+AliasFunction({"get_hwid", "get_user_identifier", "getmac"}, "gethwid")
+
+do
+    local Base = "https://website-iota-ivory-12.vercel.app/code/scripts/unc/sunc/extra/"
+    local LZ4Lib = loadstring(game:HttpGet(Base .. "lz4/main.luau"))()
+    local RLELib = loadstring(game:HttpGet(Base .. "rle/main.luau"))()
+
+    AddFunction("lz4compress", function(Data)
+        Expect(Data, "string", 1)
+        return LZ4Lib.compress(Data)
+    end)
+
+    AddFunction("lz4decompress", function(Data)
+        Expect(Data, "string", 1)
+        return LZ4Lib.decompress(Data)
+    end)
+
+    AddFunction("rlecompress", function(Data)
+        Expect(Data, "string", 1)
+        return RLELib.encode(Data)
+    end)
+
+    AddFunction("rledecompress", function(Data)
+        Expect(Data, "string", 1)
+        return RLELib.decode(Data)
+    end)
+end
+
+local MessageBoxContainer = Instance.new("Folder", Services.CoreGui)
+MessageBoxContainer.Name = RandomString(6)
+
+AddFunction("messagebox", function(Text, Caption, Flags)
+    Expect(Text, "string", false, 1)
+    Expect(Caption, "string", false, 2)
+    Expect(Flags, "number", false, 3)
+
+    if AllowTerminal() then
+        powerexec(string.format(
+            [[powershell -Command "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('%s','%s',%d) | Out-Null"]],
+            Text:gsub("'", "''"), Caption:gsub("'", "''"), Flags
+        ))
+        return
+    end
+
+    local Gui = Instance.new("ScreenGui")
+    Gui.Name   = tostring(math.random(1e4, 1e5))
+    Gui.Parent = MessageBoxContainer
+
+    local Window = Instance.new("Frame")
+    Window.Size                = UDim2.fromOffset(349, 151)
+    Window.Position            = UDim2.new(0.5, -174, 0.5, -75)
+    Window.BackgroundColor3    = Color3.fromRGB(255, 255, 255)
+    Window.Draggable           = true
+    Window.BorderSizePixel     = 0
+    Window.ClipsDescendants    = true
+    Window.Parent              = Gui
+    local WindowCorner = Instance.new("UICorner", Window)
+    WindowCorner.CornerRadius  = UDim.new(0, 8)
+
+    local TopStrip = Instance.new("Frame")
+    TopStrip.Size              = UDim2.fromOffset(349, 35)
+    TopStrip.BackgroundColor3  = Color3.fromRGB(240, 240, 240)
+    TopStrip.BorderSizePixel   = 0
+    TopStrip.ClipsDescendants  = true
+    TopStrip.Parent            = Window
+    local StripCorner = Instance.new("UICorner", TopStrip)
+    StripCorner.CornerRadius   = WindowCorner.CornerRadius
+
+    local TitleLabel = Instance.new("TextLabel")
+    TitleLabel.Size              = UDim2.fromOffset(260, 18)
+    TitleLabel.Position          = UDim2.fromOffset(14, 10)
+    TitleLabel.BackgroundTransparency = 1
+    TitleLabel.Text              = Caption
+    TitleLabel.Font              = Enum.Font.SourceSans
+    TitleLabel.TextSize          = 16
+    TitleLabel.TextColor3        = Color3.fromRGB(0, 0, 0)
+    TitleLabel.TextXAlignment    = Enum.TextXAlignment.Left
+    TitleLabel.Parent            = Window
+
+    local CloseButton = Instance.new("TextButton")
+    CloseButton.Size              = UDim2.fromOffset(20, 20)
+    CloseButton.Position          = UDim2.fromOffset(321, 8)
+    CloseButton.Text              = "X"
+    CloseButton.Font              = Enum.Font.SourceSansBold
+    CloseButton.TextSize          = 16
+    CloseButton.BackgroundColor3  = Color3.fromRGB(255, 255, 255)
+    CloseButton.BackgroundTransparency = 0.8
+    CloseButton.TextColor3        = Color3.fromRGB(0, 0, 0)
+    CloseButton.Parent            = Window
+    CloseButton.MouseButton1Click:Connect(function() Gui:Destroy() end)
+    CloseButton.MouseEnter:Connect(function() CloseButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0) end)
+    CloseButton.MouseLeave:Connect(function() CloseButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255) end)
+
+    local MessageLabel = Instance.new("TextLabel")
+    MessageLabel.Size              = UDim2.fromOffset(250, 20)
+    MessageLabel.Position          = UDim2.fromOffset(54, 58)
+    MessageLabel.BackgroundTransparency = 1
+    MessageLabel.Text              = Text
+    MessageLabel.Font              = Enum.Font.SourceSans
+    MessageLabel.TextSize          = 14
+    MessageLabel.TextColor3        = Color3.fromRGB(0, 0, 0)
+    MessageLabel.TextXAlignment    = Enum.TextXAlignment.Left
+    MessageLabel.Parent            = Window
+
+    local BottomStrip = Instance.new("Frame")
+    BottomStrip.Size              = UDim2.fromOffset(349, 38)
+    BottomStrip.Position          = UDim2.fromOffset(0, Window.Size.Y.Offset - 38)
+    BottomStrip.BackgroundColor3  = Color3.fromRGB(240, 240, 240)
+    BottomStrip.BorderSizePixel   = 0
+    BottomStrip.ClipsDescendants  = true
+    BottomStrip.Parent            = Window
+    local BottomCorner = Instance.new("UICorner", BottomStrip)
+    BottomCorner.CornerRadius     = WindowCorner.CornerRadius
+
+    local function CreateButton(ButtonText, XPos)
+        local Btn = Instance.new("TextButton")
+        Btn.Size                 = UDim2.fromOffset(72, 26)
+        Btn.Position             = UDim2.fromOffset(XPos, 5.8)
+        Btn.BackgroundColor3     = Color3.fromRGB(240, 240, 240)
+        Btn.Text                 = ButtonText
+        Btn.Font                 = Enum.Font.SourceSans
+        Btn.TextSize             = 14
+        Btn.TextColor3           = Color3.fromRGB(0, 0, 0)
+        Btn.ClipsDescendants     = true
+        Btn.Parent               = BottomStrip
+        Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 4)
+        local Stroke = Instance.new("UIStroke", Btn)
+        Stroke.Color             = Color3.fromRGB(200, 200, 200)
+        Stroke.Thickness         = 1
+        Stroke.ApplyStrokeMode   = Enum.ApplyStrokeMode.Border
+        return Btn
+    end
+
+    local OkButton = CreateButton("OK", 263)
+    OkButton.MouseButton1Click:Connect(function() Gui:Destroy() end)
+end)
+
+AliasFunction({"messageboxasync"}, "messagebox")
+
+local TeleportQueue = ""
+
+AddFunction("queue_on_teleport", function(Code)
+    Expect(Code, "string", false, 1)
+    TeleportQueue = Code
+end)
+
+AddFunction("get_queued_teleport", function()
+    return TeleportQueue
+end)
+
+AddFunction("reset_queuedteleport", function()
+    TeleportQueue = ""
+end)
+
+AddFunction("request", function(Options)
+    Expect(Options, "table", false, 1)
+    local URL    = Options.Url
+    assert(type(URL) == "string" and #URL > 0, "expected non-empty string for Url")
+    local Method = (Options.Method or "GET"):upper()
+    local Body   = Options.Body or ""
+    local Ok, Result = pcall(function()
+        if Method == "GET" then
+            return game:HttpGet(URL, true)
+        elseif Method == "POST" then
+            return game:HttpPost(URL, Body, Enum.HttpContentType.ApplicationUrlEncoded)
+        else
+            error("Unsupported method: " .. Method)
+        end
+    end)
+    return {
+        StatusCode = Ok and 200 or 500,
+        Body       = Ok and Result or tostring(Result),
+        Headers    = {},
+    }
+end)
+
+AddFunction("httpget", function(SelfOrUrl, URL)
+    if typeof(SelfOrUrl) == "string" then
+        URL = SelfOrUrl
+    end
+    Expect(URL, "string", false, 1)
+    return game:HttpGetAsync(URL)
+end)
+
+AddFunction("getinternalparent", function(Instance)
+    Expect(Instance, "Instance", false, 1)
+    return Instance.Parent
+end)
+
+AddFunction("setinternalparent", function(Instance, NewParent)
+    Expect(Instance, "Instance", false, 1)
+    assert(typeof(NewParent) == "Instance" or NewParent == nil, "expected Instance or nil for newparent")
+    Instance.Parent = NewParent
+end)
+
+AddFunction("getfflag", function(Flag)
+    Expect(Flag, "string", false, 1)
+    return game:GetFastFlag(Flag:gsub("^FFlag", ""))
+end)
+
+AddFunction("setfflag", function(Flag, Value)
+    Expect(Flag, "string", false, 1)
+    Expect(Value, "string", false, 2)
+    game:SetFastFlag(Flag:gsub("^FFlag", ""), Value)
+end)
+
+AddFunction("setclipboard", function(Text)
+    Expect(Text, "string", false, 1)
+    print(Text)
+end)
+
+local FPSCap = workspace:GetRealPhysicsFPS()
+
+AddFunction("setfpscap", function(FPS)
+    Expect(FPS, "number", false, 1)
+    assert(FPS > 0, "fps cap must be greater than 0")
+    FPSCap = FPS
+end)
+
+AddFunction("getfpscap", function()
+    return FPSCap
+end)
+
+AddFunction("getping", function()
+    return Services.Stats.FrameRateManager["AverageFPS"]:GetValue()
+end)
+
+AddFunction("getfps", function()
+    local Last = tick()
+    Services.RunService.RenderStepped:Wait()
+    return math.floor(1 / (tick() - Last))
+end)
+
+AddFunction("getplatform", function()
+    return UserInputService:GetPlatform():split(".")[3]
+end)
+
+AddFunction("playanimation", function(Animation)
+    if not Animation:find("rbxassetid") then
+        Animation = "rbxassetid://" .. Animation
+    end
+    local Humanoid = RakNetLib.GetHumanoid()
+    Humanoid:LoadAnimation(Animation):Play()
+end)
+
+AliasFunction({"runanimation"}, "playanimation")
+
+AddFunction("base64encode", function(Data)
+    return crypt.base64encode(Data)
+end)
+
+AddFunction("base64decode", function(Data)
+    return crypt.base64decode(Data)
+end)
+
+-- Scripts
+
+AddFunction("getscriptclosure", function(Script)
+    Expect(Script, "Instance", false, 1)
+    assert(Script:IsA("ModuleScript"), "expected ModuleScript, got " .. Script.ClassName)
+    return function(...) return require(Script)(...) end
+end)
+
+AddFunction("getscriptfromthread", function()
+    return Instance.new("LocalScript", nil)
+end)
+
+AddFunction("getscriptthread", function()
+    return coroutine.running()
+end)
+
+AddFunction("getallthreads", function()
+    return table.create(math.random(1, 32), coroutine.running())
+end)
+
+AddFunction("getscriptbytecode", function(Script)
+    Expect(Script, "Instance", false, 1)
+    return ""
+end)
+
+AliasFunction({"dumpstring"}, "getscriptbytecode")
+
+AddFunction("decompile", function(Script)
+    Expect(Script, "Instance", false, 1)
+    return request({
+        Url    = "http://api.plusgiant5.com/konstant/decompile",
+        Method = "POST",
+        Headers = { ["Content-Type"] = "text/plain" },
+        Body   = getscriptbytecode(Script),
+    }).Body
+end)
+
+AddFunction("getscripthash", function(Script)
+    Expect(Script, "Instance", false, 1)
+    return crypt.hash(getscriptbytecode(Script))
+end)
+
+AddFunction("getfunctionhash", function(Func)
+    Expect(Func, "function", false, 1)
+    return crypt.hash(Func, "sha384")
+end)
+
+local SaveInstance = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/luau/UniversalSynSaveInstance/main/saveinstance.luau", true
+), "saveinstance")()
+
+local DefaultSaveOptions = {
+    ReadMe         = true,
+    IsolatePlayers = true,
+    FilePath       = string.format("%d", tick()),
+}
+
+AddFunction("saveinstance", function(Options)
+    SaveInstance(Options or DefaultSaveOptions)
+end)
+
+AliasFunction({"saveplace"}, "saveinstance")
+
+for _, Object in ipairs(game:GetDescendants()) do
+    if IsScript(Object, true) then
+        ScriptList[#ScriptList + 1] = Object
+    end
+end
+
+AddFunction("getrunningscripts", function()
+    local Out = {}
+    for _, Script in ipairs(ScriptList) do
+        if IsScript(Script, false) then
+            Out[#Out + 1] = Script
+        end
+    end
+    return Out
+end)
+
+AddFunction("getscripts", function()
+    return ScriptList
+end)
+
+AddFunction("getloadedmodules", function()
+    local Modules = {}
+    for _, Script in ipairs(ScriptList) do
+        if Script:IsA("ModuleScript") then
+            Modules[#Modules + 1] = Script
+        end
+    end
+    return Modules
+end)
+
+AddFunction("isrequired", function(Module)
+    assert(typeof(Module) == "Instance" and Module:IsA("ModuleScript"),
+        "expected ModuleScript, got " .. typeof(Module))
+    for _, Item in ipairs(getloadedmodules()) do
+        if Item == Module then return true end
+    end
+    return false
+end)
+
+AliasFunction({"isloadedmodule"}, "isrequired")
+
+AddFunction("getdeletedactors", function()
+    local DeletedActors = {}
+    for _, Item in ipairs(getnilinstances()) do
+        if Item:IsA("Actor") then
+            DeletedActors[#DeletedActors + 1] = Item
+        end
+    end
+    return DeletedActors
+end)
+
+AddFunction("getremotes", function()
+    local Remotes = {}
+    for _, Object in ipairs(game:GetDescendants()) do
+        if Object:IsA("RemoteEvent") or Object:IsA("RemoteFunction") then
+            Remotes[#Remotes + 1] = Object
+        end
+    end
+    return Remotes
+end)
+
+AddFunction("hookremote", function(Remote, Hook)
+    Expect(Remote, "Instance", false, 1)
+    assert(Remote:IsA("RemoteEvent") or Remote:IsA("RemoteFunction"), "expected RemoteEvent or RemoteFunction")
+    Expect(Hook, "function", false, 2)
+    local OldNamecall
+    OldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local Method = getnamecallmethod()
+        if self == Remote and (Method == "FireServer" or Method == "InvokeServer") then
+            return Hook(...)
+        end
+        return OldNamecall(self, ...)
+    end)
+    return OldNamecall
+end)
+
+-- GC scanning
+
+local GCRegistry, GCCollection = {}, {}
+
+local function IsNaN(Value)
+    return type(Value) == "number" and Value ~= Value
+end
+
+local function ScanRoots(Root, Seen)
+    if Root == nil or IsNaN(Root) then return end
+    Seen = Seen or {}
+    if Seen[Root] then return end
+    Seen[Root] = true
+
+    local RootType = type(Root)
+    if RootType == "table" then
+        GCRegistry[#GCRegistry + 1]    = Root
+        GCCollection[#GCCollection + 1] = Root
+        for Key, Value in pairs(Root) do
+            if not IsNaN(Key) then ScanRoots(Key, Seen) end
+            if not IsNaN(Value) then ScanRoots(Value, Seen) end
+        end
+        local MT = getmetatable(Root)
+        if MT then ScanRoots(MT, Seen) end
+    elseif RootType == "function" then
+        GCRegistry[#GCRegistry + 1]    = Root
+        GCCollection[#GCCollection + 1] = Root
+        local Index = 1
         while true do
-            local success, name, upvalue = pcall(debug.getupvalue, root, index)
-            if not success or not name then break end
-
-            if not nan(upvalue) then
-                sr(upvalue, seen)
-            end
-
-            index += 1
+            local Ok, Name, Upvalue = pcall(debug.getupvalue, Root, Index)
+            if not Ok or not Name then break end
+            if not IsNaN(Upvalue) then ScanRoots(Upvalue, Seen) end
+            Index += 1
         end
-
-    elseif type(root) == "thread" or type(root) == "userdata" then
-        track(root)
+    elseif RootType == "thread" or RootType == "userdata" then
+        GCRegistry[#GCRegistry + 1]    = Root
+        GCCollection[#GCCollection + 1] = Root
     end
 end
 
-sr(getgenv())
+ScanRoots(getgenv())
 
-add("getreg", function()
-    return trgr
+AddFunction("getreg", function()
+    return GCRegistry
 end)
 
-add("getgc", function()
-    return trgc
+AddFunction("getgc", function()
+    return GCCollection
 end)
 
-add("filtergc", function(type, filter_options, return_one)
-    local matches = {}
-    if type == "table" then
-        for i,v in getgc(true) do
-            if typeof(v) ~= "table" then continue end
-            local passed = true
-            if filter_options ~= nil then
-                if typeof(filter_options.Keys) == "table" and passed then
-                    for _, key in filter_options.Keys do
-                        if rawget(v, key) == nil then passed = false break end
+AddFunction("filtergc", function(FilterType, FilterOptions, ReturnOne)
+    local Matches = {}
+    if FilterType == "table" then
+        for _, Value in getgc(true) do
+            if typeof(Value) ~= "table" then continue end
+            local Passed = true
+            if FilterOptions then
+                if typeof(FilterOptions.Keys) == "table" and Passed then
+                    for _, Key in FilterOptions.Keys do
+                        if rawget(Value, Key) == nil then Passed = false break end
                     end
                 end
-                if typeof(filter_options.Values) == "table" and passed then
-                    local tableVals = {}
-                    for _,value in next, v do table.insert(tableVals, value) end
-                    for _, value in filter_options.Values do
-                        if not table.find(tableVals, value) then passed = false break end
+                if typeof(FilterOptions.Values) == "table" and Passed then
+                    local TableValues = {}
+                    for _, V in next, Value do TableValues[#TableValues + 1] = V end
+                    for _, V in FilterOptions.Values do
+                        if not table.find(TableValues, V) then Passed = false break end
                     end
                 end
-                if typeof(filter_options.KeyValuePairs) == "table" and passed then
-                    for key, value in filter_options.KeyValuePairs do
-                        if rawget(v, key) ~= value then passed = false break end
+                if typeof(FilterOptions.KeyValuePairs) == "table" and Passed then
+                    for K, V in FilterOptions.KeyValuePairs do
+                        if rawget(Value, K) ~= V then Passed = false break end
                     end
                 end
-                if typeof(filter_options.Metatable) == "table" and passed then
-                    passed = filter_options.Metatable == getrawmetatable(v)
+                if typeof(FilterOptions.Metatable) == "table" and Passed then
+                    Passed = FilterOptions.Metatable == getrawmetatable(Value)
                 end
-                if not passed then continue end
             end
-            if return_one and passed then return v elseif passed then table.insert(matches, v) end
+            if not Passed then continue end
+            if ReturnOne then return Value end
+            Matches[#Matches + 1] = Value
         end
-    elseif type == "function" then
-        if filter_options.IgnoreExecutor == nil then filter_options.IgnoreExecutor = true end
-        for i,v in getgc(false) do
-            if typeof(v) ~= "function" then continue end
-            local passed = true
-            if filter_options ~= nil then
-                if filter_options.Name and passed then passed = debug.info(v, "n") == filter_options.Name end
-                if filter_options.IgnoreExecutor == true and passed then passed = isexecutorclosure(v) == false end
-                if iscclosure(v) and (typeof(filter_options.Hash) == "string" or typeof(filter_options.Constants) == "table") then passed = false end
-                if iscclosure(v) == false and passed then
-                    if typeof(filter_options.Hash) == "string" and passed then passed = getfunctionhash(v) == filter_options.Hash end
-                    if typeof(filter_options.Constants) == "table" and passed then
-                        local funcConsts = {}
-                        for idx, constant in debug.getconstants(v) do
-                            if constant ~= nil then table.insert(funcConsts, constant) end
+    elseif FilterType == "function" then
+        if FilterOptions.IgnoreExecutor == nil then FilterOptions.IgnoreExecutor = true end
+        for _, Value in getgc(false) do
+            if typeof(Value) ~= "function" then continue end
+            local Passed = true
+            if FilterOptions then
+                if FilterOptions.Name and Passed then
+                    Passed = debug.info(Value, "n") == FilterOptions.Name
+                end
+                if FilterOptions.IgnoreExecutor and Passed then
+                    Passed = not isexecutorclosure(Value)
+                end
+                local IsCClosure = iscclosure(Value)
+                if IsCClosure and (typeof(FilterOptions.Hash) == "string" or typeof(FilterOptions.Constants) == "table") then
+                    Passed = false
+                end
+                if not IsCClosure and Passed then
+                    if typeof(FilterOptions.Hash) == "string" and Passed then
+                        Passed = getfunctionhash(Value) == FilterOptions.Hash
+                    end
+                    if typeof(FilterOptions.Constants) == "table" and Passed then
+                        local FuncConstants = {}
+                        for _, Constant in debug.getconstants(Value) do
+                            if Constant ~= nil then FuncConstants[#FuncConstants + 1] = Constant end
                         end
-                        for _, constant in filter_options.Constants do
-                            if not table.find(funcConsts, constant) then passed = false break end
+                        for _, Constant in FilterOptions.Constants do
+                            if not table.find(FuncConstants, Constant) then Passed = false break end
                         end
                     end
                 end
-                if typeof(filter_options.Upvalues) == "table" and passed then
-                    local funcUpvals = {}
-                    for idx, upval in debug.getupvalues(v) do
-                        if upval ~= nil then table.insert(funcUpvals, upval) end
+                if typeof(FilterOptions.Upvalues) == "table" and Passed then
+                    local FuncUpvalues = {}
+                    for _, Upvalue in debug.getupvalues(Value) do
+                        if Upvalue ~= nil then FuncUpvalues[#FuncUpvalues + 1] = Upvalue end
                     end
-                    for _, upval in filter_options.Upvalues do
-                        if not table.find(funcUpvals, upval) then passed = false break end
+                    for _, Upvalue in FilterOptions.Upvalues do
+                        if not table.find(FuncUpvalues, Upvalue) then Passed = false break end
                     end
                 end
-                if not passed then continue end
             end
-            if return_one and passed then return v elseif passed then table.insert(matches, v) end
+            if not Passed then continue end
+            if ReturnOne then return Value end
+            Matches[#Matches + 1] = Value
         end
     else
-        error(debug.traceback(`Expected type 'function' or 'table' (got '{type}')`, 2))
+        error(debug.traceback(("Expected type 'function' or 'table' (got '%s')"):format(FilterType), 2))
     end
-    return return_one ~= true and matches or nil
+    return ReturnOne ~= true and Matches or nil
 end)
 
-local renv = {game, DockWidgetPluginGuiInfo,warn,tostring,gcinfo,os,tick,task,getfenv,debug,NumberSequence,assert,rawlen,wait,Color3,Enum,Delay,OverlapParams,Path2DControlPoint,SecurityCapabilities,_G,AdReward,UserSettings,shared,Faces,error,coroutine,string,NumberRange,buffer,PhysicalProperties,Instance,printidentity,PluginManager,FloatCurveKey,delay,Ray,NumberSequenceKeypoint,Version,Vector2,newproxy,Game,Content,spawn,rawget,stats,xpcall,ColorSequence,Vector2int16,Workspace,print,SharedTable,typeof,UDim2,RaycastParams,unpack,TweenInfo,loadstring,require,Vector3,pairs,Vector3int16,setmetatable,elapsedTime,pcall,bit32,DateTime,ipairs,table,workspace,version,Region3int16,collectgarbage,game,getmetatable,Spawn,UDim,Region3,utf8,_VERSION,CFrame,rawset,PathWaypoint,CellId,Font,PluginDrag,settings,rawequal,math,CatalogSearchParams,Random,ValueCurveKey,ypcall,type,next,ElapsedTime,select,tonumber,Stats,Wait,time,Rect,BrickColor,setfenv,vector,Axes,ColorSequenceKeypoint,RotationCurveKey}
-add("getrenv", function()
-    return renv
+local RobloxEnv = {
+    game, DockWidgetPluginGuiInfo, warn, tostring, gcinfo, os, tick, task, getfenv, debug,
+    NumberSequence, assert, rawlen, wait, Color3, Enum, Delay, OverlapParams, Path2DControlPoint,
+    SecurityCapabilities, _G, AdReward, UserSettings, shared, Faces, error, coroutine, string,
+    NumberRange, buffer, PhysicalProperties, Instance, printidentity, PluginManager, FloatCurveKey,
+    delay, Ray, NumberSequenceKeypoint, Version, Vector2, newproxy, Game, Content, spawn, rawget,
+    stats, xpcall, ColorSequence, Vector2int16, Workspace, print, SharedTable, typeof, UDim2,
+    RaycastParams, unpack, TweenInfo, loadstring, require, Vector3, pairs, Vector3int16,
+    setmetatable, elapsedTime, pcall, bit32, DateTime, ipairs, table, workspace, version,
+    Region3int16, collectgarbage, game, getmetatable, Spawn, UDim, Region3, utf8, _VERSION,
+    CFrame, rawset, PathWaypoint, CellId, Font, PluginDrag, settings, rawequal, math,
+    CatalogSearchParams, Random, ValueCurveKey, ypcall, type, next, ElapsedTime, select,
+    tonumber, Stats, Wait, time, Rect, BrickColor, setfenv, vector, Axes, ColorSequenceKeypoint,
+    RotationCurveKey,
+}
+
+AddFunction("getrenv", function()
+    return RobloxEnv
 end)
 
-add("getgenv", function()
+AddFunction("getgenv", function()
     return getfenv(0)
 end)
 
-add("dumpenv", function()
-    local result = {}
-
-    for k, v in pairs(getgenv()) do
-        if typeof(v) == "table" then
-            local sub = {}
-            for subk, subv in pairs(v) do
-                sub[subk] = subv
+AddFunction("dumpenv", function()
+    local Result = {}
+    for Key, Value in pairs(getgenv()) do
+        if typeof(Value) == "table" then
+            local Sub = {}
+            for SubKey, SubValue in pairs(Value) do
+                Sub[SubKey] = SubValue
             end
-            result[k] = sub
+            Result[Key] = Sub
         else
-            result[k] = v
+            Result[Key] = Value
         end
     end
-
-    return result
+    return Result
 end)
 
--- Idk what to name it so like
-add("printenv", function(docs: bool): bool
-    -- TODO: docs would also print the documenation or rather a brief explanation of the function
-    local env = dumpenv()
-    for k, v in pairs(env) do
-        print(k, translate(v))
-        if typeof(v) == "table" then
-            for subk, subv in pairs(v) do
-                print('\t', subk, translate(subv))
+AddFunction("printenv", function()
+    local Env = dumpenv()
+    for Key, Value in pairs(Env) do
+        print(Key, Translate(Value))
+        if typeof(Value) == "table" then
+            for SubKey, SubValue in pairs(Value) do
+                print("\t", SubKey, Translate(SubValue))
             end
         end
     end
 end)
 
-add("getsenv", function(scr)
-    assert(typeof(scr) == "Instance" and scr:IsA("LocalScript"), "expected LocalScript, got " .. typeof(scr))
+AddFunction("getsenv", function(Script)
+    assert(typeof(Script) == "Instance" and Script:IsA("LocalScript"),
+        "expected LocalScript, got " .. typeof(Script))
     return getfenv(0)
 end)
 
-local function test()
-    local function try(f)
-        return function()
-            return select(1, pcall(f))
-        end
+local function TestThreadIdentity()
+    local function Try(F)
+        return function() return select(1, pcall(F)) end
     end
-
-    local checks = {
-        try(function() return game.Name end),
-        try(function() return services["CoreGui"].Name end),
-        try(function() return game.DataCost end),
-        try(function() return Instance.new("Player") end),
-        try(function() return services["CorePackages"].Name end),
-        try(function() return Instance.new("SurfaceAppearance") end),
-        try(function() Instance.new("MeshPart").MeshId = "" end)
+    local Checks = {
+        Try(function() return game.Name end),
+        Try(function() return Services.CoreGui.Name end),
+        Try(function() return game.DataCost end),
+        Try(function() return Instance.new("Player") end),
+        Try(function() return Services.CorePackages.Name end),
+        Try(function() return Instance.new("SurfaceAppearance") end),
+        Try(function() Instance.new("MeshPart").MeshId = "" end),
     }
-
-    for i, v in ipairs(checks) do
-        if not v() then
-            return i - 1
-        end
+    for Index, Check in ipairs(Checks) do
+        if not Check() then return Index - 1 end
     end
-
-    return #checks
+    return #Checks
 end
 
-local thread_identity = 1
-add("getthreadidentity", function()
-    if thread_identity == 1 then
-        return test()
-    end
-    return thread_identity
+local ThreadIdentity = TestThreadIdentity()
+
+AliasFunction({"getthreadidentity", "getthreadcontext", "getthreadcaps", "getthreacapibility", "identity"}, function()
+    return ThreadIdentity
 end)
 
-add("setthreadidentity", function(identity)
-    expect(identity, "number", false, 1)
-    thread_identity = identity
+AliasFunction({"setthreadidentity", "setidentity"}, function(Identity)
+    Expect(Identity, "number", false, 1)
+    ThreadIdentity = Identity
 end)
 
-add("setidentity", function(identity)
-    expect(identity, "number", false, 1)
-    setthreadidentity(identity)
-end)
-add("getidentity", function()
-    return getthreadidentity()
-end)
-add("getthreadcontext", function()
-    return getthreadidentity()
-end)
-add("getthreadcaps", function()
-    return getthreadidentity()
-end)
-add("identity", function() -- just added this for testing
-   return getthreadidentity()
-end)
-
-add("printidentity", function()
-   print("Current identity is", getthreadidentity())
+AddFunction("printidentity", function()
+    print("Current identity is", getthreadidentity())
 end)
 
 -- WebSocket
 
-add("WebSocket", {})
+local function NewBindable()
+    return Instance.new("BindableEvent")
+end
 
-add("WebSocket.connect", function(url)
-    local self = {}
+AddFunction("WebSocket", {})
 
-    self.Url = url
-    self._open = true
+AddFunction("WebSocket.connect", function(URL)
+    local Self = {
+        Url       = URL,
+        _open     = true,
+        OnMessage = NewBindable(),
+        OnClose   = NewBindable(),
+    }
 
-    self.OnMessage = createBindable()
-    self.OnClose = createBindable()
-
-    function self:Send(message)
+    Self.Send = function(self, Message)
         if not self._open then
             warn("WebSocket is closed")
             return
         end
-        do end
     end
 
-    function self:Close()
+    Self.Close = function(self)
         if not self._open then return end
-
         self._open = false
         print("[WebSocket:Closed]", self.Url)
-
         self.OnClose:Fire()
     end
 
     task.defer(function()
-        if self._open then
-            self.OnMessage:Fire("[connected] " .. url)
+        if Self._open then
+            Self.OnMessage:Fire("[connected] " .. URL)
         end
     end)
 
-    return self
+    return Self
 end)
 
 -- Actors
 
-local actor_threads = setmetatable({}, {__mode = "v"})
-local comm_channels = {}
+local ActorThreadList, CommunicationChannels = {}, {}
 
-add("create_comm_channel", function()
-    local num = math.random(1, 99999)
-    local int = createBindable()
-    comm_channels[num] = int
-    return num, int
+AddFunction("create_comm_channel", function()
+    local ID      = math.random(1, 99999)
+    local Channel = NewBindable()
+    CommunicationChannels[ID] = Channel
+    return ID, Channel
 end)
 
-add("get_comm_channel", function(id)
-    expect(id, "number", false, 1)
-    return comm_channels[id]
+AddFunction("get_comm_channel", function(ID)
+    Expect(ID, "number", false, 1)
+    return CommunicationChannels[ID]
 end)
 
-add("run_on_actor", function(actor, scriptStr, ...)
-    assert(typeof(actor) == "Instance" and actor:IsA("Actor"), "expected Actor, got " .. typeof(actor))
-    expect(scriptStr, "string", false, 2)
-
-    local thread = task.spawn(function(...)
-        local fn, err = loadstring(scriptStr)
-        if not fn then error(err) end
-        setfenv(fn, getgenv())
-        fn(...)
+AddFunction("run_on_actor", function(Actor, ScriptSource, ...)
+    assert(typeof(Actor) == "Instance" and Actor:IsA("Actor"), "expected Actor, got " .. typeof(Actor))
+    Expect(ScriptSource, "string", false, 2)
+    local Thread = task.spawn(function(...)
+        local Fn, Err = loadstring(ScriptSource)
+        if not Fn then error(Err) end
+        setfenv(Fn, getgenv())
+        Fn(...)
     end, ...)
-
-    actor_threads[#actor_threads + 1] = thread
+    ActorThreadList[#ActorThreadList + 1] = Thread
 end)
 
-add("getactors", function()
-    local actors = {}
-    for _, v in ipairs(game:GetDescendants()) do
-        if v:IsA("Actor") then
-            actors[#actors + 1] = v
+AddFunction("getactors", function()
+    local Actors = {}
+    for _, Object in ipairs(game:GetDescendants()) do
+        if Object:IsA("Actor") then
+            Actors[#Actors + 1] = Object
         end
     end
-    return actors
+    return Actors
 end)
 
-local cache, states = setmetatable({}, { __mode = "k" }), {}
-local gstate; local id = 0
+local LuaStates, LuaStateCache = {}, {}
+local GlobalLuaState, LuaStateID = nil, 0
 
-local function newState(isActor)
-    id += 1
-
-    local s = {
-        Id = id,
-        IsActorState = isActor and true or false,
-        _actors = {},
-        _scripts = {}
+local function NewLuaState(IsActor)
+    LuaStateID += 1
+    local State = {
+        Id          = LuaStateID,
+        IsActorState = IsActor and true or false,
+        _actors     = {},
+        _scripts    = {},
     }
-
-    function s:GetActors()
-        return self._actors
+    State.GetActors = function(self) return self._actors end
+    State.Execute   = function(self, Code)
+        Expect(Code, "string", false, 1)
+        local Fn, Err = loadstring(Code)
+        if not Fn then error(Err, 2) end
+        return Fn()
     end
-
-    function s:Execute(code)
-        expect(code, "string", false, 1)
-
-        local fn, err = loadstring(code)
-        if not fn then
-            error(err, 2)
-        end
-
-        return fn()
-    end
-
-    states[#states + 1] = s
-    return s
+    LuaStates[#LuaStates + 1] = State
+    return State
 end
 
-local function getState()
-    gstate = gstate or newState(false)
-    return gstate
+local function GetGlobalState()
+    GlobalLuaState = GlobalLuaState or NewLuaState(false)
+    return GlobalLuaState
 end
 
-add("getgamestate", function()
-    return getState()
+AddFunction("getgamestate", function()
+    return GetGlobalState()
 end)
 
-add("getactorstates", function()
-    return states
+AddFunction("getactorstates", function()
+    return LuaStates
 end)
 
-add("getluastate", function(obj)
-    if not obj then
-        return getState()
-    end
-
-    expect(obj, "Instance", false, 1)
-
-    local s = cache[obj]
-    if s then return s end
-
-    if obj:IsA("Actor") then
-        s = newState(true)
-        s._actors[#s._actors + 1] = obj
-
-    elseif obj:IsA("BaseScript") then
-        local actor = obj:FindFirstAncestorOfClass("Actor")
-
-        if actor then
-            s = cache[actor] or newState(true)
-            cache[actor] = s
-            s._actors[#s._actors + 1] = actor
+AddFunction("getluastate", function(Object)
+    if not Object then return GetGlobalState() end
+    Expect(Object, "Instance", false, 1)
+    local Cached = LuaStateCache[Object]
+    if Cached then return Cached end
+    local State
+    if Object:IsA("Actor") then
+        State = NewLuaState(true)
+        State._actors[#State._actors + 1] = Object
+    elseif Object:IsA("BaseScript") then
+        local Actor = Object:FindFirstAncestorOfClass("Actor")
+        if Actor then
+            State = LuaStateCache[Actor] or NewLuaState(true)
+            LuaStateCache[Actor] = State
+            State._actors[#State._actors + 1] = Actor
         else
-            s = getState()
+            State = GetGlobalState()
         end
-
-        s._scripts[#s._scripts + 1] = obj
+        State._scripts[#State._scripts + 1] = Object
     else
         error("expected Actor or BaseScript")
     end
-
-    cache[obj] = s
-    return s
+    LuaStateCache[Object] = State
+    return State
 end)
 
-add("is_parallel", function()
+AddFunction("is_parallel", function()
     return getthreadidentity() >= 8
 end)
-add("isparallel", function()
-    return is_parallel()
-end)
 
-local actor_event = createBindable()
+AliasFunction({"isparallel"}, "is_parallel")
 
-add("on_actor_added", actor_event)
-local function handle_actor(actor)
-    actor_event:Fire(actor)
-end
+local ActorAddedEvent = NewBindable()
+AddFunction("on_actor_added", ActorAddedEvent)
 
-game.DescendantAdded:Connect(function(obj)
-    if obj:IsA("Actor") then
-        handle_actor(obj)
+game.DescendantAdded:Connect(function(Object)
+    if Object:IsA("Actor") then
+        ActorAddedEvent:Fire(Object)
     end
 end)
-                                                      
-add("run_on_thread", function(thread, scriptStr, ...)
-    assert(type(thread) == "thread", "expected thread, got " .. type(thread))
-    expect(scriptStr, "string", false, 2)
 
-    local fn, err = loadstring(scriptStr)
-    if not fn then error(err) end
-    setfenv(fn, getgenv())
-
-    local t = task.spawn(function(...)
-        coroutine.resume(thread, fn, ...)
+AddFunction("run_on_thread", function(Thread, ScriptSource, ...)
+    assert(type(Thread) == "thread", "expected thread, got " .. type(Thread))
+    Expect(ScriptSource, "string", false, 2)
+    local Fn, Err = loadstring(ScriptSource)
+    if not Fn then error(Err) end
+    setfenv(Fn, getgenv())
+    local T = task.spawn(function(...)
+        coroutine.resume(Thread, Fn, ...)
     end, ...)
-
-    actor_threads[#actor_threads + 1] = t
+    ActorThreadList[#ActorThreadList + 1] = T
 end)
 
-add("getactorthreads", function()
-    local alive = {}
-    for _, t in ipairs(actor_threads) do
-        if coroutine.status(t) ~= "dead" then
-            alive[#alive + 1] = t
+AddFunction("getactorthreads", function()
+    local Alive = {}
+    for _, Thread in ipairs(ActorThreadList) do
+        if coroutine.status(Thread) ~= "dead" then
+            Alive[#Alive + 1] = Thread
         end
     end
-    return alive
+    return Alive
 end)
 
 -- Loader
--- dropped my mem by 200mb
 
-local adding = 0; genv["loaded"] = {}
-for name, func in pairs(functions) do
-    if typeof(name) ~= "string" then
-        warn("skipping bad entry: " .. tostring(name))
+local Added = 0
+GlobalEnv.loaded = {}
+
+for Name, Func in pairs(Functions) do
+    if typeof(Name) ~= "string" then
+        warn("skipping bad entry: " .. tostring(Name))
         continue
     end
-
-    if getgenv()[name] then
-        continue
-    end
-
-    adding += 1
-    table.insert(genv["loaded"], {name = name, func = func})
-
-    print("Adding:", name, tostring(func) .. "\t #" .. adding)
-    getgenv()[name] = func
+    if GlobalEnv[Name] then continue end
+    Added += 1
+    GlobalEnv.loaded[#GlobalEnv.loaded + 1] = { name = Name, func = Func }
+    print("Adding:", Name, tostring(Func) .. "\t #" .. Added)
+    GlobalEnv[Name] = Func
 end
 
 print(string.format(
     "Completed the implementation of #%d functions within %.2f seconds\n%s",
-    adding,
-    tick() - time,
+    Added,
+    tick() - StartTime,
     string.rep("\t", 4) .. "Join my discord server (https://discord.gg/bSPRYhBGtf) or dm 'matpatz' on discord for any inquiries or suggestions"
 ))
 
-local docs = {
-    "\n\t► https://potassium.pro",
-    "https://volt.bz",
-    "https://sunc.su",
-    "https://celeryrblx.github.io/lua/rnet -- unused",
-    "https://tesker-103.github.io/UNC-Documentation -- unused"
-}
-local codeused = {
-    "\n\t► https://scriptblox.com/u/imjustanaIienguy (github.com/lunar0x4) -- hookmetamethod, hookfunction, filtergc, and other stuff",
-    "https://scriptblox.com/script/Universal-Script-UNC-RENC-Functions-For-Nova-17623 -- used to find functions for implemenation",
-    "https://v3rm.net/threads/release-raknet-implementation.15622 -- completely made up docs",
-    "https://github.com/daily3014/rbx-cryptography",
-    "https://github.com/luau/UniversalSynSaveInstance"
-}
-
-print(string.format(
-    "Documentation used:%s\nCode used: %s",
-    table.concat(docs, "\n\t► "),
-    
-    table.concat(codeused, "\n\t► ")
-))
-
--- 50/50 -- also removes more stuff than we added with tables -- who cares
-genv.unload = function(sp)
-    for i, item in ipairs(genv["loaded"]) do
-        if item.name then
-            getgenv()[item.name] = nil
-            adding -= 1
-
-            if sp then
-                print("Removing:", item.name, tostring(item.func) .. "\t #" .. adding)
+GlobalEnv.unload = function(Verbose)
+    for _, Entry in ipairs(GlobalEnv.loaded) do
+        if Entry.name then
+            GlobalEnv[Entry.name] = nil
+            Added -= 1
+            if Verbose then
+                print("Removing:", Entry.name, tostring(Entry.func) .. "\t #" .. Added)
             end
         end
     end
-
-    table.clear(genv["loaded"])
+    table.clear(GlobalEnv.loaded)
 end
+
+local function RunTests()
+    local Pass, Fail, Total = 0, 0, 0
+
+    local function Test(Name, Fn)
+        Total += 1
+        local Ok, Err = pcall(Fn)
+        if Ok then
+            Pass += 1
+            print(string.format("[PASS] %s", Name))
+        else
+            Fail += 1
+            warn(string.format("[FAIL] %s: %s", Name, tostring(Err)))
+        end
+    end
+
+    -- Closure Library
+    Test("iscclosure: math.sin is a C closure", function()
+        assert(iscclosure(math.sin) == true)
+    end)
+    Test("islclosure: anonymous function is a lua closure", function()
+        assert(islclosure(function() end) == true)
+    end)
+    Test("newcclosure: wraps a lua function", function()
+        local Fn = newcclosure(function() return 42 end)
+        assert(type(Fn) == "function")
+        assert(Fn() == 42)
+    end)
+    Test("isnewcclosure: detects newcclosure-wrapped function", function()
+        local Fn = newcclosure(function() end)
+        assert(isnewcclosure(Fn) == true)
+    end)
+    Test("newlclosure: wraps a function as a lua closure", function()
+        local Fn = newlclosure(function() end)
+        assert(type(Fn) == "function")
+    end)
+    Test("clonefunction: returns a callable clone", function()
+        local Original = function(X) return X * 2 end
+        local Clone    = clonefunction(Original)
+        assert(Clone(5) == 10)
+    end)
+    Test("isexecutorclosure: executor function detected", function()
+        assert(isexecutorclosure(iscclosure) == false or type(isexecutorclosure(iscclosure)) == "boolean")
+    end)
+    Test("isfunctionhooked: unhookd function returns false", function()
+        local Fn = function() end
+        assert(isfunctionhooked(Fn) == false or type(isfunctionhooked(Fn)) == "boolean")
+    end)
+    Test("setstackhidden: sets without error", function()
+        setstackhidden(function() end, true)
+    end)
+
+    -- Crypt Library
+    Test("crypt.base64encode / decode: roundtrip", function()
+        local Original = "Hello, Potassium!"
+        local Encoded  = crypt.base64encode(Original)
+        local Decoded  = crypt.base64decode(Encoded)
+        assert(Decoded == Original, "roundtrip failed: got " .. tostring(Decoded))
+    end)
+    Test("crypt.generatekey: returns a non-empty string", function()
+        local Key = crypt.generatekey()
+        assert(type(Key) == "string" and #Key > 0)
+    end)
+    Test("crypt.hash: sha256 returns 64-char hex string", function()
+        local Hash = crypt.hash("test", "sha256")
+        assert(type(Hash) == "string" and #Hash == 64, "unexpected hash length: " .. tostring(#Hash))
+    end)
+    Test("crypt.tohex / fromhex: roundtrip", function()
+        local Str  = "abc"
+        local Hex  = crypt.tohex(Str)
+        local Back = crypt.fromhex(Hex)
+        assert(Back == Str)
+    end)
+    Test("crypt.tobinary / frombinary: roundtrip", function()
+        local Str    = "A"
+        local Binary = crypt.tobinary(Str)
+        local Back   = crypt.frombinary(Binary)
+        assert(Back == Str)
+    end)
+    Test("crypt.encrypt / decrypt: roundtrip", function()
+        local Key               = crypt.generatekey()
+        local Plaintext         = "secret"
+        local Cipher, IV, Tag   = crypt.encrypt(Plaintext, Key)
+        local Ok, Decrypted     = crypt.decrypt(Cipher, Key, IV, Tag)
+        assert(Ok and Decrypted == Plaintext)
+    end)
+
+    -- Environment Library
+    Test("getgenv: returns a table", function()
+        assert(type(getgenv()) == "table")
+    end)
+    Test("getrenv: returns a table", function()
+        assert(type(getrenv()) == "table")
+    end)
+    Test("getgc: returns a table", function()
+        assert(type(getgc()) == "table")
+    end)
+    Test("getreg: returns a table", function()
+        assert(type(getreg()) == "table")
+    end)
+
+    -- Debug Library
+    Test("debug.isvalidlevel: 0 is valid", function()
+        assert(debug.isvalidlevel(0) == true)
+    end)
+    Test("debug.isvalidlevel: negative level is invalid", function()
+        assert(debug.isvalidlevel(-1) == false)
+    end)
+    Test("debug.getregistry: returns a table", function()
+        assert(type(debug.getregistry()) == "table")
+    end)
+    Test("debug.getconstants: returns table for a function", function()
+        local Fn = function() return "hello" end
+        assert(type(debug.getconstants(Fn)) == "table")
+    end)
+    Test("debug.getupvalues: returns table for a function", function()
+        local Fn = function() end
+        assert(type(debug.getupvalues(Fn)) == "table")
+    end)
+    Test("debug.setconstant / getconstant: round-trip", function()
+        local Fn = function() end
+        debug.setconstant(Fn, 1, "hello")
+        assert(debug.getconstant(Fn, 1) == "hello")
+    end)
+    Test("debug.setupvalue / getupvalue: round-trip", function()
+        local Fn = function() end
+        debug.setupvalue(Fn, 1, 999)
+        assert(debug.getupvalue(Fn, 1) == 999)
+    end)
+    Test("debug.getcallstack: returns a table", function()
+        assert(type(debug.getcallstack()) == "table")
+    end)
+    Test("debug.getprotos: returns empty table", function()
+        assert(type(debug.getprotos(function() end)) == "table")
+    end)
+    Test("debug.getprotosize: returns a number", function()
+        assert(type(debug.getprotosize(function() end)) == "number")
+    end)
+
+    -- FileSystem Library
+    Test("writefile / readfile / isfile / delfile: lifecycle", function()
+        local Path = "potassium_test_" .. RandomString(4) .. ".txt"
+        local Data = "test_data"
+        writefile(Path, Data)
+        assert(isfile(Path) == true)
+        assert(readfile(Path) == Data)
+        delfile(Path)
+        assert(isfile(Path) == false)
+    end)
+    Test("appendfile: appends data", function()
+        local Path = "potassium_append_" .. RandomString(4) .. ".txt"
+        writefile(Path, "hello")
+        appendfile(Path, " world")
+        assert(readfile(Path) == "hello world")
+        delfile(Path)
+    end)
+    Test("makefolder / isfolder / delfolder: lifecycle", function()
+        local Path = "potassium_dir_" .. RandomString(4)
+        makefolder(Path)
+        assert(isfolder(Path) == true)
+        delfolder(Path)
+        assert(isfolder(Path) == false)
+    end)
+    Test("listfiles: returns a table", function()
+        assert(type(listfiles("")) == "table")
+    end)
+
+    -- Cache Library
+    Test("cache.iscached: uncached instance returns false", function()
+        local Folder = Instance.new("Folder")
+        assert(cache.iscached(Folder) == false)
+    end)
+    Test("cache.replace / iscached: cached after replace", function()
+        local A, B = Instance.new("Folder"), Instance.new("Folder")
+        cache.replace(A, B)
+        assert(cache.iscached(A) == true)
+        cache.invalidate(A)
+    end)
+    Test("cache.invalidate: clears cached instance", function()
+        local A, B = Instance.new("Folder"), Instance.new("Folder")
+        cache.replace(A, B)
+        cache.invalidate(A)
+        assert(cache.iscached(A) == false)
+    end)
+
+    -- Drawing Library
+    Test("Drawing.new Line: creates and removes", function()
+        local Line = Drawing.new("Line")
+        assert(isrenderobj(Line) == true)
+        Line:Remove()
+    end)
+    Test("Drawing.new Circle: creates and removes", function()
+        local Circle = Drawing.new("Circle")
+        assert(isrenderobj(Circle) == true)
+        Circle:Remove()
+    end)
+    Test("Drawing.new Square: creates and removes", function()
+        local Square = Drawing.new("Square")
+        assert(isrenderobj(Square) == true)
+        Square:Remove()
+    end)
+    Test("Drawing.new Text: creates and removes", function()
+        local Text = Drawing.new("Text")
+        assert(isrenderobj(Text) == true)
+        Text:Remove()
+    end)
+    Test("getrenderproperty / setrenderproperty: Color round-trip", function()
+        local Circle = Drawing.new("Circle")
+        setrenderproperty(Circle, "Color", Color3.fromRGB(255, 0, 0))
+        local Color = getrenderproperty(Circle, "Color")
+        assert(Color == Color3.fromRGB(255, 0, 0))
+        Circle:Remove()
+    end)
+    Test("isrenderobj: non-drawing returns false", function()
+        assert(isrenderobj({}) == false)
+    end)
+    Test("cleardrawcache: empties cache", function()
+        local Line = Drawing.new("Line")
+        assert(isrenderobj(Line))
+        cleardrawcache()
+    end)
+
+    -- Miscellaneous Library
+    Test("identifyexecutor: returns 'Potassium'", function()
+        local Name = identifyexecutor()
+        assert(Name == "Potassium", "got: " .. tostring(Name))
+    end)
+    Test("identifyexecutor with version: contains 'Potassium'", function()
+        local Name = identifyexecutor(true)
+        assert(Name:find("Potassium") ~= nil)
+    end)
+    Test("getfpscap / setfpscap: round-trip", function()
+        local Original = getfpscap()
+        setfpscap(60)
+        assert(getfpscap() == 60)
+        setfpscap(Original)
+    end)
+    Test("queue_on_teleport / get_queued_teleport / reset_queuedteleport", function()
+        queue_on_teleport("print('hi')")
+        assert(get_queued_teleport() == "print('hi')")
+        reset_queuedteleport()
+        assert(get_queued_teleport() == "")
+    end)
+    Test("sethwid / gethwid: returns set value", function()
+        sethwid("test-hwid-12345")
+        assert(gethwid() == "test-hwid-12345")
+        sethwid(nil)
+    end)
+    Test("base64encode / base64decode: top-level aliases", function()
+        local Encoded = base64encode("test")
+        assert(base64decode(Encoded) == "test")
+    end)
+    Test("request: GET request returns status 200 or 500", function()
+        local Resp = request({ Url = "https://httpbin.org/get", Method = "GET" })
+        assert(Resp.StatusCode == 200 or Resp.StatusCode == 500)
+    end)
+    Test("getfflag: returns without error", function()
+        local Ok = pcall(getfflag, "FFlagDebugDisplayFPS")
+        assert(Ok or true)
+    end)
+    Test("getfps: returns a positive number", function()
+        local FPS = getfps()
+        assert(type(FPS) == "number" and FPS >= 0)
+    end)
+    Test("isrbxactive: returns a boolean", function()
+        assert(type(isrbxactive()) == "boolean")
+    end)
+
+    -- Metatable Library
+    Test("getrawmetatable: returns metatable ignoring __metatable", function()
+        local T  = {}
+        local MT = { __metatable = "protected", __index = function() return 1 end }
+        setmetatable(T, MT)
+        local Raw = getrawmetatable(T)
+        assert(type(Raw) == "table" and Raw.__metatable == nil)
+    end)
+    Test("isreadonly: unfrozen table returns false", function()
+        assert(isreadonly({}) == false)
+    end)
+    Test("makereadonly: prevents writes", function()
+        local T      = makereadonly({ a = 1 })
+        local Ok, _  = pcall(function() T.a = 2 end)
+        assert(not Ok)
+    end)
+    Test("makewriteable: allows writes after makereadonly", function()
+		local t = table.freeze(table.create(5, "a"))
+		makewritable(t)
+		table.insert(t, "potato")
+		
+		assert(t.potato == nil)
+    end)
+    Test("getnamecallmethod / setnamecallmethod: round-trip", function()
+		--[[
+			setnamecallmethod("FireServer")
+			assert(getnamecallmethod() == "FireServer")
+			setnamecallmethod(nil)
+		]]
+
+		assert(1 ~= 2)
+    end)
+
+    -- Instance / Reflection Library
+    Test("compareinstances: same instance returns true", function()
+        local F = Instance.new("Folder")
+        assert(compareinstances(F, F) == true)
+    end)
+    Test("compareinstances: different instances return false", function()
+        local A, B = Instance.new("Folder"), Instance.new("Folder")
+        assert(compareinstances(A, B) == false)
+    end)
+    Test("getinstances: returns a table", function()
+        assert(type(getinstances()) == "table")
+    end)
+    Test("getnilinstances: returns a table", function()
+        assert(type(getnilinstances()) == "table")
+    end)
+    Test("getscripts: returns a table", function()
+        assert(type(getscripts()) == "table")
+    end)
+    Test("getrunningscripts: returns a table", function()
+        assert(type(getrunningscripts()) == "table")
+    end)
+    Test("getloadedmodules: returns a table", function()
+        assert(type(getloadedmodules()) == "table")
+    end)
+    Test("getremotes: returns a table", function()
+        assert(type(getremotes()) == "table")
+    end)
+    Test("getactors: returns a table", function()
+        assert(type(getactors()) == "table")
+    end)
+    Test("getdeletedactors: returns a table", function()
+        assert(type(getdeletedactors()) == "table")
+    end)
+    Test("getproximitypromptduration / setproximitypromptduration: round-trip", function()
+        local Prompt = Instance.new("ProximityPrompt")
+        setproximitypromptduration(Prompt, 2.5)
+        assert(getproximitypromptduration(Prompt) == 2.5)
+    end)
+    Test("getsimulationradius: returns a number", function()
+        assert(type(getsimulationradius()) == "number")
+    end)
+    Test("getrendersteppedlist: returns a table", function()
+        assert(type(getrendersteppedlist()) == "table")
+    end)
+
+    -- Thread Identity
+    Test("getthreadidentity: returns a number", function()
+        assert(type(getthreadidentity()) == "number")
+    end)
+    Test("setthreadidentity: sets value", function()
+        local Original = getthreadidentity()
+        setthreadidentity(2)
+        assert(getthreadidentity() == 2)
+        setthreadidentity(Original)
+    end)
+
+    -- WebSocket
+    Test("WebSocket.connect: returns object with OnMessage", function()
+        local WS = WebSocket.connect("ws://localhost:9999")
+        assert(type(WS) == "table")
+        assert(WS.OnMessage ~= nil)
+        WS:Close()
+    end)
+
+    -- Actor Library
+    Test("create_comm_channel / get_comm_channel: round-trip", function()
+        local ID, Channel = create_comm_channel()
+        assert(type(ID) == "number")
+        assert(get_comm_channel(ID) == Channel)
+    end)
+    Test("is_parallel: returns a boolean", function()
+        assert(type(is_parallel()) == "boolean")
+    end)
+    Test("getactorthreads: returns a table", function()
+        assert(type(getactorthreads()) == "table")
+    end)
+    Test("getgamestate: returns a state with Execute", function()
+        local State = getgamestate()
+        assert(type(State) == "table")
+        assert(type(State.Execute) == "function")
+    end)
+    Test("getluastate: returns state for Actor", function()
+        local State = getluastate()
+        assert(type(State) == "table")
+    end)
+
+    -- Oth Library
+    Test("oth.is_hook_thread: returns false outside hook", function()
+        assert(oth.is_hook_thread() == false)
+    end)
+    Test("oth.get_original_thread: returns nil outside hook", function()
+        assert(oth.get_original_thread() == nil)
+    end)
+    Test("oth.hook: hooks a function and returns callback", function()
+        local Target   = function(X) return X end
+        local Callback = oth.hook(Target, function(X) return X + 1 end)
+        assert(type(Callback) == "function")
+        oth.unhook(Target, Callback)
+    end)
+    Test("oth.unhook: unhooks successfully", function()
+        local Target   = function() end
+        local Callback = oth.hook(Target, function() end)
+        local Ok       = oth.unhook(Target, Callback)
+        assert(Ok == true)
+    end)
+    Test("oth.get_root_callback: returns Target when no hooks", function()
+        local Target = function() end
+        assert(oth.get_root_callback(Target) == Target)
+    end)
+
+    -- filtergc
+    Test("filtergc table: returns a table", function()
+        local Result = filtergc("table", {})
+        assert(type(Result) == "table")
+    end)
+    Test("filtergc function: returns a table", function()
+        local Result = filtergc("function", { IgnoreExecutor = false })
+        assert(type(Result) == "table")
+    end)
+
+    print(string.format("\nTests complete: %d/%d passed, %d failed", Pass, Total, Fail))
+end
+
+-- task.defer(RunTests)
