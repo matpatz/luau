@@ -10,7 +10,9 @@ const webhooks = {
     // Guess the Country Flag or Die
     "88817068170433": "https://discord.com/api/webhooks/1422774328100913272/EY0fzME1MD1mhBH4TrPxm5fWjkkbNCLnPn_FQLcJ5lhlVSG-s7y1pwy4uAsoXm45Bg_K",
     // Idle Blocks
-    "101759436219635": "https://discord.com/api/webhooks/1502821413390913666/F7pOBvhXavuv8SHBlRY5bUtVcStj5aJZt12nJzFx3ijD1X5wAayD7TcLa1ezH3BovGTF"
+    "101759436219635": "https://discord.com/api/webhooks/1502821413390913666/F7pOBvhXavuv8SHBlRY5bUtVcStj5aJZt12nJzFx3ijD1X5wAayD7TcLa1ezH3BovGTF",
+    // teen titan
+    "3082002798": "https://discord.com/api/webhooks/1433582234442403890/cCN2SL7MwbhVV2esOfThdlL42JqNYw14cQXi5VXyKw5GtpAeQud5v6hP_O2IQ0fnStqq"
 };
 
 export default async function handler(req, res) {
