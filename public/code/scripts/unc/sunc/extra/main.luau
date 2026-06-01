@@ -45,6 +45,10 @@ local AliasFunction = function(Names, SourceNameOrFunc)
     end
 end
 
+local IndexFunction = function(Func)
+	return GlobalEnv["Func"] or Functions["Func"] or nil
+end
+
 local TypeDummies = {
     string   = "",
     number   = 0,
@@ -1980,6 +1984,28 @@ AddFunction("makewriteable", function(Object)
     return GuardTable(Object, false)
 end)
 
+--[[
+	do
+		local a = IndexFunction("setreadonly")
+		local b = IndexFunction("makewriteable")
+
+
+		local table.unfreeze = function(tbl)
+			a(tbl, false)
+		end
+		local table.writetable = function(tbl) --basically an allias
+			return b(tbl)
+		end
+
+		a(table, false)
+
+		table.insert(table, table.unfreeze)
+		table.insert(table, table.writetable)
+
+		a(table, true)
+	end
+--]]
+
 -- Miscellaneous
 
 AddFunction("identifyexecutor", function(IncludeVersion)
@@ -2183,8 +2209,14 @@ AddFunction("httpget", function(SelfOrUrl, URL)
     if typeof(SelfOrUrl) == "string" then
         URL = SelfOrUrl
     end
-    Expect(URL, "string", false, 1)
-    return game:HttpGetAsync(URL)
+    if typeof(self) == "string" then
+        url = self
+    end
+
+	return request({
+		Url = URL,
+		Method = "GET"
+	}).Body
 end)
 
 AddFunction("getinternalparent", function(Instance)
@@ -2198,15 +2230,69 @@ AddFunction("setinternalparent", function(Instance, NewParent)
     Instance.Parent = NewParent
 end)
 
+local FlagTypes = {
+	number = "int",
+	boolean = "flag"
+}
+
+AddFunction("getfflagtype", function(Flag)
+	local Value = getfflag(Flag)
+	local Result = FlagTypes[typeof(Value)]
+
+	if Result then
+		return Result
+	end
+
+	if Value == "True" or Value == "False" then
+		return "flag"
+	end
+end)
+
+AliasFunction({"getfastflagtype"}, "getfflagtype")
+
 AddFunction("getfflag", function(Flag)
     Expect(Flag, "string", false, 1)
-    return game:GetFastFlag(Flag:gsub("^FFlag", ""))
+
+    local FlagName = Flag
+        :gsub("^FFlag", "")
+        :gsub("^FInt", "")
+        :gsub("^FString", "")
+
+    local FlagType = Functions.getfflagtype(Flag)
+
+    if FlagType == "flag" then
+        return game:GetFastFlag(FlagName)
+    elseif FlagType == "int" then
+        return game:GetFastInt(FlagName)
+    elseif FlagType == "string" then
+        return game:GetFastString(FlagName)
+    end
+
+    error(("Unknown flag type for '%s'"):format(Flag), 2)
 end)
 
 AddFunction("setfflag", function(Flag, Value)
     Expect(Flag, "string", false, 1)
-    Expect(Value, "string", false, 2)
-    game:SetFastFlag(Flag:gsub("^FFlag", ""), Value)
+
+    local FlagName = Flag
+        :gsub("^FFlag", "")
+        :gsub("^FInt", "")
+        :gsub("^FString", "")
+
+    local FlagType = Functions.getfflagtype(Flag)
+
+    if FlagType == "flag" then
+        Expect(Value, "boolean", false, 2)
+        return game:SetFastFlag(FlagName, Value)
+    elseif FlagType == "int" then
+        Expect(Value, "number", false, 2)
+        return game:SetFastInt(FlagName, Value)
+    elseif FlagType == "string" then
+        Expect(Value, "string", false, 2)
+        return game:SetFastString(FlagName, Value)
+    end
+
+    error(("Unknown flag type for '%s'"):format(Flag), 2)
 end)
 
 AddFunction("setclipboard", function(Text)
@@ -3256,4 +3342,4 @@ local function RunTests()
     print(string.format("\nTests complete: %d/%d passed, %d failed", Pass, Total, Fail))
 end
 
--- task.defer(RunTests)
+--task.defer(RunTests)
