@@ -550,7 +550,13 @@ CryptLib.generatebytes = function(Size)
 end
 
 CryptLib.random = function(Length)
-    return Base64Decode(crypt.generatebytes(Length))
+    local Buffer = table.create(Length)
+
+    for Index = 1, Length do
+        Buffer[Index] = string.char(math.random(0, 255))
+    end
+
+    return table.concat(Buffer)
 end
 
 CryptLib.generatekey = function()
@@ -597,11 +603,6 @@ CryptLib.hash = function(Str, Algorithm)
     return HashLib[Algorithm](Str)
 end
 
-CryptLib.rnum = function(Length)
-    Length = Length or 12
-    return CSPRNG.RandomNum(Length / 2, Length)
-end
-
 local XORLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/daily3014/rbx-cryptography/refs/heads/main/src/Encryption/XOR.luau"))()
 
 CryptLib.salt = function(Input)
@@ -615,17 +616,8 @@ CryptLib.xor = function(Data)
     return StringFromBuf(XORLib(BufFromString(Data)))
 end
 
-CryptLib.rstring = function(Length)
-    return RandomString(Length)
-end
-
 CryptLib.tobytecode = function(Source)
     Expect(Source, "string", false, 1)
-    local Out = table.create(#Source)
-    for Index = 1, #Source do
-        Out[Index] = string.char(Source:byte(Index))
-    end
-    return table.concat(Out)
 end
 
 CryptLib.tobinary = function(Str)
