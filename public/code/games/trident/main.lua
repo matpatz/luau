@@ -44,8 +44,8 @@ local States = {
             TCP = nil,
 
 			Lighting = {
-				DefaultAmbient = services["lighting"].Ambient
-				DefaultOutdoorAmbient = services["lighting"].OutdoorAmbient
+				DefaultAmbient = services["lighting"].Ambient,
+				DefaultOutdoorAmbient = services["lighting"].OutdoorAmbient,
 				DefaultBrightness = services["lighting"].Brightness
 			},
 			Workspace = {
@@ -129,12 +129,14 @@ if States.Values.AreWeBeingRanInAnActor then
 	SetValue(_game, "RangedWeaponClient", _game.Classes.RangedWeaponClient)
 	SetValue(_game, "Recoil", _game.Classes.Recoil)
 	SetValue(_game, "SetSwaySpeed", _game.Classes.SetSwaySpeed)
-	SetValue(_game, "TCP", services["player"].TCP
+	SetValue(_game, "TCP", services["player"].TCP)
 
 	SetValue(_localplayer, "Character", _game.Classes.Character)
 	SetValue(_localplayer, "IsGrounded", _localplayer.Character.IsGrounded) -- function
 	SetValue(_localplayer, "SetSprintBlocked", _localplayer.Character.SetSprintBlocked) -- function
 	SetValue(_localplauer, "Camera", _localplayer.Camera)
+else
+	task.spawn(error("Run via Actor for more functions, thanks!", 2))
 end
 
 local Library, ThemeManager, SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/Library.lua"))(),loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/ThemeManager.lua"))(),loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/SaveManager.lua"))()
