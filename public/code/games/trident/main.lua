@@ -376,7 +376,6 @@ VehicleEsp:AddToggle("vehicleesp", {
 })
 
 local Crosshair = Tabs.Visuals:AddRightGroupbox("Crosshair")
-
 local CrosshairDrawings = {}
 
 local function DestroyCrosshair()
@@ -388,11 +387,11 @@ local function DestroyCrosshair()
 end
 
 local function UpdateCrosshair()
-    if #CrosshairDrawings == 0 then return end
+    if not Toggles.crosshairenabled.Value or #CrosshairDrawings == 0 then return end
 
-    local MousePos = game:GetService("UserInputService"):GetMouseLocation()
-    local Size = Options.crosshairsize.Value
+    local MousePos = services["uis"]:GetMouseLocation()
     local Cx, Cy = MousePos.X, MousePos.Y
+    local Size = Options.crosshairsize.Value
 
     if Options.crosshairshape.Value == "Circle" then
         local Circle = CrosshairDrawings[1]
@@ -401,29 +400,37 @@ local function UpdateCrosshair()
             Circle.Radius = Size
         end
     else
-        local Gap = math.max(4, Size * 0.08)
-        local Length = math.max(8, Size * 0.2)
-        local Thickness = math.max(2, Size * 0.04)
-        local Angles = {0, 45, 90, 135, 180, 225, 270, 315}
+        -- 4 lines: right, down, left, up
+        local Gap     = math.max(4, Size * 0.15)
+        local Length  = math.max(8, Size * 0.35)
+        local Half    = math.max(1, Size * 0.025)
+        local Dirs    = { {1,0}, {0,1}, {-1,0}, {0,-1} }
 
-        for i, Angle in ipairs(Angles) do
+        for i, Dir in ipairs(Dirs) do
             local Quad = CrosshairDrawings[i]
-            if Quad then
-                local Rad = math.rad(Angle)
-                local DirX = math.cos(Rad)
-                local DirY = math.sin(Rad)
-                local PerpX = -DirY * Thickness
-                local PerpY =  DirX * Thickness
-                local InnerX = Cx + DirX * Gap
-                local InnerY = Cy + DirY * Gap
-                local OuterX = Cx + DirX * (Gap + Length)
-                local OuterY = Cy + DirY * (Gap + Length)
-                Quad.PointA = Vector2.new(InnerX + PerpX, InnerY + PerpY)
-                Quad.PointB = Vector2.new(InnerX - PerpX, InnerY - PerpY)
-                Quad.PointC = Vector2.new(OuterX - PerpX, OuterY - PerpY)
-                Quad.PointD = Vector2.new(OuterX + PerpX, OuterY + PerpY)
-            end
+            if not Quad then continue end
+
+            local Dx, Dy = Dir[1], Dir[2]
+            -- perpendicular
+            local Px, Py = -Dy * Half, Dx * Half
+
+            local Ix = Cx + Dx * Gap
+            local Iy = Cy + Dy * Gap
+            local Ox = Cx + Dx * (Gap + Length)
+            local Oy = Cy + Dy * (Gap + Length)
+
+            Quad.PointA = Vector2.new(Ix + Px, Iy + Py)
+            Quad.PointB = Vector2.new(Ix - Px, Iy - Py)
+            Quad.PointC = Vector2.new(Ox - Px, Oy - Py)
+            Quad.PointD = Vector2.new(Ox + Px, Oy + Py)
         end
+    end
+end
+
+local function ApplyCrosshairStyle()
+    local Color = Options.crosshaircolor.Value
+    for _, D in pairs(CrosshairDrawings) do
+        if D then D.Color = Color end
     end
 end
 
@@ -432,74 +439,68 @@ local function CreateCrosshair()
     if not Toggles.crosshairenabled.Value then return end
 
     local Shape = Options.crosshairshape.Value
-    local Size = Options.crosshairsize.Value
+    local Color = Options.crosshaircolor.Value
 
     if Shape == "Circle" then
         local Circle = Drawing.new("Circle")
-        Circle.Visible = true
-        Circle.Color = Color3.new(1, 1, 1)
-        Circle.Thickness = 2
-        Circle.Filled = false
-        Circle.Radius = Size
-        Circle.Position = Vector2.new(0, 0)
+        Circle.Visible      = true
+        Circle.Color        = Color
+        Circle.Thickness    = 2
+        Circle.Filled       = false
+        Circle.Radius       = Options.crosshairsize.Value
+        Circle.Transparency = 1
+        Circle.Position     = Vector2.new(0, 0)
         table.insert(CrosshairDrawings, Circle)
     else
-        for _ = 1, 8 do
+        -- only 4 quads for a proper +
+        for _ = 1, 4 do
             local Quad = Drawing.new("Quad")
-            Quad.Visible = true
-            Quad.Color = Color3.new(1, 1, 1)
-            Quad.Thickness = 2
-            Quad.Filled = true
+            Quad.Visible      = true
+            Quad.Color        = Color
+            Quad.Filled       = true
+            Quad.Transparency = 1
             table.insert(CrosshairDrawings, Quad)
         end
     end
 
-    AddConnection("Crosshair", game:GetService("RunService").RenderStepped:Connect(UpdateCrosshair))
+    AddConnection("Crosshair", services["rs"].RenderStepped:Connect(UpdateCrosshair))
 end
 
-Crosshair:AddDropdown("crosshairshape", {
-    Values = {"Circle", "Lines"},
-    Default = "Circle",
-    Text = "Shape",
+-- Callbacks
+
+Crosshair:AddToggle("crosshairenabled", {
+    Text    = "Enable",
+    Default = false,
     Callback = function(Value)
-        if Toggles.crosshairenabled.Value then
-            CreateCrosshair()
-        end
+        if Value then CreateCrosshair() else DestroyCrosshair() end
     end
 })
 
-Crosshair:AddToggle("crosshairenabled", {
-    Text = "Enable",
-    Default = false,
-    Callback = function(Value)
-        if Value then
-            CreateCrosshair()
-        else
-            DestroyCrosshair()
-        end
+Crosshair:AddDropdown("crosshairshape", {
+    Values   = {"Circle", "Lines"},
+    Default  = "Circle",
+    Text     = "Shape",
+    Callback = function()
+        if Toggles.crosshairenabled.Value then CreateCrosshair() end
     end
 })
 
 Crosshair:AddSlider("crosshairsize", {
-    Text = "Crosshair Size",
-    Default = 50,
-    Min = 10,
-    Max = 300,
+    Text     = "Crosshair Size",
+    Default  = 50,
+    Min      = 10,
+    Max      = 300,
     Rounding = 0,
-    Callback = function(Value)
-        if Toggles.crosshairenabled.Value then
-            CreateCrosshair()
-        end
+    Callback = function()
+        -- size is read live in UpdateCrosshair, no recreate needed
     end
 })
 
 Crosshair:AddLabel("Color"):AddColorPicker("crosshaircolor", {
-    Default = Color3.new(1, 1, 1),
-    Title = "Crosshair Color",
-    Callback = function(Value)
-        for _, D in pairs(CrosshairDrawings) do
-            setrenderproperty(D, "Color", Value)
-        end
+    Default  = Color3.new(1, 1, 1),
+    Title    = "Crosshair Color",
+    Callback = function()
+        if Toggles.crosshairenabled.Value then ApplyCrosshairStyle() end
     end
 })
 
