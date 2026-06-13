@@ -596,7 +596,7 @@ Gui:AddButton("Unload Gui", function()
     Library:Unload()
 end)
 
-MenuGroup:AddLabel("Menu bind")
+Gui:AddLabel("Menu bind")
 	:AddKeyPicker("MenuKeybind", { Default = "RightShift", NoUI = true, Text = "Menu keybind" })
 
 SaveManager:LoadAutoloadConfig()
