@@ -13,35 +13,41 @@ local Connections = {
     Gameplay = {},
 }
 
+local Global = getsenv(services["player"].PlayerScripts.Client.Client)._G) -- Scripts.Client = Actor .Client = LocalScript
+local Next = Global.NEXT or {} -- nil
+local Classes = Global.classes
+
+local Character = Classes.Character
+
+if not is_parallel() then
+	task.spawn(error("Run in an Actor for more features, thanks!", 2))
+end
+
 local States = {
     Runtime = {},
+	Hooks = {}
 
     Values = {
-		AreWeBeingRanInAnActor = is_parallel(),
-
         LocalPlayer = {
-            IsGrounded = nil,
-			SetSprintBlocked = nil,
+			Character = Character,
+            IsGrounded = Character.IsGrounded, -- func
+			SetSprintBlocked = Character.SetSprintBlocked, -- func
             CanShoot = nil,
-            Character = nil,
             EquippedItem = nil,
-            Camera = nil
+            Camera = Classes.Camera
         },
-
         Game = {
-            Global = {},
-            NEXT = {},
-            Classes = {},
-			
-			RangedWeaponClient = {},
-				-- CreateProjictle
+			SharedFunctions = Classes.SharedFunctions
+			RangedWeaponClient = Classes.RangedWeaponClient,
+				-- Fire
+				-- CreateProjictle -- Bullet Tracer?
 				-- PlayerReload
 				-- ProjictileSpeed
 				-- PlayerAim
-            Recoil = nil,
-			SetSwaySpeed = nil,
-            SendTcp = nil,
-            TCP = nil,
+            Recoil = Classes.Recoil, -- func
+			SetSwaySpeed = Classes.SetSwaySpeed, -- func
+            SendTcp = Classes.NetClient.sendTCP, -- func
+            TCP = services["player"].TCP, -- RemoteEvent
 
 			Lighting = {
 				DefaultAmbient = services["lighting"].Ambient,
@@ -121,22 +127,51 @@ local function RemoveConnection(Category, Name)
     States.Runtime[Name] = false
 end
 
-if States.Values.AreWeBeingRanInAnActor then
-	SetValue(_game, "Global", getsenv(services["player"].PlayerScripts.Client.Client)._G) -- Scripts.Client = Actor .Client = LocalScript
-	SetValue(_game, "NEXT", _game.Global.NEXT)
-	SetValue(_game, "Classes", _game.Global.classes)
+local RandomString = function(Length)
+	local str = {}
+	for i = 1, Length do
+		table.insert(str, string.char(math.random(97, 121)) -- uncap: 97 121 - capitlized: 65 90
+	end
+	return table.concat(str)
+end
 
-	SetValue(_game, "RangedWeaponClient", _game.Classes.RangedWeaponClient)
-	SetValue(_game, "Recoil", _game.Classes.Recoil)
-	SetValue(_game, "SetSwaySpeed", _game.Classes.SetSwaySpeed)
-	SetValue(_game, "TCP", services["player"].TCP)
+local RandomNumber = function(Digits)
+	local str = #RandomString(Digits)
+	local numbers = {}
 
-	SetValue(_localplayer, "Character", _game.Classes.Character)
-	SetValue(_localplayer, "IsGrounded", _localplayer.Character.IsGrounded) -- function
-	SetValue(_localplayer, "SetSprintBlocked", _localplayer.Character.SetSprintBlocked) -- function
-	SetValue(_localplayer, "Camera", _game.Classes.Camera)
-else
-	task.spawn(error("Run via Actor for more functions, thanks!", 2))
+	for i = 1, str do
+		table.insert(numbers, string.byte(i))
+	end
+	return numbers
+end
+
+local function IsHooked(Name)
+    return States.Hooks[Name] ~= nil
+end
+
+local function AddHook(Name, Target, Hook, Type)
+    if IsHooked(Name) then
+        restorefunction(States.Hooks[Name].Target)
+        States.Hooks[Name] = nil
+    end
+
+    if Type == "Lua" then
+        Hook = newlclosure(Hook)
+    elseif Type == "C" then
+        Hook = newcclosure(Hook)
+    end
+
+    States.Hooks[Name] = {
+        Target = Target,
+        Original = hookfunction(Target, Hook)
+    }
+end
+
+local function RemoveHook(Name)
+    if not IsHooked(Name) then return end
+
+    restorefunction(States.Hooks[Name].Target)
+    States.Hooks[Name] = nil
 end
 
 local Library, ThemeManager, SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/Library.lua"))(),loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/ThemeManager.lua"))(),loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/SaveManager.lua"))()
@@ -215,16 +250,10 @@ WeaponMods:AddToggle("norecoil", {
     Text = "No Recoil",
     Default = false,
     Callback = function(Value)
-        local Camera = _game.Classes.Camera
         if Value then
-            AddConnection(Connections.Gameplay, "NoRecoil", nil)
-
-            _game.OldRecoil = hookfunction(_localplayer.Camera.Recoil, function(...)
-				return
-			end)
-        elseif isfunctionhooked(_game.OldRecoil) then
-			restorefunction(_game.OldRecoil)
-			_game.OldRecoil = nil
+            AddHook("NoRecoil", Classes.Camera.Recoil, function(...) return end, "C")
+        else
+            RemoveHook("NoRecoil")
         end
     end
 })
@@ -458,7 +487,7 @@ local function InputKeys(Keys, Delay)
 end
 
 local function FarJump()
-    InputKeys({"C", "Space"}, 0.02)
+	_localplayer.Character.CrouchOrSlide(true)
 end
 
 MovementTab:AddToggle("autoslidejump", {
