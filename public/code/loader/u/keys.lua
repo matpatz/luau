@@ -36,7 +36,6 @@ return {
     ["NonConvert"] = 0x1D,
     ["Accept"] = 0x1E,
     ["Mode Change"] = 0x1F,
-    ["Space"] = 0x20,
 	[" "] = 0x20,
     ["Page Up"] = 0x21,
     ["Page Down"] = 0x22,
