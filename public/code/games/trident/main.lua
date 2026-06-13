@@ -444,8 +444,8 @@ local KeyList = loadstring(game:HttpGet("https://website-iota-ivory-12.vercel.ap
 local function InputKeys(Keys, Delay)
     Delay = Delay or 0
     for _, v in ipairs(Keys) do
-        if keypress then
-            keypress(KeyList[v])
+        if keytap then
+            keytap(KeyList[v])
         else
             services["vim"]:SendKeyEvent(true, Enum.KeyCode[v], false, game)
             task.wait(0.05)
@@ -458,8 +458,7 @@ local function InputKeys(Keys, Delay)
 end
 
 local function FarJump()
-	local keys = {KeyList["C"], KeyList["Space"]}
-	InputKeys(keys, 0.02)
+    InputKeys({"C", "Space"}, 0.02)
 end
 
 MovementTab:AddToggle("autoslidejump", {
