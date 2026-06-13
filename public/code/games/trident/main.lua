@@ -134,7 +134,7 @@ if States.Values.AreWeBeingRanInAnActor then
 	SetValue(_localplayer, "Character", _game.Classes.Character)
 	SetValue(_localplayer, "IsGrounded", _localplayer.Character.IsGrounded) -- function
 	SetValue(_localplayer, "SetSprintBlocked", _localplayer.Character.SetSprintBlocked) -- function
-	SetValue(_localplauer, "Camera", _localplayer.Camera)
+	SetValue(_localplayer, "Camera", _localplayer.Camera)
 else
 	task.spawn(error("Run via Actor for more functions, thanks!", 2))
 end
