@@ -176,7 +176,7 @@ end
 
 local Library, ThemeManager, SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/Library.lua"))(),loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/ThemeManager.lua"))(),loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/SaveManager.lua"))()
 
-local Options, Toggles = Library.Options
+local Options, Toggles = Library.Options, Library.Toggles
 Library.ForceCheckbox, Library.ShowToggleFrameInKeybinds = false, true
 
 local Window = Library:CreateWindow({
@@ -376,6 +376,8 @@ VehicleEsp:AddToggle("vehicleesp", {
 })
 
 local Crosshair = Tabs.Visuals:AddRightGroupbox("Crosshair")
+
+-- Octagon crosshair (8 arms, 45° apart)
 local CrosshairDrawings = {}
 
 local function DestroyCrosshair()
@@ -383,7 +385,7 @@ local function DestroyCrosshair()
         if D and D.Remove then pcall(D.Remove, D) end
     end
     CrosshairDrawings = {}
-    RemoveConnection("Crosshair")
+    RemoveConnection(Connections.Gameplay, "Crosshair")
 end
 
 local function UpdateCrosshair()
@@ -400,19 +402,19 @@ local function UpdateCrosshair()
             Circle.Radius = Size
         end
     else
-        -- 4 lines: right, down, left, up
-        local Gap     = math.max(4, Size * 0.15)
-        local Length  = math.max(8, Size * 0.35)
-        local Half    = math.max(1, Size * 0.025)
-        local Dirs    = { {1,0}, {0,1}, {-1,0}, {0,-1} }
+        local Gap = math.max(4, Size * 0.15)
+        local Length = math.max(8, Size * 0.35)
+        local Half = math.max(1, Size * 0.025)
 
-        for i, Dir in ipairs(Dirs) do
+        for i = 1, 8 do
             local Quad = CrosshairDrawings[i]
             if not Quad then continue end
 
-            local Dx, Dy = Dir[1], Dir[2]
-            -- perpendicular
-            local Px, Py = -Dy * Half, Dx * Half
+            local Rad = math.rad((i - 1) * 45)
+            local Dx = math.cos(Rad)
+            local Dy = math.sin(Rad)
+            local Px = -Dy * Half
+            local Py = Dx * Half
 
             local Ix = Cx + Dx * Gap
             local Iy = Cy + Dy * Gap
@@ -443,33 +445,30 @@ local function CreateCrosshair()
 
     if Shape == "Circle" then
         local Circle = Drawing.new("Circle")
-        Circle.Visible      = true
-        Circle.Color        = Color
-        Circle.Thickness    = 2
-        Circle.Filled       = false
-        Circle.Radius       = Options.crosshairsize.Value
+        Circle.Visible = true
+        Circle.Color = Color
+        Circle.Thickness = 2
+        Circle.Filled = false
+        Circle.Radius = Options.crosshairsize.Value
         Circle.Transparency = 1
-        Circle.Position     = Vector2.new(0, 0)
+        Circle.Position = Vector2.new(0, 0)
         table.insert(CrosshairDrawings, Circle)
     else
-        -- only 4 quads for a proper +
-        for _ = 1, 4 do
+        for _ = 1, 8 do
             local Quad = Drawing.new("Quad")
-            Quad.Visible      = true
-            Quad.Color        = Color
-            Quad.Filled       = true
+            Quad.Visible = true
+            Quad.Color = Color
+            Quad.Filled = true
             Quad.Transparency = 1
             table.insert(CrosshairDrawings, Quad)
         end
     end
 
-    AddConnection("Crosshair", services["rs"].RenderStepped:Connect(UpdateCrosshair))
+    AddConnection(Connections.Gameplay, "Crosshair", services["rs"].RenderStepped:Connect(UpdateCrosshair))
 end
 
--- Callbacks
-
 Crosshair:AddToggle("crosshairenabled", {
-    Text    = "Enable",
+    Text = "Enable",
     Default = false,
     Callback = function(Value)
         if Value then CreateCrosshair() else DestroyCrosshair() end
@@ -477,28 +476,26 @@ Crosshair:AddToggle("crosshairenabled", {
 })
 
 Crosshair:AddDropdown("crosshairshape", {
-    Values   = {"Circle", "Lines"},
-    Default  = "Circle",
-    Text     = "Shape",
+    Values = {"Circle", "Lines"},
+    Default = "Circle",
+    Text = "Shape",
     Callback = function()
         if Toggles.crosshairenabled.Value then CreateCrosshair() end
     end
 })
 
 Crosshair:AddSlider("crosshairsize", {
-    Text     = "Crosshair Size",
-    Default  = 50,
-    Min      = 10,
-    Max      = 300,
+    Text = "Crosshair Size",
+    Default = 50,
+    Min = 10,
+    Max = 300,
     Rounding = 0,
-    Callback = function()
-        -- size is read live in UpdateCrosshair, no recreate needed
-    end
+    Callback = function() end
 })
 
 Crosshair:AddLabel("Color"):AddColorPicker("crosshaircolor", {
-    Default  = Color3.new(1, 1, 1),
-    Title    = "Crosshair Color",
+    Default = Color3.new(1, 1, 1),
+    Title = "Crosshair Color",
     Callback = function()
         if Toggles.crosshairenabled.Value then ApplyCrosshairStyle() end
     end
@@ -731,6 +728,8 @@ end)
 
 Gui:AddLabel("Menu bind")
 	:AddKeyPicker("MenuKeybind", { Default = "RightShift", NoUI = true, Text = "Menu keybind" })
+
+Library.ToggleKeybind = Options.MenuKeybind
 
 SaveManager:LoadAutoloadConfig()
 SaveManager:IgnoreThemeSettings()
