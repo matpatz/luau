@@ -377,17 +377,107 @@ VehicleEsp:AddToggle("vehicleesp", {
 
 local Crosshair = Tabs.Visuals:AddRightGroupbox("Crosshair")
 
+local CrosshairDrawings = {}
+
+local function DestroyCrosshair()
+    for _, D in pairs(CrosshairDrawings) do
+        if D and D.Remove then pcall(D.Remove, D) end
+    end
+    CrosshairDrawings = {}
+    RemoveConnection("Crosshair")
+end
+
+local function UpdateCrosshair()
+    if #CrosshairDrawings == 0 then return end
+
+    local MousePos = game:GetService("UserInputService"):GetMouseLocation()
+    local Size = Options.crosshairsize.Value
+    local Cx, Cy = MousePos.X, MousePos.Y
+
+    if Options.crosshairshape.Value == "Circle" then
+        local Circle = CrosshairDrawings[1]
+        if Circle then
+            Circle.Position = Vector2.new(Cx, Cy)
+            Circle.Radius = Size
+        end
+    else
+        local Gap = math.max(4, Size * 0.08)
+        local Length = math.max(8, Size * 0.2)
+        local Thickness = math.max(2, Size * 0.04)
+        local Angles = {0, 45, 90, 135, 180, 225, 270, 315}
+
+        for i, Angle in ipairs(Angles) do
+            local Quad = CrosshairDrawings[i]
+            if Quad then
+                local Rad = math.rad(Angle)
+                local DirX = math.cos(Rad)
+                local DirY = math.sin(Rad)
+                local PerpX = -DirY * Thickness
+                local PerpY =  DirX * Thickness
+                local InnerX = Cx + DirX * Gap
+                local InnerY = Cy + DirY * Gap
+                local OuterX = Cx + DirX * (Gap + Length)
+                local OuterY = Cy + DirY * (Gap + Length)
+                Quad.PointA = Vector2.new(InnerX + PerpX, InnerY + PerpY)
+                Quad.PointB = Vector2.new(InnerX - PerpX, InnerY - PerpY)
+                Quad.PointC = Vector2.new(OuterX - PerpX, OuterY - PerpY)
+                Quad.PointD = Vector2.new(OuterX + PerpX, OuterY + PerpY)
+            end
+        end
+    end
+end
+
+local function CreateCrosshair()
+    DestroyCrosshair()
+    if not Toggles.crosshairenabled.Value then return end
+
+    local Shape = Options.crosshairshape.Value
+    local Size = Options.crosshairsize.Value
+
+    if Shape == "Circle" then
+        local Circle = Drawing.new("Circle")
+        Circle.Visible = true
+        Circle.Color = Color3.new(1, 1, 1)
+        Circle.Thickness = 2
+        Circle.Filled = false
+        Circle.Radius = Size
+        Circle.Position = Vector2.new(0, 0)
+        table.insert(CrosshairDrawings, Circle)
+    else
+        for _ = 1, 8 do
+            local Quad = Drawing.new("Quad")
+            Quad.Visible = true
+            Quad.Color = Color3.new(1, 1, 1)
+            Quad.Thickness = 2
+            Quad.Filled = true
+            table.insert(CrosshairDrawings, Quad)
+        end
+    end
+
+    AddConnection("Crosshair", game:GetService("RunService").RenderStepped:Connect(UpdateCrosshair))
+end
+
 Crosshair:AddDropdown("crosshairshape", {
     Values = {"Circle", "Lines"},
     Default = "Circle",
     Text = "Shape",
-    Callback = function(Value) end
+    Callback = function(Value)
+        if Toggles.crosshairenabled.Value then
+            CreateCrosshair()
+        end
+    end
 })
 
 Crosshair:AddToggle("crosshairenabled", {
     Text = "Enable",
     Default = false,
-    Callback = function(Value) end
+    Callback = function(Value)
+        if Value then
+            CreateCrosshair()
+        else
+            DestroyCrosshair()
+        end
+    end
 })
 
 Crosshair:AddSlider("crosshairsize", {
@@ -396,7 +486,21 @@ Crosshair:AddSlider("crosshairsize", {
     Min = 10,
     Max = 300,
     Rounding = 0,
-    Callback = function(Value) end
+    Callback = function(Value)
+        if Toggles.crosshairenabled.Value then
+            CreateCrosshair()
+        end
+    end
+})
+
+Crosshair:AddLabel("Color"):AddColorPicker("crosshaircolor", {
+    Default = Color3.new(1, 1, 1),
+    Title = "Crosshair Color",
+    Callback = function(Value)
+        for _, D in pairs(CrosshairDrawings) do
+            setrenderproperty(D, "Color", Value)
+        end
+    end
 })
 
 local DefaultAmbient = _game.Lighting.DefaultAmbient
