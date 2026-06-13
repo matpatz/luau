@@ -274,13 +274,14 @@ Hitbox:AddSlider("hitboxsize", {
 
 local PlayerEsp = Tabs.Visuals:AddLeftGroupbox("Player Esp")
 
-PlayerEsp:AddToggle("pv", {
+PlayerEsp:AddToggle("playeresp", {
     Text = "Enable",
     Default = false,
     Callback = function(Value) end
 })
 
-PlayerEsp:AddDropdown("ed", {
+PlayerEsp:AddDropdown("playerespsettings", {
+	Multi = true,
     Values = {"Box", "Name", "Held Item", "Tracer", "Health", "Distance", "Chams", "Health Bar", "Team Color"},
     Default = "Distance",
     Callback = function(Value) end
@@ -439,18 +440,18 @@ Terrain:AddToggle("reducewater", {
 
 local MovementTab = Tabboxes.Misc:AddTab("Movement")
 
-local Keys = loadstring(game:HttpGet("https://website-iota-ivory-12.vercel.app/code/loader/u/keys.lua"))()
+local KeyList = loadstring(game:HttpGet("https://website-iota-ivory-12.vercel.app/code/loader/u/keys.lua"))()
 local function InputKeys(Keys, Delay)
     Delay = Delay or 0
     for _, v in ipairs(Keys) do
         if keypress then
-            keypress(Keys[v])
+            keypress(KeyList[v])
         else
             services["vim"]:SendKeyEvent(true, Enum.KeyCode[v], false, game)
             task.wait(0.05)
             services["vim"]:SendKeyEvent(false, Enum.KeyCode[v], false, game)
         end
-        if Delay > 0 then
+        if Delay and Delay > 0 then
             task.wait(Delay)
         end
     end
@@ -595,7 +596,8 @@ Gui:AddButton("Unload Gui", function()
     Library:Unload()
 end)
 
-Gui:AddLabel("Menu bind"):AddKeyPicker("MenuKeybind", { Default = "RightShift", NoUI = true, Text = "Menu keybind" })
+MenuGroup:AddLabel("Menu bind")
+	:AddKeyPicker("MenuKeybind", { Default = "RightShift", NoUI = true, Text = "Menu keybind" })
 
 SaveManager:LoadAutoloadConfig()
 SaveManager:IgnoreThemeSettings()
