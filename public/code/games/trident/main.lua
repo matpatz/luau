@@ -1,3 +1,7 @@
+if not is_parallel() then
+	task.spawn(error("Run in an Actor for more features, thanks!", 2))
+end
+
 local services = loadstring(game:HttpGet(
     "https://website-iota-ivory-12.vercel.app/code/loader/u/vars.lua"
 ))()
@@ -13,19 +17,15 @@ local Connections = {
     Gameplay = {},
 }
 
-local Global = getsenv(services["player"].PlayerScripts.Client.Client)._G) -- Scripts.Client = Actor .Client = LocalScript
+local Global = getsenv(services["player"].PlayerScripts.Client.Client)._G -- Scripts.Client = Actor .Client = LocalScript
 local Next = Global.NEXT or {} -- nil
 local Classes = Global.classes
 
 local Character = Classes.Character
 
-if not is_parallel() then
-	task.spawn(error("Run in an Actor for more features, thanks!", 2))
-end
-
 local States = {
     Runtime = {},
-	Hooks = {}
+	Hooks = {},
 
     Values = {
         LocalPlayer = {
@@ -37,7 +37,7 @@ local States = {
             Camera = Classes.Camera
         },
         Game = {
-			SharedFunctions = Classes.SharedFunctions
+			SharedFunctions = Classes.SharedFunctions,
 			RangedWeaponClient = Classes.RangedWeaponClient,
 				-- Fire
 				-- CreateProjictle -- Bullet Tracer?
@@ -130,7 +130,7 @@ end
 local RandomString = function(Length)
 	local str = {}
 	for i = 1, Length do
-		table.insert(str, string.char(math.random(97, 121)) -- uncap: 97 121 - capitlized: 65 90
+		table.insert(str, string.char(math.random(97, 121))) -- uncap: 97 121 - capitlized: 65 90
 	end
 	return table.concat(str)
 end
