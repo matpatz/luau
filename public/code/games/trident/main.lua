@@ -391,7 +391,7 @@ end
 local function UpdateCrosshair()
     if not Toggles.crosshairenabled.Value or #CrosshairDrawings == 0 then return end
 
-    local MousePos = services["uis"]:GetMouseLocation()
+    local MousePos = services["input"]:GetMouseLocation()
     local Cx, Cy = MousePos.X, MousePos.Y
     local Size = Options.crosshairsize.Value
 
