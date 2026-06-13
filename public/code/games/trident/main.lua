@@ -458,7 +458,7 @@ local function InputKeys(Keys, Delay)
 end
 
 local function FarJump()
-	local keys = {Keys["C"], Keys["Space"]}
+	local keys = {Keys["0x43"], Keys["0x20"]}
 	InputKeys(keys, 0.02)
 end
 
