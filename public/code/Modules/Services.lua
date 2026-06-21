@@ -34,7 +34,6 @@ local ServiceMap = {
     GroupService = "GroupService",
     LocalizationService = "LocalizationService",
     Chat = "Chat",
-    VoiceChatService = "VoiceChatService",
     StarterPack = "StarterPack",
     StarterPlayer = "StarterPlayer",
     MaterialService = "MaterialService",
