@@ -55,9 +55,8 @@ for VariableName, ServiceName in next, ServiceMap do
     )
 end
 
-local Player = Services.Players.LocalPlayer
-
-if Player then
+if getgenv().PlayerHelper then
+    local Player = Services.Players.LocalPlayer
     local Character = Player.Character or Player.CharacterAdded:Wait()
 
     Services.Player = Player
