@@ -56,8 +56,9 @@ for VariableName, ServiceName in next, ServiceMap do
     )
 end
 
-do
-    local Player = Services.Players.LocalPlayer
+local Player = Services.Players.LocalPlayer
+
+if Player then
     local Character = Player.Character or Player.CharacterAdded:Wait()
 
     Services.Player = Player
@@ -66,13 +67,13 @@ do
     Services.HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
     Services.Camera = Services.Workspace.CurrentCamera
     Services.Mouse = Player:GetMouse()
-end
 
-Services.Player.CharacterAdded:Connect(function(Character)
-    Services.Character = Character
-    Services.Humanoid = Character:FindFirstChildOfClass("Humanoid")
-    Services.HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
-end)
+    Player.CharacterAdded:Connect(function(Character)
+        Services.Character = Character
+        Services.Humanoid = Character:FindFirstChildOfClass("Humanoid")
+        Services.HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
+    end)
+end
 
 return setmetatable(Services, {
     __index = function(_, Key)
