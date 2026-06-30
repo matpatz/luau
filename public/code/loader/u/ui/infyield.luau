@@ -1,1999 +1,2153 @@
--- Infinite Yield UI Library (Entire 2000 Lines)
+-- Infinite Yield UI Library - Fully Functional Rewrite
 -- 2026 Compatible
 
 local CoreGuiService = game:GetService("CoreGui")
 local PlayersService = game:GetService("Players")
 local TextService = game:GetService("TextService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 
 local Library = {}
+local Env = getfenv()
 
-function Library:CreateWindow()
-
-    local CurrentVersion = "6.4"
-    local IyAssets = {
-        ["infiniteyield/assets/bindsandplugins.png"] = "rbxassetid://5147695474",
-        ["infiniteyield/assets/close.png"] = "rbxassetid://5054663650",
-        ["infiniteyield/assets/editaliases.png"] = "rbxassetid://5147488658",
-        ["infiniteyield/assets/editkeybinds.png"] = "rbxassetid://129697930",
-        ["infiniteyield/assets/edittheme.png"] = "rbxassetid://4911962991",
-        ["infiniteyield/assets/editwaypoints.png"] = "rbxassetid://5147488592",
-        ["infiniteyield/assets/imgstudiopluginlogo.png"] = "rbxassetid://4113050383",
-        ["infiniteyield/assets/logo.png"] = "rbxassetid://1352543873",
-        ["infiniteyield/assets/minimize.png"] = "rbxassetid://2406617031",
-        ["infiniteyield/assets/pin.png"] = "rbxassetid://6234691350",
-        ["infiniteyield/assets/reference.png"] = "rbxassetid://3523243755",
-        ["infiniteyield/assets/settings.png"] = "rbxassetid://1204397029"
-    }
-    local function GetCustomAsset(asset) return IyAssets[asset] or "" end
-local ScaledHolder = Instance.new("Frame")
-local Scale = Instance.new("UIScale")
-local Holder = Instance.new("Frame")
-local Title = Instance.new("TextLabel")
-local Dark = Instance.new("Frame")
-local Cmdbar = Instance.new("TextBox")
-local CMDsF = Instance.new("ScrollingFrame")
-local CmdListLayout = Instance.new("UIListLayout")
-local SettingsButton = Instance.new("ImageButton")
-local ColorsButton = Instance.new("ImageButton")
-local Settings = Instance.new("Frame")
-local Prefix = Instance.new("TextLabel")
-local PrefixBox = Instance.new("TextBox")
-local Keybinds = Instance.new("TextLabel")
-local StayOpen = Instance.new("TextLabel")
-local Button = Instance.new("Frame")
-local On = Instance.new("TextButton")
-local Positions = Instance.new("TextLabel")
-local EventBind = Instance.new("TextLabel")
-local Plugins = Instance.new("TextLabel")
-local Example = Instance.new("TextButton")
-local Notification = Instance.new("Frame")
-local Title_2 = Instance.new("TextLabel")
-local Text_2 = Instance.new("TextLabel")
-local CloseButton = Instance.new("TextButton")
-local CloseImage = Instance.new("ImageLabel")
-local PinButton = Instance.new("TextButton")
-local PinImage = Instance.new("ImageLabel")
-local Tooltip = Instance.new("Frame")
-local Title_3 = Instance.new("TextLabel")
-local Description = Instance.new("TextLabel")
-local IntroBackground = Instance.new("Frame")
-local Logo = Instance.new("ImageLabel")
-local Credits = Instance.new("TextBox")
-local KeybindsFrame = Instance.new("Frame")
-local Close = Instance.new("TextButton")
-local Add = Instance.new("TextButton")
-local Delete = Instance.new("TextButton")
-local Holder_2 = Instance.new("ScrollingFrame")
-local Example_2 = Instance.new("Frame")
-local Text_3 = Instance.new("TextLabel")
-local Delete_2 = Instance.new("TextButton")
-local KeybindEditor = Instance.new("Frame")
-local Background2 = Instance.new("Frame")
-local Dark_3 = Instance.new("Frame")
-local Directions = Instance.new("TextLabel")
-local BindTo = Instance.new("TextButton")
-local TriggerLabel = Instance.new("TextLabel")
-local BindTriggerSelect = Instance.new("TextButton")
-local Add_2 = Instance.new("TextButton")
-local Toggles = Instance.new("ScrollingFrame")
-local ClickTP = Instance.new("TextLabel")
-local Select = Instance.new("TextButton")
-local ClickDelete = Instance.new("TextLabel")
-local Select_2 = Instance.new("TextButton")
-local Cmdbar_2 = Instance.new("TextBox")
-local Cmdbar_3 = Instance.new("TextBox")
-local CreateToggle = Instance.new("TextLabel")
-local Button_2 = Instance.new("Frame")
-local On_2 = Instance.new("TextButton")
-local Shadow2 = Instance.new("Frame")
-local PopupText_2 = Instance.new("TextLabel")
-local Exit_2 = Instance.new("TextButton")
-local ExitImage_2 = Instance.new("ImageLabel")
-local PositionsFrame = Instance.new("Frame")
-local Close_3 = Instance.new("TextButton")
-local Delete_5 = Instance.new("TextButton")
-local Part = Instance.new("TextButton")
-local Holder_4 = Instance.new("ScrollingFrame")
-local Example_4 = Instance.new("Frame")
-local Text_5 = Instance.new("TextLabel")
-local Delete_6 = Instance.new("TextButton")
-local TP = Instance.new("TextButton")
-local AliasesFrame = Instance.new("Frame")
-local Close_2 = Instance.new("TextButton")
-local Delete_3 = Instance.new("TextButton")
-local Holder_3 = Instance.new("ScrollingFrame")
-local Example_3 = Instance.new("Frame")
-local Text_4 = Instance.new("TextLabel")
-local Delete_4 = Instance.new("TextButton")
-local Aliases = Instance.new("TextLabel")
-local PluginsFrame = Instance.new("Frame")
-local Close_4 = Instance.new("TextButton")
-local Add_3 = Instance.new("TextButton")
-local Holder_5 = Instance.new("ScrollingFrame")
-local Example_5 = Instance.new("Frame")
-local Text_6 = Instance.new("TextLabel")
-local Delete_7 = Instance.new("TextButton")
-local PluginEditor = Instance.new("Frame")
-local Background3 = Instance.new("Frame")
-local Dark_2 = Instance.new("Frame")
-local Img = Instance.new("ImageButton")
-local AddPlugin = Instance.new("TextButton")
-local FileName = Instance.new("TextBox")
-local About = Instance.new("TextLabel")
-local Directions_2 = Instance.new("TextLabel")
-local Shadow3 = Instance.new("Frame")
-local PopupText_3 = Instance.new("TextLabel")
-local Exit_3 = Instance.new("TextButton")
-local ExitImage_3 = Instance.new("ImageLabel")
-local AliasHint = Instance.new("TextLabel")
-local PluginsHint = Instance.new("TextLabel")
-local PositionsHint = Instance.new("TextLabel")
-local ToPartFrame = Instance.new("Frame")
-local Background4 = Instance.new("Frame")
-local ChoosePart = Instance.new("TextButton")
-local CopyPath = Instance.new("TextButton")
-local Directions_3 = Instance.new("TextLabel")
-local Path = Instance.new("TextLabel")
-local Shadow4 = Instance.new("Frame")
-local PopupText_5 = Instance.new("TextLabel")
-local Exit_4 = Instance.new("TextButton")
-local ExitImage_5 = Instance.new("ImageLabel")
-local Logs = Instance.new("Frame")
-local Shadow = Instance.new("Frame")
-local Hide = Instance.new("TextButton")
-local ImageLabel = Instance.new("ImageLabel")
-local PopupText = Instance.new("TextLabel")
-local Exit = Instance.new("TextButton")
-local ImageLabel_2 = Instance.new("ImageLabel")
-local Background = Instance.new("Frame")
-local Chat = Instance.new("Frame")
-local Clear = Instance.new("TextButton")
-local SaveChatlogs = Instance.new("TextButton")
-local Toggle = Instance.new("TextButton")
-local Scroll2 = Instance.new("ScrollingFrame")
-local Join = Instance.new("Frame")
-local Toggle_2 = Instance.new("TextButton")
-local Clear_2 = Instance.new("TextButton")
-local Scroll3 = Instance.new("ScrollingFrame")
-local ListLayout = Instance.new("UIListLayout",Scroll3)
-local SelectChat = Instance.new("TextButton")
-local SelectJoin = Instance.new("TextButton")
+-- Theme system
+local Theme = {
+    Shade1 = Color3.fromRGB(36, 36, 37),
+    Shade2 = Color3.fromRGB(46, 46, 47),
+    Shade3 = Color3.fromRGB(78, 78, 79),
+    Text1 = Color3.new(1, 1, 1),
+    Text2 = Color3.new(0, 0, 0),
+    Accent = Color3.fromRGB(150, 150, 151),
+    Scroll = Color3.fromRGB(78, 78, 79),
+}
 
 local function RandomString()
-	local Length = math.random(10, 20)
-	local array = {}
-	for Index = 1, Length do
-		array[Index] = string.char(math.random(32, 126))
-	end
-	return table.concat(array)
+    local Length = math.random(10, 20)
+    local array = {}
+    for Index = 1, Length do
+        array[Index] = string.char(math.random(32, 126))
+    end
+    return table.concat(array)
 end
 
+local IyAssets = {
+    ["bindsandplugins"] = "rbxassetid://5147695474",
+    ["close"] = "rbxassetid://5054663650",
+    ["editaliases"] = "rbxassetid://5147488658",
+    ["editkeybinds"] = "rbxassetid://129697930",
+    ["edittheme"] = "rbxassetid://4911962991",
+    ["editwaypoints"] = "rbxassetid://5147488592",
+    ["imgstudiopluginlogo"] = "rbxassetid://4113050383",
+    ["logo"] = "rbxassetid://1352543873",
+    ["minimize"] = "rbxassetid://2406617031",
+    ["pin"] = "rbxassetid://6234691350",
+    ["reference"] = "rbxassetid://3523243755",
+    ["settings"] = "rbxassetid://1204397029",
+}
+local function GetAsset(name) return IyAssets[name] or "" end
 
-    local ParentGui
-    if CoreGuiService:FindFirstChild("RobloxGui") then
-        ParentGui = CoreGuiService.RobloxGui
-    else
-        ParentGui = CoreGuiService
+function Library:CreateWindow(options)
+    options = options or {}
+    local CurrentVersion = options.Version or "6.4"
+    local WindowTitle = options.Title or ("Infinite Yield FE v" .. CurrentVersion)
+    local Prefix = options.Prefix or ";"
+
+    -- State
+    local Commands = {}
+    local Aliases = {}
+    local Keybinds = {}
+    local Waypoints = {}
+    local Plugins = {}
+    local EventBinds = {}
+    local StayOpen = false
+    local SettingsOpen = false
+    local Minimized = false
+    local PinnedNotification = nil
+    local CommandHistory = {}
+    local HistoryIndex = 0
+    local NotificationQueue = {}
+    local CurrentNotification = nil
+
+    -- Callbacks
+    local OnCommandRun = options.OnCommandRun or function(cmd, args) end
+    local OnPrefixChange = options.OnPrefixChange or function(new) end
+
+    -- Emoji for title
+    local function GetTitleEmoji()
+        local md = os.date("%m %d")
+        local yr = tonumber(os.date("%Y"))
+        local emojiMap = {
+            ["01 01"] = "🎆",
+            ["10 31"] = "🎃",
+            ["12 25"] = "🎄",
+        }
+        -- Easter calculation
+        local A = math.floor(yr / 100)
+        local B = math.floor((13 + 8 * A) / 25)
+        local C = (15 - B + A - math.floor(A / 4)) % 30
+        local D = (4 + A - math.floor(A / 4)) % 7
+        local E = (19 * (yr % 19) + C) % 30
+        local F = (2 * (yr % 4) + 4 * (yr % 7) + 6 * E + D) % 7
+        local G = (22 + E + F)
+        local easterDate
+        if E == 29 and F == 6 then
+            easterDate = "04 19"
+        elseif E == 28 and F == 6 then
+            easterDate = "04 18"
+        elseif 31 < G then
+            easterDate = ("04 %02d"):format(G - 31)
+        else
+            easterDate = ("03 %02d"):format(G)
+        end
+        emojiMap[easterDate] = "🥚"
+        return emojiMap[md]
     end
 
+    local emoji = GetTitleEmoji()
+    local DisplayTitle = emoji and ("%s %s %s"):format(emoji, WindowTitle, emoji) or WindowTitle
+
+    -- GUI Setup
+    local ParentGui = CoreGuiService:FindFirstChild("RobloxGui") or CoreGuiService
     local ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = RandomString()
     ScreenGui.ResetOnSpawn = false
     ScreenGui.DisplayOrder = 2147483647
     ScreenGui.Parent = ParentGui
-    local Parent = ScreenGui
-Shade1 = {}
-Shade2 = {}
-Shade3 = {}
-Text1 = {}
-Text2 = {}
-Scroll = {}
 
-ScaledHolder.Name = RandomString()
-ScaledHolder.Size = UDim2.fromScale(1, 1)
-ScaledHolder.BackgroundTransparency = 1
-ScaledHolder.Parent = Parent
-Scale.Name = RandomString()
-
-Holder.Name = RandomString()
-Holder.Parent = ScaledHolder
-Holder.Active = true
-Holder.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Holder.BorderSizePixel = 0
-Holder.Position = UDim2.new(1, -250, 1, -220)
-Holder.Size = UDim2.new(0, 250, 0, 220)
-Holder.ZIndex = 10
-table.insert(Shade2,Holder)
-
-Title.Name = "Title"
-Title.Parent = Holder
-Title.Active = true
-Title.BackgroundColor3 = Color3.fromRGB(36,36,37)
-Title.BorderSizePixel = 0
-Title.Size = UDim2.new(0, 250, 0, 20)
-Title.Font = Enum.Font.SourceSans
-Title.TextSize = 18
-Title.Text = "Infinite Yield FE v" .. CurrentVersion
-
-do
-	local emoji = ({
-		["01 01"] = "🎆",
-		[(function(Year)
-			local A = math.floor(Year/100)
-			local B = math.floor((13+8*A)/25)
-			local C = (15-B+A-math.floor(A/4))%30
-			local D = (4+A-math.floor(A/4))%7
-			local E = (19*(Year%19)+C)%30
-			local F = (2*(Year%4)+4*(Year%7)+6*E+D)%7
-			local G = (22+E+F)
-			if E == 29 and F == 6 then
-				return "04 19"
-			elseif E == 28 and F == 6 then
-				return "04 18"
-			elseif 31 < G then
-				return ("04 %02d"):format(G-31)
-			end
-			return ("03 %02d"):format(G)
-		end)(tonumber(os.date"%Y"))] = "🥚",
-		["10 31"] = "🎃",
-		["12 25"] = "🎄"
-	})[os.date("%m %d")]
-	if emoji then
-		Title.Text = ("%s %s %s"):format(emoji, Title.Text, emoji)
-	end
-end
-
-Title.TextColor3 = Color3.new(1, 1, 1)
-Title.ZIndex = 10
-table.insert(Shade1,Title)
-table.insert(Text1,Title)
-
-Dark.Name = "Dark"
-Dark.Parent = Holder
-Dark.Active = true
-Dark.BackgroundColor3 = Color3.fromRGB(36, 36, 37)
-Dark.BorderSizePixel = 0
-Dark.Position = UDim2.new(0, 0, 0, 45)
-Dark.Size = UDim2.new(0, 250, 0, 175)
-Dark.ZIndex = 10
-table.insert(Shade1,Dark)
-
-Cmdbar.Name = "Cmdbar"
-Cmdbar.Parent = Holder
-Cmdbar.BackgroundTransparency = 1
-Cmdbar.BorderSizePixel = 0
-Cmdbar.Position = UDim2.new(0, 5, 0, 20)
-Cmdbar.Size = UDim2.new(0, 240, 0, 25)
-Cmdbar.Font = Enum.Font.SourceSans
-Cmdbar.TextSize = 18
-Cmdbar.TextXAlignment = Enum.TextXAlignment.Left
-Cmdbar.TextColor3 = Color3.new(1, 1, 1)
-Cmdbar.Text = ""
-Cmdbar.ZIndex = 10
-Cmdbar.PlaceholderText = "Command Bar"
-
-CMDsF.Name = "CMDs"
-CMDsF.Parent = Holder
-CMDsF.BackgroundTransparency = 1
-CMDsF.BorderSizePixel = 0
-CMDsF.Position = UDim2.new(0, 5, 0, 45)
-CMDsF.Size = UDim2.new(0, 245, 0, 175)
-CMDsF.ScrollBarImageColor3 = Color3.fromRGB(78,78,79)
-CMDsF.BottomImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-CMDsF.CanvasSize = UDim2.new(0, 0, 0, 0)
-CMDsF.MidImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-CMDsF.ScrollBarThickness = 8
-CMDsF.TopImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-CMDsF.VerticalScrollBarInset = 'Always'
-CMDsF.ZIndex = 10
-table.insert(Scroll,CMDsF)
-
-CmdListLayout.Parent = CMDsF
-
-SettingsButton.Name = "SettingsButton"
-SettingsButton.Parent = Holder
-SettingsButton.BackgroundTransparency = 1
-SettingsButton.Position = UDim2.new(0, 230, 0, 0)
-SettingsButton.Size = UDim2.new(0, 20, 0, 20)
-SettingsButton.Image = GetCustomAsset("infiniteyield/assets/settings.png")
-SettingsButton.ZIndex = 10
-
-local ReferenceButton = Instance.new("ImageButton")
-ReferenceButton.Name = "ReferenceButton"
-ReferenceButton.Parent = Holder
-ReferenceButton.BackgroundTransparency = 1
-ReferenceButton.Position = UDim2.new(0, 212, 0, 2)
-ReferenceButton.Size = UDim2.new(0, 16, 0, 16)
-ReferenceButton.Image = GetCustomAsset("infiniteyield/assets/reference.png")
-ReferenceButton.ZIndex = 10
-
-Settings.Name = "Settings"
-Settings.Parent = Holder
-Settings.Active = true
-Settings.BackgroundColor3 = Color3.fromRGB(36, 36, 37)
-Settings.BorderSizePixel = 0
-Settings.Position = UDim2.new(0, 0, 0, 220)
-Settings.Size = UDim2.new(0, 250, 0, 175)
-Settings.ZIndex = 10
-table.insert(Shade1,Settings)
-
-local SettingsHolder = Instance.new("ScrollingFrame")
-SettingsHolder.Name = "Holder"
-SettingsHolder.Parent = Settings
-SettingsHolder.BackgroundTransparency = 1
-SettingsHolder.BorderSizePixel = 0
-SettingsHolder.Size = UDim2.new(1,0,1,0)
-SettingsHolder.ScrollBarImageColor3 = Color3.fromRGB(78,78,79)
-SettingsHolder.BottomImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-SettingsHolder.CanvasSize = UDim2.new(0, 0, 0, 235)
-SettingsHolder.MidImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-SettingsHolder.ScrollBarThickness = 8
-SettingsHolder.TopImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-SettingsHolder.VerticalScrollBarInset = 'Always'
-SettingsHolder.ZIndex = 10
-table.insert(Scroll,SettingsHolder)
-
-Prefix.Name = "Prefix"
-Prefix.Parent = SettingsHolder
-Prefix.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Prefix.BorderSizePixel = 0
-Prefix.BackgroundTransparency = 1
-Prefix.Position = UDim2.new(0, 5, 0, 5)
-Prefix.Size = UDim2.new(1, -10, 0, 20)
-Prefix.Font = Enum.Font.SourceSans
-Prefix.TextSize = 14
-Prefix.Text = "Prefix"
-Prefix.TextColor3 = Color3.new(1, 1, 1)
-Prefix.TextXAlignment = Enum.TextXAlignment.Left
-Prefix.ZIndex = 10
-table.insert(Shade2,Prefix)
-table.insert(Text1,Prefix)
-
-PrefixBox.Name = "PrefixBox"
-PrefixBox.Parent = Prefix
-PrefixBox.BackgroundColor3 = Color3.fromRGB(78, 78, 79)
-PrefixBox.BorderSizePixel = 0
-PrefixBox.Position = UDim2.new(1, -20, 0, 0)
-PrefixBox.Size = UDim2.new(0, 20, 0, 20)
-PrefixBox.Font = Enum.Font.SourceSansBold
-PrefixBox.TextSize = 14
-PrefixBox.Text = ''
-PrefixBox.TextColor3 = Color3.new(0, 0, 0)
-PrefixBox.ZIndex = 10
-table.insert(Shade3,PrefixBox)
-table.insert(Text2,PrefixBox)
-
-function makeSettingsButton(name,iconID,off)
-	local button = Instance.new("TextButton")
-	button.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-	button.BorderSizePixel = 0
-	button.Position = UDim2.new(0,0,0,0)
-	button.Size = UDim2.new(1,0,0,25)
-	button.Text = ""
-	button.ZIndex = 10
-	local icon = Instance.new("ImageLabel")
-	icon.Name = "Icon"
-	icon.Parent = button
-	icon.Position = UDim2.new(0,5,0,5)
-	icon.Size = UDim2.new(0,16,0,16)
-	icon.BackgroundTransparency = 1
-	icon.Image = iconID
-	icon.ZIndex = 10
-	if off then
-		icon.ScaleType = Enum.ScaleType.Crop
-		icon.ImageRectSize = Vector2.new(16,16)
-		icon.ImageRectOffset = Vector2.new(off,0)
-	end
-	local label = Instance.new("TextLabel")
-	label.Name = "ButtonLabel"
-	label.Parent = button
-	label.BackgroundTransparency = 1
-	label.Text = name
-	label.Position = UDim2.new(0,28,0,0)
-	label.Size = UDim2.new(1,-28,1,0)
-	label.Font = Enum.Font.SourceSans
-	label.TextColor3 = Color3.new(1, 1, 1)
-	label.TextSize = 14
-	label.ZIndex = 10
-	label.TextXAlignment = Enum.TextXAlignment.Left
-	table.insert(Shade2,button)
-	table.insert(Text1,label)
-	return button
-end
-
-ColorsButton = makeSettingsButton("Edit Theme",GetCustomAsset("infiniteyield/assets/edittheme.png"))
-ColorsButton.Position = UDim2.new(0, 5, 0, 55)
-ColorsButton.Size = UDim2.new(1, -10, 0, 25)
-ColorsButton.Name = "Colors"
-ColorsButton.Parent = SettingsHolder
-
-Keybinds = makeSettingsButton("Edit Keybinds",GetCustomAsset("infiniteyield/assets/editkeybinds.png"))
-Keybinds.Position = UDim2.new(0, 5, 0, 85)
-Keybinds.Size = UDim2.new(1, -10, 0, 25)
-Keybinds.Name = "Keybinds"
-Keybinds.Parent = SettingsHolder
-
-Aliases = makeSettingsButton("Edit Aliases",GetCustomAsset("infiniteyield/assets/editaliases.png"))
-Aliases.Position = UDim2.new(0, 5, 0, 115)
-Aliases.Size = UDim2.new(1, -10, 0, 25)
-Aliases.Name = "Aliases"
-Aliases.Parent = SettingsHolder
-
-StayOpen.Name = "StayOpen"
-StayOpen.Parent = SettingsHolder
-StayOpen.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-StayOpen.BorderSizePixel = 0
-StayOpen.BackgroundTransparency = 1
-StayOpen.Position = UDim2.new(0, 5, 0, 30)
-StayOpen.Size = UDim2.new(1, -10, 0, 20)
-StayOpen.Font = Enum.Font.SourceSans
-StayOpen.TextSize = 14
-StayOpen.Text = "Keep Menu Open"
-StayOpen.TextColor3 = Color3.new(1, 1, 1)
-StayOpen.TextXAlignment = Enum.TextXAlignment.Left
-StayOpen.ZIndex = 10
-table.insert(Shade2,StayOpen)
-table.insert(Text1,StayOpen)
-
-Button.Name = "Button"
-Button.Parent = StayOpen
-Button.BackgroundColor3 = Color3.fromRGB(78, 78, 79)
-Button.BorderSizePixel = 0
-Button.Position = UDim2.new(1, -20, 0, 0)
-Button.Size = UDim2.new(0, 20, 0, 20)
-Button.ZIndex = 10
-table.insert(Shade3,Button)
-
-On.Name = "On"
-On.Parent = Button
-On.BackgroundColor3 = Color3.fromRGB(150, 150, 151)
-On.BackgroundTransparency = 1
-On.BorderSizePixel = 0
-On.Position = UDim2.new(0, 2, 0, 2)
-On.Size = UDim2.new(0, 16, 0, 16)
-On.Font = Enum.Font.SourceSans
-On.FontSize = Enum.FontSize.Size14
-On.Text = ""
-On.TextColor3 = Color3.new(0, 0, 0)
-On.ZIndex = 10
-
-Positions = makeSettingsButton("Edit/Goto Waypoints",GetCustomAsset("infiniteyield/assets/editwaypoints.png"))
-Positions.Position = UDim2.new(0, 5, 0, 145)
-Positions.Size = UDim2.new(1, -10, 0, 25)
-Positions.Name = "Waypoints"
-Positions.Parent = SettingsHolder
-
-EventBind = makeSettingsButton("Edit Event Binds",GetCustomAsset("infiniteyield/assets/bindsandplugins.png"),759)
-EventBind.Position = UDim2.new(0, 5, 0, 205)
-EventBind.Size = UDim2.new(1, -10, 0, 25)
-EventBind.Name = "EventBinds"
-EventBind.Parent = SettingsHolder
-
-Plugins = makeSettingsButton("Manage Plugins",GetCustomAsset("infiniteyield/assets/bindsandplugins.png"),743)
-Plugins.Position = UDim2.new(0, 5, 0, 175)
-Plugins.Size = UDim2.new(1, -10, 0, 25)
-Plugins.Name = "Plugins"
-Plugins.Parent = SettingsHolder
-
-Example.Name = "Example"
-Example.Parent = Holder
-Example.BackgroundTransparency = 1
-Example.BorderSizePixel = 0
-Example.Size = UDim2.new(0, 190, 0, 20)
-Example.Visible = false
-Example.Font = Enum.Font.SourceSans
-Example.TextSize = 18
-Example.Text = "Example"
-Example.TextColor3 = Color3.new(1, 1, 1)
-Example.TextXAlignment = Enum.TextXAlignment.Left
-Example.ZIndex = 10
-table.insert(Text1,Example)
-
-Notification.Name = RandomString()
-Notification.Parent = ScaledHolder
-Notification.BackgroundColor3 = Color3.fromRGB(36, 36, 37)
-Notification.BorderSizePixel = 0
-Notification.Position = UDim2.new(1, -500, 1, 20)
-Notification.Size = UDim2.new(0, 250, 0, 100)
-Notification.ZIndex = 10
-table.insert(Shade1,Notification)
-
-Title_2.Name = "Title"
-Title_2.Parent = Notification
-Title_2.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Title_2.BorderSizePixel = 0
-Title_2.Size = UDim2.new(0, 250, 0, 20)
-Title_2.Font = Enum.Font.SourceSans
-Title_2.TextSize = 14
-Title_2.Text = "Notification Title"
-Title_2.TextColor3 = Color3.new(1, 1, 1)
-Title_2.ZIndex = 10
-table.insert(Shade2,Title_2)
-table.insert(Text1,Title_2)
-
-Text_2.Name = "Text"
-Text_2.Parent = Notification
-Text_2.BackgroundTransparency = 1
-Text_2.BorderSizePixel = 0
-Text_2.Position = UDim2.new(0, 5, 0, 25)
-Text_2.Size = UDim2.new(0, 240, 0, 75)
-Text_2.Font = Enum.Font.SourceSans
-Text_2.TextSize = 16
-Text_2.Text = "Notification Text"
-Text_2.TextColor3 = Color3.new(1, 1, 1)
-Text_2.TextWrapped = true
-Text_2.ZIndex = 10
-table.insert(Text1,Text_2)
-
-CloseButton.Name = "CloseButton"
-CloseButton.Parent = Notification
-CloseButton.BackgroundTransparency = 1
-CloseButton.Position = UDim2.new(1, -20, 0, 0)
-CloseButton.Size = UDim2.new(0, 20, 0, 20)
-CloseButton.Text = ""
-CloseButton.ZIndex = 10
-
-CloseImage.Parent = CloseButton
-CloseImage.BackgroundColor3 = Color3.new(1, 1, 1)
-CloseImage.BackgroundTransparency = 1
-CloseImage.Position = UDim2.new(0, 5, 0, 5)
-CloseImage.Size = UDim2.new(0, 10, 0, 10)
-CloseImage.Image = GetCustomAsset("infiniteyield/assets/close.png")
-CloseImage.ZIndex = 10
-
-PinButton.Name = "PinButton"
-PinButton.Parent = Notification
-PinButton.BackgroundTransparency = 1
-PinButton.Size = UDim2.new(0, 20, 0, 20)
-PinButton.ZIndex = 10
-PinButton.Text = ""
-
-PinImage.Parent = PinButton
-PinImage.BackgroundColor3 = Color3.new(1, 1, 1)
-PinImage.BackgroundTransparency = 1
-PinImage.Position = UDim2.new(0, 3, 0, 3)
-PinImage.Size = UDim2.new(0, 14, 0, 14)
-PinImage.ZIndex = 10
-PinImage.Image = GetCustomAsset("infiniteyield/assets/pin.png")
-
-Tooltip.Name = RandomString()
-Tooltip.Parent = ScaledHolder
-Tooltip.Active = true
-Tooltip.BackgroundColor3 = Color3.fromRGB(36, 36, 37)
-Tooltip.BackgroundTransparency = 0.1
-Tooltip.BorderSizePixel = 0
-Tooltip.Size = UDim2.new(0, 200, 0, 96)
-Tooltip.Visible = false
-Tooltip.ZIndex = 10
-table.insert(Shade1,Tooltip)
-
-Title_3.Name = "Title"
-Title_3.Parent = Tooltip
-Title_3.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Title_3.BackgroundTransparency = 0.1
-Title_3.BorderSizePixel = 0
-Title_3.Size = UDim2.new(0, 200, 0, 20)
-Title_3.Font = Enum.Font.SourceSans
-Title_3.TextSize = 14
-Title_3.Text = ""
-Title_3.TextColor3 = Color3.new(1, 1, 1)
-Title_3.TextTransparency = 0.1
-Title_3.ZIndex = 10
-table.insert(Shade2,Title_3)
-table.insert(Text1,Title_3)
-
-Description.Name = "Description"
-Description.Parent = Tooltip
-Description.BackgroundTransparency = 1
-Description.BorderSizePixel = 0
-Description.Size = UDim2.new(0,180,0,72)
-Description.Position = UDim2.new(0,10,0,18)
-Description.Font = Enum.Font.SourceSans
-Description.TextSize = 16
-Description.Text = ""
-Description.TextColor3 = Color3.new(1, 1, 1)
-Description.TextTransparency = 0.1
-Description.TextWrapped = true
-Description.ZIndex = 10
-table.insert(Text1,Description)
-
-IntroBackground.Name = "IntroBackground"
-IntroBackground.Parent = Holder
-IntroBackground.Active = true
-IntroBackground.BackgroundColor3 = Color3.fromRGB(36, 36, 37)
-IntroBackground.BorderSizePixel = 0
-IntroBackground.Position = UDim2.new(0, 0, 0, 45)
-IntroBackground.Size = UDim2.new(0, 250, 0, 175)
-IntroBackground.ZIndex = 10
-
-Logo.Name = "Logo"
-Logo.Parent = Holder
-Logo.BackgroundTransparency = 1
-Logo.BorderSizePixel = 0
-Logo.Position = UDim2.new(0, 125, 0, 127)
-Logo.Size = UDim2.new(0, 10, 0, 10)
-Logo.Image = GetCustomAsset("infiniteyield/assets/logo.png")
-Logo.ImageTransparency = 0
-Logo.ZIndex = 10
-
-Credits.Name = "Credits"
-Credits.Parent = Holder
-Credits.BackgroundTransparency = 1
-Credits.BorderSizePixel = 0
-Credits.Position = UDim2.new(0, 0, 0.9, 30)
-Credits.Size = UDim2.new(0, 250, 0, 20)
-Credits.Font = Enum.Font.SourceSansLight
-Credits.FontSize = Enum.FontSize.Size14
-Credits.Text = "Edge // Zwolf // Moon // Toon // Peyton // ATP"
-Credits.TextColor3 = Color3.new(1, 1, 1)
-Credits.ZIndex = 10
-
-KeybindsFrame.Name = "KeybindsFrame"
-KeybindsFrame.Parent = Settings
-KeybindsFrame.Active = true
-KeybindsFrame.BackgroundColor3 = Color3.fromRGB(36, 36, 37)
-KeybindsFrame.BorderSizePixel = 0
-KeybindsFrame.Position = UDim2.new(0, 0, 0, 175)
-KeybindsFrame.Size = UDim2.new(0, 250, 0, 175)
-KeybindsFrame.ZIndex = 10
-table.insert(Shade1,KeybindsFrame)
-
-Close.Name = "Close"
-Close.Parent = KeybindsFrame
-Close.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Close.BorderSizePixel = 0
-Close.Position = UDim2.new(0, 205, 0, 150)
-Close.Size = UDim2.new(0, 40, 0, 20)
-Close.Font = Enum.Font.SourceSans
-Close.TextSize = 14
-Close.Text = "Close"
-Close.TextColor3 = Color3.new(1, 1, 1)
-Close.ZIndex = 10
-table.insert(Shade2,Close)
-table.insert(Text1,Close)
-
-Add.Name = "Add"
-Add.Parent = KeybindsFrame
-Add.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Add.BorderSizePixel = 0
-Add.Position = UDim2.new(0, 5, 0, 150)
-Add.Size = UDim2.new(0, 40, 0, 20)
-Add.Font = Enum.Font.SourceSans
-Add.TextSize = 14
-Add.Text = "Add"
-Add.TextColor3 = Color3.new(1, 1, 1)
-Add.ZIndex = 10
-table.insert(Shade2,Add)
-table.insert(Text1,Add)
-
-Delete.Name = "Delete"
-Delete.Parent = KeybindsFrame
-Delete.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Delete.BorderSizePixel = 0
-Delete.Position = UDim2.new(0, 50, 0, 150)
-Delete.Size = UDim2.new(0, 40, 0, 20)
-Delete.Font = Enum.Font.SourceSans
-Delete.TextSize = 14
-Delete.Text = "Clear"
-Delete.TextColor3 = Color3.new(1, 1, 1)
-Delete.ZIndex = 10
-table.insert(Shade2,Delete)
-table.insert(Text1,Delete)
-
-Holder_2.Name = "Holder"
-Holder_2.Parent = KeybindsFrame
-Holder_2.BackgroundTransparency = 1
-Holder_2.BorderSizePixel = 0
-Holder_2.Position = UDim2.new(0, 0, 0, 0)
-Holder_2.Size = UDim2.new(0, 250, 0, 145)
-Holder_2.ScrollBarImageColor3 = Color3.fromRGB(78,78,79)
-Holder_2.BottomImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-Holder_2.CanvasSize = UDim2.new(0, 0, 0, 0)
-Holder_2.MidImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-Holder_2.ScrollBarThickness = 0
-Holder_2.TopImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-Holder_2.VerticalScrollBarInset = 'Always'
-Holder_2.ZIndex = 10
-
-Example_2.Name = "Example"
-Example_2.Parent = KeybindsFrame
-Example_2.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Example_2.BorderSizePixel = 0
-Example_2.Size = UDim2.new(0, 10, 0, 20)
-Example_2.Visible = false
-Example_2.ZIndex = 10
-table.insert(Shade2,Example_2)
-
-Text_3.Name = "Text"
-Text_3.Parent = Example_2
-Text_3.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Text_3.BorderSizePixel = 0
-Text_3.Position = UDim2.new(0, 10, 0, 0)
-Text_3.Size = UDim2.new(0, 240, 0, 20)
-Text_3.Font = Enum.Font.SourceSans
-Text_3.TextSize = 14
-Text_3.Text = "nom"
-Text_3.TextColor3 = Color3.new(1, 1, 1)
-Text_3.TextXAlignment = Enum.TextXAlignment.Left
-Text_3.ZIndex = 10
-table.insert(Shade2,Text_3)
-table.insert(Text1,Text_3)
-
-Delete_2.Name = "Delete"
-Delete_2.Parent = Text_3
-Delete_2.BackgroundColor3 = Color3.fromRGB(78, 78, 79)
-Delete_2.BorderSizePixel = 0
-Delete_2.Position = UDim2.new(0, 200, 0, 0)
-Delete_2.Size = UDim2.new(0, 40, 0, 20)
-Delete_2.Font = Enum.Font.SourceSans
-Delete_2.TextSize = 14
-Delete_2.Text = "Delete"
-Delete_2.TextColor3 = Color3.new(0, 0, 0)
-Delete_2.ZIndex = 10
-table.insert(Shade3,Delete_2)
-table.insert(Text2,Delete_2)
-
-KeybindEditor.Name = RandomString()
-KeybindEditor.Parent = ScaledHolder
-KeybindEditor.Active = true
-KeybindEditor.BackgroundTransparency = 1
-KeybindEditor.Position = UDim2.new(0.5, -180, 0, -500)
-KeybindEditor.Size = UDim2.new(0, 360, 0, 20)
-KeybindEditor.ZIndex = 10
-
-Background2.Name = "Background"
-Background2.Parent = KeybindEditor
-Background2.Active = true
-Background2.BackgroundColor3 = Color3.fromRGB(36, 36, 37)
-Background2.BorderSizePixel = 0
-Background2.Position = UDim2.new(0, 0, 0, 20)
-Background2.Size = UDim2.new(0, 360, 0, 185)
-Background2.ZIndex = 10
-table.insert(Shade1,Background2)
-
-Dark_3.Name = "Dark"
-Dark_3.Parent = Background2
-Dark_3.Active = true
-Dark_3.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Dark_3.BorderSizePixel = 0
-Dark_3.Position = UDim2.new(0, 135, 0, 0)
-Dark_3.Size = UDim2.new(0, 2, 0, 185)
-Dark_3.ZIndex = 10
-table.insert(Shade2,Dark_3)
-
-Directions.Name = "Directions"
-Directions.Parent = Background2
-Directions.BackgroundTransparency = 1
-Directions.BorderSizePixel = 0
-Directions.Position = UDim2.new(0, 10, 0, 15)
-Directions.Size = UDim2.new(0, 115, 0, 90)
-Directions.ZIndex = 10
-Directions.Font = Enum.Font.SourceSans
-Directions.Text = "Click the button below and press a key/mouse button. Then select what you want to bind it to."
-Directions.TextColor3 = Color3.fromRGB(255, 255, 255)
-Directions.TextSize = 14.000
-Directions.TextWrapped = true
-Directions.TextYAlignment = Enum.TextYAlignment.Top
-table.insert(Text1,Directions)
-
-BindTo.Name = "BindTo"
-BindTo.Parent = Background2
-BindTo.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-BindTo.BorderSizePixel = 0
-BindTo.Position = UDim2.new(0, 10, 0, 95)
-BindTo.Size = UDim2.new(0, 115, 0, 50)
-BindTo.ZIndex = 10
-BindTo.Font = Enum.Font.SourceSans
-BindTo.Text = "Click to bind"
-BindTo.TextColor3 = Color3.fromRGB(255, 255, 255)
-BindTo.TextSize = 16.000
-table.insert(Shade2,BindTo)
-table.insert(Text1,BindTo)
-
-TriggerLabel.Name = "TriggerLabel"
-TriggerLabel.Parent = Background2
-TriggerLabel.BackgroundTransparency = 1
-TriggerLabel.Position = UDim2.new(0, 10, 0, 155)
-TriggerLabel.Size = UDim2.new(0, 45, 0, 20)
-TriggerLabel.ZIndex = 10
-TriggerLabel.Font = Enum.Font.SourceSans
-TriggerLabel.Text = "Trigger:"
-TriggerLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TriggerLabel.TextSize = 14.000
-TriggerLabel.TextXAlignment = Enum.TextXAlignment.Left
-table.insert(Text1,TriggerLabel)
-
-BindTriggerSelect.Name = "BindTo"
-BindTriggerSelect.Parent = Background2
-BindTriggerSelect.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-BindTriggerSelect.BorderSizePixel = 0
-BindTriggerSelect.Position = UDim2.new(0, 60, 0, 155)
-BindTriggerSelect.Size = UDim2.new(0, 65, 0, 20)
-BindTriggerSelect.ZIndex = 10
-BindTriggerSelect.Font = Enum.Font.SourceSans
-BindTriggerSelect.Text = "KeyDown"
-BindTriggerSelect.TextColor3 = Color3.fromRGB(255, 255, 255)
-BindTriggerSelect.TextSize = 16.000
-table.insert(Shade2,BindTriggerSelect)
-table.insert(Text1,BindTriggerSelect)
-
-Add_2.Name = "Add"
-Add_2.Parent = Background2
-Add_2.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Add_2.BorderSizePixel = 0
-Add_2.Position = UDim2.new(0, 310, 0, 35)
-Add_2.Size = UDim2.new(0, 40, 0, 20)
-Add_2.ZIndex = 10
-Add_2.Font = Enum.Font.SourceSans
-Add_2.Text = "Add"
-Add_2.TextColor3 = Color3.fromRGB(255, 255, 255)
-Add_2.TextSize = 14.000
-table.insert(Shade2,Add_2)
-table.insert(Text1,Add_2)
-
-Toggles.Name = "Toggles"
-Toggles.Parent = Background2
-Toggles.BackgroundTransparency = 1
-Toggles.BorderSizePixel = 0
-Toggles.Position = UDim2.new(0, 150, 0, 125)
-Toggles.Size = UDim2.new(0, 200, 0, 50)
-Toggles.ZIndex = 10
-Toggles.BottomImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-Toggles.CanvasSize = UDim2.new(0, 0, 0, 50)
-Toggles.ScrollBarThickness = 8
-Toggles.TopImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-Toggles.VerticalScrollBarInset = Enum.ScrollBarInset.Always
-table.insert(Scroll,Toggles)
-
-ClickTP.Name = "Click TP (Hold Key & Click)"
-ClickTP.Parent = Toggles
-ClickTP.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-ClickTP.BorderSizePixel = 0
-ClickTP.Size = UDim2.new(0, 200, 0, 20)
-ClickTP.ZIndex = 10
-ClickTP.Font = Enum.Font.SourceSans
-ClickTP.Text = "    Click TP (Hold Key & Click)"
-ClickTP.TextColor3 = Color3.fromRGB(255, 255, 255)
-ClickTP.TextSize = 14.000
-ClickTP.TextXAlignment = Enum.TextXAlignment.Left
-table.insert(Shade2,ClickTP)
-table.insert(Text1,ClickTP)
-
-Select.Name = "Select"
-Select.Parent = ClickTP
-Select.BackgroundColor3 = Color3.fromRGB(78, 78, 79)
-Select.BorderSizePixel = 0
-Select.Position = UDim2.new(0, 160, 0, 0)
-Select.Size = UDim2.new(0, 40, 0, 20)
-Select.ZIndex = 10
-Select.Font = Enum.Font.SourceSans
-Select.Text = "Add"
-Select.TextColor3 = Color3.fromRGB(0, 0, 0)
-Select.TextSize = 14.000
-table.insert(Shade3,Select)
-table.insert(Text2,Select)
-
-ClickDelete.Name = "Click Delete (Hold Key & Click)"
-ClickDelete.Parent = Toggles
-ClickDelete.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-ClickDelete.BorderSizePixel = 0
-ClickDelete.Position = UDim2.new(0, 0, 0, 25)
-ClickDelete.Size = UDim2.new(0, 200, 0, 20)
-ClickDelete.ZIndex = 10
-ClickDelete.Font = Enum.Font.SourceSans
-ClickDelete.Text = "    Click Delete (Hold Key & Click)"
-ClickDelete.TextColor3 = Color3.fromRGB(255, 255, 255)
-ClickDelete.TextSize = 14.000
-ClickDelete.TextXAlignment = Enum.TextXAlignment.Left
-table.insert(Shade2,ClickDelete)
-table.insert(Text1,ClickDelete)
-
-Select_2.Name = "Select"
-Select_2.Parent = ClickDelete
-Select_2.BackgroundColor3 = Color3.fromRGB(78, 78, 79)
-Select_2.BorderSizePixel = 0
-Select_2.Position = UDim2.new(0, 160, 0, 0)
-Select_2.Size = UDim2.new(0, 40, 0, 20)
-Select_2.ZIndex = 10
-Select_2.Font = Enum.Font.SourceSans
-Select_2.Text = "Add"
-Select_2.TextColor3 = Color3.fromRGB(0, 0, 0)
-Select_2.TextSize = 14.000
-table.insert(Shade3,Select_2)
-table.insert(Text2,Select_2)
-
-Cmdbar_2.Name = "Cmdbar_2"
-Cmdbar_2.Parent = Background2
-Cmdbar_2.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Cmdbar_2.BorderSizePixel = 0
-Cmdbar_2.Position = UDim2.new(0, 150, 0, 35)
-Cmdbar_2.Size = UDim2.new(0, 150, 0, 20)
-Cmdbar_2.ZIndex = 10
-Cmdbar_2.Font = Enum.Font.SourceSans
-Cmdbar_2.PlaceholderText = "Command"
-Cmdbar_2.Text = ""
-Cmdbar_2.TextColor3 = Color3.fromRGB(255, 255, 255)
-Cmdbar_2.TextSize = 14.000
-Cmdbar_2.TextXAlignment = Enum.TextXAlignment.Left
-
-Cmdbar_3.Name = "Cmdbar_3"
-Cmdbar_3.Parent = Background2
-Cmdbar_3.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Cmdbar_3.BorderSizePixel = 0
-Cmdbar_3.Position = UDim2.new(0, 150, 0, 60)
-Cmdbar_3.Size = UDim2.new(0, 150, 0, 20)
-Cmdbar_3.ZIndex = 10
-Cmdbar_3.Font = Enum.Font.SourceSans
-Cmdbar_3.PlaceholderText = "Command 2"
-Cmdbar_3.Text = ""
-Cmdbar_3.TextColor3 = Color3.fromRGB(255, 255, 255)
-Cmdbar_3.TextSize = 14.000
-Cmdbar_3.TextXAlignment = Enum.TextXAlignment.Left
-
-CreateToggle.Name = "CreateToggle"
-CreateToggle.Parent = Background2
-CreateToggle.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-CreateToggle.BackgroundTransparency = 1
-CreateToggle.BorderSizePixel = 0
-CreateToggle.Position = UDim2.new(0, 152, 0, 10)
-CreateToggle.Size = UDim2.new(0, 198, 0, 20)
-CreateToggle.ZIndex = 10
-CreateToggle.Font = Enum.Font.SourceSans
-CreateToggle.Text = "Create Toggle"
-CreateToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
-CreateToggle.TextSize = 14.000
-CreateToggle.TextXAlignment = Enum.TextXAlignment.Left
-table.insert(Text1,CreateToggle)
-
-Button_2.Name = "Button"
-Button_2.Parent = CreateToggle
-Button_2.BackgroundColor3 = Color3.fromRGB(78, 78, 79)
-Button_2.BorderSizePixel = 0
-Button_2.Position = UDim2.new(1, -20, 0, 0)
-Button_2.Size = UDim2.new(0, 20, 0, 20)
-Button_2.ZIndex = 10
-table.insert(Shade3,Button_2)
-
-On_2.Name = "On"
-On_2.Parent = Button_2
-On_2.BackgroundColor3 = Color3.fromRGB(150, 150, 151)
-On_2.BackgroundTransparency = 1
-On_2.BorderSizePixel = 0
-On_2.Position = UDim2.new(0, 2, 0, 2)
-On_2.Size = UDim2.new(0, 16, 0, 16)
-On_2.ZIndex = 10
-On_2.Font = Enum.Font.SourceSans
-On_2.Text = ""
-On_2.TextColor3 = Color3.fromRGB(0, 0, 0)
-On_2.TextSize = 14.000
-
-Shadow2.Name = "Shadow"
-Shadow2.Parent = KeybindEditor
-Shadow2.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Shadow2.BorderSizePixel = 0
-Shadow2.Size = UDim2.new(0, 360, 0, 20)
-Shadow2.ZIndex = 10
-table.insert(Shade2,Shadow2)
-
-PopupText_2.Name = "PopupText_2"
-PopupText_2.Parent = Shadow2
-PopupText_2.BackgroundTransparency = 1
-PopupText_2.Size = UDim2.new(1, 0, 0.949999988, 0)
-PopupText_2.ZIndex = 10
-PopupText_2.Font = Enum.Font.SourceSans
-PopupText_2.Text = "Set Keybinds"
-PopupText_2.TextColor3 = Color3.fromRGB(255, 255, 255)
-PopupText_2.TextSize = 14.000
-PopupText_2.TextWrapped = true
-table.insert(Text1,PopupText_2)
-
-Exit_2.Name = "Exit_2"
-Exit_2.Parent = Shadow2
-Exit_2.BackgroundTransparency = 1
-Exit_2.Position = UDim2.new(1, -20, 0, 0)
-Exit_2.Size = UDim2.new(0, 20, 0, 20)
-Exit_2.ZIndex = 10
-Exit_2.Text = ""
-
-ExitImage_2.Parent = Exit_2
-ExitImage_2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-ExitImage_2.BackgroundTransparency = 1
-ExitImage_2.Position = UDim2.new(0, 5, 0, 5)
-ExitImage_2.Size = UDim2.new(0, 10, 0, 10)
-ExitImage_2.ZIndex = 10
-ExitImage_2.Image = GetCustomAsset("infiniteyield/assets/close.png")
-
-PositionsFrame.Name = "PositionsFrame"
-PositionsFrame.Parent = Settings
-PositionsFrame.Active = true
-PositionsFrame.BackgroundColor3 = Color3.fromRGB(36, 36, 37)
-PositionsFrame.BorderSizePixel = 0
-PositionsFrame.Size = UDim2.new(0, 250, 0, 175)
-PositionsFrame.Position = UDim2.new(0, 0, 0, 175)
-PositionsFrame.ZIndex = 10
-table.insert(Shade1,PositionsFrame)
-
-Close_3.Name = "Close"
-Close_3.Parent = PositionsFrame
-Close_3.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Close_3.BorderSizePixel = 0
-Close_3.Position = UDim2.new(0, 205, 0, 150)
-Close_3.Size = UDim2.new(0, 40, 0, 20)
-Close_3.Font = Enum.Font.SourceSans
-Close_3.TextSize = 14
-Close_3.Text = "Close"
-Close_3.TextColor3 = Color3.new(1, 1, 1)
-Close_3.ZIndex = 10
-table.insert(Shade2,Close_3)
-table.insert(Text1,Close_3)
-
-Delete_5.Name = "Delete"
-Delete_5.Parent = PositionsFrame
-Delete_5.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Delete_5.BorderSizePixel = 0
-Delete_5.Position = UDim2.new(0, 50, 0, 150)
-Delete_5.Size = UDim2.new(0, 40, 0, 20)
-Delete_5.Font = Enum.Font.SourceSans
-Delete_5.TextSize = 14
-Delete_5.Text = "Clear"
-Delete_5.TextColor3 = Color3.new(1, 1, 1)
-Delete_5.ZIndex = 10
-table.insert(Shade2,Delete_5)
-table.insert(Text1,Delete_5)
-
-Part.Name = "PartGoto"
-Part.Parent = PositionsFrame
-Part.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Part.BorderSizePixel = 0
-Part.Position = UDim2.new(0, 5, 0, 150)
-Part.Size = UDim2.new(0, 40, 0, 20)
-Part.Font = Enum.Font.SourceSans
-Part.TextSize = 14
-Part.Text = "Part"
-Part.TextColor3 = Color3.new(1, 1, 1)
-Part.ZIndex = 10
-table.insert(Shade2,Part)
-table.insert(Text1,Part)
-
-Holder_4.Name = "Holder"
-Holder_4.Parent = PositionsFrame
-Holder_4.BackgroundTransparency = 1
-Holder_4.BorderSizePixel = 0
-Holder_4.Position = UDim2.new(0, 0, 0, 0)
-Holder_4.Selectable = false
-Holder_4.Size = UDim2.new(0, 250, 0, 145)
-Holder_4.ScrollBarImageColor3 = Color3.fromRGB(78,78,79)
-Holder_4.BottomImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-Holder_4.CanvasSize = UDim2.new(0, 0, 0, 0)
-Holder_4.MidImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-Holder_4.ScrollBarThickness = 0
-Holder_4.TopImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-Holder_4.VerticalScrollBarInset = 'Always'
-Holder_4.ZIndex = 10
-
-Example_4.Name = "Example"
-Example_4.Parent = PositionsFrame
-Example_4.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Example_4.BorderSizePixel = 0
-Example_4.Size = UDim2.new(0, 10, 0, 20)
-Example_4.Visible = false
-Example_4.Position = UDim2.new(0, 0, 0, -5)
-Example_4.ZIndex = 10
-table.insert(Shade2,Example_4)
-
-Text_5.Name = "Text"
-Text_5.Parent = Example_4
-Text_5.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Text_5.BorderSizePixel = 0
-Text_5.Position = UDim2.new(0, 10, 0, 0)
-Text_5.Size = UDim2.new(0, 240, 0, 20)
-Text_5.Font = Enum.Font.SourceSans
-Text_5.TextSize = 14
-Text_5.Text = "Position"
-Text_5.TextColor3 = Color3.new(1, 1, 1)
-Text_5.TextXAlignment = Enum.TextXAlignment.Left
-Text_5.ZIndex = 10
-table.insert(Shade2,Text_5)
-table.insert(Text1,Text_5)
-
-Delete_6.Name = "Delete"
-Delete_6.Parent = Text_5
-Delete_6.BackgroundColor3 = Color3.fromRGB(78, 78, 79)
-Delete_6.BorderSizePixel = 0
-Delete_6.Position = UDim2.new(0, 200, 0, 0)
-Delete_6.Size = UDim2.new(0, 40, 0, 20)
-Delete_6.Font = Enum.Font.SourceSans
-Delete_6.TextSize = 14
-Delete_6.Text = "Delete"
-Delete_6.TextColor3 = Color3.new(0, 0, 0)
-Delete_6.ZIndex = 10
-table.insert(Shade3,Delete_6)
-table.insert(Text2,Delete_6)
-
-TP.Name = "TP"
-TP.Parent = Text_5
-TP.BackgroundColor3 = Color3.fromRGB(78, 78, 79)
-TP.BorderSizePixel = 0
-TP.Position = UDim2.new(0, 155, 0, 0)
-TP.Size = UDim2.new(0, 40, 0, 20)
-TP.Font = Enum.Font.SourceSans
-TP.TextSize = 14
-TP.Text = "Goto"
-TP.TextColor3 = Color3.new(0, 0, 0)
-TP.ZIndex = 10
-table.insert(Shade3,TP)
-table.insert(Text2,TP)
-
-AliasesFrame.Name = "AliasesFrame"
-AliasesFrame.Parent = Settings
-AliasesFrame.Active = true
-AliasesFrame.BackgroundColor3 = Color3.fromRGB(36, 36, 37)
-AliasesFrame.BorderSizePixel = 0
-AliasesFrame.Position = UDim2.new(0, 0, 0, 175)
-AliasesFrame.Size = UDim2.new(0, 250, 0, 175)
-AliasesFrame.ZIndex = 10
-table.insert(Shade1,AliasesFrame)
-
-Close_2.Name = "Close"
-Close_2.Parent = AliasesFrame
-Close_2.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Close_2.BorderSizePixel = 0
-Close_2.Position = UDim2.new(0, 205, 0, 150)
-Close_2.Size = UDim2.new(0, 40, 0, 20)
-Close_2.Font = Enum.Font.SourceSans
-Close_2.TextSize = 14
-Close_2.Text = "Close"
-Close_2.TextColor3 = Color3.new(1, 1, 1)
-Close_2.ZIndex = 10
-table.insert(Shade2,Close_2)
-table.insert(Text1,Close_2)
-
-Delete_3.Name = "Delete"
-Delete_3.Parent = AliasesFrame
-Delete_3.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Delete_3.BorderSizePixel = 0
-Delete_3.Position = UDim2.new(0, 5, 0, 150)
-Delete_3.Size = UDim2.new(0, 40, 0, 20)
-Delete_3.Font = Enum.Font.SourceSans
-Delete_3.TextSize = 14
-Delete_3.Text = "Clear"
-Delete_3.TextColor3 = Color3.new(1, 1, 1)
-Delete_3.ZIndex = 10
-table.insert(Shade2,Delete_3)
-table.insert(Text1,Delete_3)
-
-Holder_3.Name = "Holder"
-Holder_3.Parent = AliasesFrame
-Holder_3.BackgroundTransparency = 1
-Holder_3.BorderSizePixel = 0
-Holder_3.Position = UDim2.new(0, 0, 0, 0)
-Holder_3.Size = UDim2.new(0, 250, 0, 145)
-Holder_3.ScrollBarImageColor3 = Color3.fromRGB(78,78,79)
-Holder_3.BottomImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-Holder_3.CanvasSize = UDim2.new(0, 0, 0, 0)
-Holder_3.MidImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-Holder_3.ScrollBarThickness = 0
-Holder_3.TopImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-Holder_3.VerticalScrollBarInset = 'Always'
-Holder_3.ZIndex = 10
-
-Example_3.Name = "Example"
-Example_3.Parent = AliasesFrame
-Example_3.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Example_3.BorderSizePixel = 0
-Example_3.Size = UDim2.new(0, 10, 0, 20)
-Example_3.Visible = false
-Example_3.ZIndex = 10
-table.insert(Shade2,Example_3)
-
-Text_4.Name = "Text"
-Text_4.Parent = Example_3
-Text_4.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Text_4.BorderSizePixel = 0
-Text_4.Position = UDim2.new(0, 10, 0, 0)
-Text_4.Size = UDim2.new(0, 240, 0, 20)
-Text_4.Font = Enum.Font.SourceSans
-Text_4.TextSize = 14
-Text_4.Text = "honk"
-Text_4.TextColor3 = Color3.new(1, 1, 1)
-Text_4.TextXAlignment = Enum.TextXAlignment.Left
-Text_4.ZIndex = 10
-table.insert(Shade2,Text_4)
-table.insert(Text1,Text_4)
-
-Delete_4.Name = "Delete"
-Delete_4.Parent = Text_4
-Delete_4.BackgroundColor3 = Color3.fromRGB(78, 78, 79)
-Delete_4.BorderSizePixel = 0
-Delete_4.Position = UDim2.new(0, 200, 0, 0)
-Delete_4.Size = UDim2.new(0, 40, 0, 20)
-Delete_4.Font = Enum.Font.SourceSans
-Delete_4.TextSize = 14
-Delete_4.Text = "Delete"
-Delete_4.TextColor3 = Color3.new(0, 0, 0)
-Delete_4.ZIndex = 10
-table.insert(Shade3,Delete_4)
-table.insert(Text2,Delete_4)
-
-PluginsFrame.Name = "PluginsFrame"
-PluginsFrame.Parent = Settings
-PluginsFrame.Active = true
-PluginsFrame.BackgroundColor3 = Color3.fromRGB(36, 36, 37)
-PluginsFrame.BorderSizePixel = 0
-PluginsFrame.Position = UDim2.new(0, 0, 0, 175)
-PluginsFrame.Size = UDim2.new(0, 250, 0, 175)
-PluginsFrame.ZIndex = 10
-table.insert(Shade1,PluginsFrame)
-
-Close_4.Name = "Close"
-Close_4.Parent = PluginsFrame
-Close_4.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Close_4.BorderSizePixel = 0
-Close_4.Position = UDim2.new(0, 205, 0, 150)
-Close_4.Size = UDim2.new(0, 40, 0, 20)
-Close_4.Font = Enum.Font.SourceSans
-Close_4.TextSize = 14
-Close_4.Text = "Close"
-Close_4.TextColor3 = Color3.new(1, 1, 1)
-Close_4.ZIndex = 10
-table.insert(Shade2,Close_4)
-table.insert(Text1,Close_4)
-
-Add_3.Name = "Add"
-Add_3.Parent = PluginsFrame
-Add_3.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Add_3.BorderSizePixel = 0
-Add_3.Position = UDim2.new(0, 5, 0, 150)
-Add_3.Size = UDim2.new(0, 40, 0, 20)
-Add_3.Font = Enum.Font.SourceSans
-Add_3.TextSize = 14
-Add_3.Text = "Add"
-Add_3.TextColor3 = Color3.new(1, 1, 1)
-Add_3.ZIndex = 10
-table.insert(Shade2,Add_3)
-table.insert(Text1,Add_3)
-
-Holder_5.Name = "Holder"
-Holder_5.Parent = PluginsFrame
-Holder_5.BackgroundTransparency = 1
-Holder_5.BorderSizePixel = 0
-Holder_5.Position = UDim2.new(0, 0, 0, 0)
-Holder_5.Selectable = false
-Holder_5.Size = UDim2.new(0, 250, 0, 145)
-Holder_5.ScrollBarImageColor3 = Color3.fromRGB(78,78,79)
-Holder_5.BottomImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-Holder_5.CanvasSize = UDim2.new(0, 0, 0, 0)
-Holder_5.MidImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-Holder_5.ScrollBarThickness = 0
-Holder_5.TopImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-Holder_5.VerticalScrollBarInset = 'Always'
-Holder_5.ZIndex = 10
-
-Example_5.Name = "Example"
-Example_5.Parent = PluginsFrame
-Example_5.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Example_5.BorderSizePixel = 0
-Example_5.Size = UDim2.new(0, 10, 0, 20)
-Example_5.Visible = false
-Example_5.ZIndex = 10
-table.insert(Shade2,Example_5)
-
-Text_6.Name = "Text"
-Text_6.Parent = Example_5
-Text_6.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Text_6.BorderSizePixel = 0
-Text_6.Position = UDim2.new(0, 10, 0, 0)
-Text_6.Size = UDim2.new(0, 240, 0, 20)
-Text_6.Font = Enum.Font.SourceSans
-Text_6.TextSize = 14
-Text_6.Text = "F4 > Toggle Fly"
-Text_6.TextColor3 = Color3.new(1, 1, 1)
-Text_6.TextXAlignment = Enum.TextXAlignment.Left
-Text_6.ZIndex = 10
-table.insert(Shade2,Text_6)
-table.insert(Text1,Text_6)
-
-Delete_7.Name = "Delete"
-Delete_7.Parent = Text_6
-Delete_7.BackgroundColor3 = Color3.fromRGB(78, 78, 79)
-Delete_7.BorderSizePixel = 0
-Delete_7.Position = UDim2.new(0, 200, 0, 0)
-Delete_7.Size = UDim2.new(0, 40, 0, 20)
-Delete_7.Font = Enum.Font.SourceSans
-Delete_7.TextSize = 14
-Delete_7.Text = "Delete"
-Delete_7.TextColor3 = Color3.new(0, 0, 0)
-Delete_7.ZIndex = 10
-table.insert(Shade3,Delete_7)
-table.insert(Text2,Delete_7)
-
-PluginEditor.Name = RandomString()
-PluginEditor.Parent = ScaledHolder
-PluginEditor.BorderSizePixel = 0
-PluginEditor.Active = true
-PluginEditor.BackgroundTransparency = 1
-PluginEditor.Position = UDim2.new(0.5, -180, 0, -500)
-PluginEditor.Size = UDim2.new(0, 360, 0, 20)
-PluginEditor.ZIndex = 10
-
-Background3.Name = "Background"
-Background3.Parent = PluginEditor
-Background3.Active = true
-Background3.BackgroundColor3 = Color3.fromRGB(36, 36, 37)
-Background3.BorderSizePixel = 0
-Background3.Position = UDim2.new(0, 0, 0, 20)
-Background3.Size = UDim2.new(0, 360, 0, 160)
-Background3.ZIndex = 10
-table.insert(Shade1,Background3)
-
-Dark_2.Name = "Dark"
-Dark_2.Parent = Background3
-Dark_2.Active = true
-Dark_2.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Dark_2.BorderSizePixel = 0
-Dark_2.Position = UDim2.new(0, 222, 0, 0)
-Dark_2.Size = UDim2.new(0, 2, 0, 160)
-Dark_2.ZIndex = 10
-table.insert(Shade2,Dark_2)
-
-Img.Name = "Img"
-Img.Parent = Background3
-Img.BackgroundTransparency = 1
-Img.Position = UDim2.new(0, 242, 0, 3)
-Img.Size = UDim2.new(0, 100, 0, 95)
-Img.Image = GetCustomAsset("infiniteyield/assets/imgstudiopluginlogo.png")
-Img.ZIndex = 10
-
-AddPlugin.Name = "AddPlugin"
-AddPlugin.Parent = Background3
-AddPlugin.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-AddPlugin.BorderSizePixel = 0
-AddPlugin.Position = UDim2.new(0, 235, 0, 100)
-AddPlugin.Size = UDim2.new(0, 115, 0, 50)
-AddPlugin.Font = Enum.Font.SourceSans
-AddPlugin.TextSize = 14
-AddPlugin.Text = "Add Plugin"
-AddPlugin.TextColor3 = Color3.new(1, 1, 1)
-AddPlugin.ZIndex = 10
-table.insert(Shade2,AddPlugin)
-table.insert(Text1,AddPlugin)
-
-FileName.Name = "FileName"
-FileName.Parent = Background3
-FileName.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-FileName.BorderSizePixel = 0
-FileName.Position = UDim2.new(0.028, 0, 0.625, 0)
-FileName.Size = UDim2.new(0, 200, 0, 50)
-FileName.Font = Enum.Font.SourceSans
-FileName.TextSize = 14
-FileName.Text = "Plugin File Name"
-FileName.TextColor3 = Color3.new(1, 1, 1)
-FileName.ZIndex = 10
-table.insert(Shade2,FileName)
-table.insert(Text1,FileName)
-
-About.Name = "About"
-About.Parent = Background3
-About.BackgroundTransparency = 1
-About.BorderSizePixel = 0
-About.Position = UDim2.new(0, 17, 0, 10)
-About.Size = UDim2.new(0, 187, 0, 49)
-About.Font = Enum.Font.SourceSans
-About.TextSize = 14
-About.Text = "Plugins are .iy files and should be located in the 'workspace' folder of your exploit."
-About.TextColor3 = Color3.fromRGB(255, 255, 255)
-About.TextWrapped = true
-About.TextYAlignment = Enum.TextYAlignment.Top
-About.ZIndex = 10
-table.insert(Text1,About)
-
-Directions_2.Name = "Directions"
-Directions_2.Parent = Background3
-Directions_2.BackgroundTransparency = 1
-Directions_2.BorderSizePixel = 0
-Directions_2.Position = UDim2.new(0, 17, 0, 60)
-Directions_2.Size = UDim2.new(0, 187, 0, 49)
-Directions_2.Font = Enum.Font.SourceSans
-Directions_2.TextSize = 14
-Directions_2.Text = "Type the name of the plugin file you want to add below."
-Directions_2.TextColor3 = Color3.fromRGB(255, 255, 255)
-Directions_2.TextWrapped = true
-Directions_2.TextYAlignment = Enum.TextYAlignment.Top
-Directions_2.ZIndex = 10
-table.insert(Text1,Directions_2)
-
-Shadow3.Name = "Shadow"
-Shadow3.Parent = PluginEditor
-Shadow3.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Shadow3.BorderSizePixel = 0
-Shadow3.Size = UDim2.new(0, 360, 0, 20)
-Shadow3.ZIndex = 10
-table.insert(Shade2,Shadow3)
-
-PopupText_3.Name = "PopupText"
-PopupText_3.Parent = Shadow3
-PopupText_3.BackgroundTransparency = 1
-PopupText_3.Size = UDim2.new(1, 0, 0.95, 0)
-PopupText_3.ZIndex = 10
-PopupText_3.Font = Enum.Font.SourceSans
-PopupText_3.TextSize = 14
-PopupText_3.Text = "Add Plugins"
-PopupText_3.TextColor3 = Color3.new(1, 1, 1)
-PopupText_3.TextWrapped = true
-table.insert(Text1,PopupText_3)
-
-Exit_3.Name = "Exit"
-Exit_3.Parent = Shadow3
-Exit_3.BackgroundTransparency = 1
-Exit_3.Position = UDim2.new(1, -20, 0, 0)
-Exit_3.Size = UDim2.new(0, 20, 0, 20)
-Exit_3.Text = ""
-Exit_3.ZIndex = 10
-
-ExitImage_3.Parent = Exit_3
-ExitImage_3.BackgroundColor3 = Color3.new(1, 1, 1)
-ExitImage_3.BackgroundTransparency = 1
-ExitImage_3.Position = UDim2.new(0, 5, 0, 5)
-ExitImage_3.Size = UDim2.new(0, 10, 0, 10)
-ExitImage_3.Image = GetCustomAsset("infiniteyield/assets/close.png")
-ExitImage_3.ZIndex = 10
-
-AliasHint.Name = "AliasHint"
-AliasHint.Parent = AliasesFrame
-AliasHint.BackgroundTransparency = 1
-AliasHint.BorderSizePixel = 0
-AliasHint.Position = UDim2.new(0, 25, 0, 40)
-AliasHint.Size = UDim2.new(0, 200, 0, 50)
-AliasHint.Font = Enum.Font.SourceSansItalic
-AliasHint.TextSize = 16
-AliasHint.Text = "Add aliases by using the 'addalias' command"
-AliasHint.TextColor3 = Color3.new(1, 1, 1)
-AliasHint.TextStrokeColor3 = Color3.new(1, 1, 1)
-AliasHint.TextWrapped = true
-AliasHint.ZIndex = 10
-table.insert(Text1,AliasHint)
-
-PluginsHint.Name = "PluginsHint"
-PluginsHint.Parent = PluginsFrame
-PluginsHint.BackgroundTransparency = 1
-PluginsHint.BorderSizePixel = 0
-PluginsHint.Position = UDim2.new(0, 25, 0, 40)
-PluginsHint.Size = UDim2.new(0, 200, 0, 50)
-PluginsHint.Font = Enum.Font.SourceSansItalic
-PluginsHint.TextSize = 16
-PluginsHint.Text = "Download plugins from the IY Discord (discord.gg/78ZuWSq)"
-PluginsHint.TextColor3 = Color3.new(1, 1, 1)
-PluginsHint.TextStrokeColor3 = Color3.new(1, 1, 1)
-PluginsHint.TextWrapped = true
-PluginsHint.ZIndex = 10
-table.insert(Text1,PluginsHint)
-
-PositionsHint.Name = "PositionsHint"
-PositionsHint.Parent = PositionsFrame
-PositionsHint.BackgroundTransparency = 1
-PositionsHint.BorderSizePixel = 0
-PositionsHint.Position = UDim2.new(0, 25, 0, 40)
-PositionsHint.Size = UDim2.new(0, 200, 0, 70)
-PositionsHint.Font = Enum.Font.SourceSansItalic
-PositionsHint.TextSize = 16
-PositionsHint.Text = "Use the 'swp' or 'setwaypoint' command to add a position using your character (NOTE: Part teleports will not save)"
-PositionsHint.TextColor3 = Color3.new(1, 1, 1)
-PositionsHint.TextStrokeColor3 = Color3.new(1, 1, 1)
-PositionsHint.TextWrapped = true
-PositionsHint.ZIndex = 10
-table.insert(Text1,PositionsHint)
-
-ToPartFrame.Name = RandomString()
-ToPartFrame.Parent = ScaledHolder
-ToPartFrame.Active = true
-ToPartFrame.BackgroundTransparency = 1
-ToPartFrame.Position = UDim2.new(0.5, -180, 0, -500)
-ToPartFrame.Size = UDim2.new(0, 360, 0, 20)
-ToPartFrame.ZIndex = 10
-
-Background4.Name = "Background"
-Background4.Parent = ToPartFrame
-Background4.Active = true
-Background4.BackgroundColor3 = Color3.fromRGB(36, 36, 37)
-Background4.BorderSizePixel = 0
-Background4.Position = UDim2.new(0, 0, 0, 20)
-Background4.Size = UDim2.new(0, 360, 0, 117)
-Background4.ZIndex = 10
-table.insert(Shade1,Background4)
-
-ChoosePart.Name = "ChoosePart"
-ChoosePart.Parent = Background4
-ChoosePart.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-ChoosePart.BorderSizePixel = 0
-ChoosePart.Position = UDim2.new(0, 100, 0, 55)
-ChoosePart.Size = UDim2.new(0, 75, 0, 30)
-ChoosePart.Font = Enum.Font.SourceSans
-ChoosePart.TextSize = 14
-ChoosePart.Text = "Select Part"
-ChoosePart.TextColor3 = Color3.new(1, 1, 1)
-ChoosePart.ZIndex = 10
-table.insert(Shade2,ChoosePart)
-table.insert(Text1,ChoosePart)
-
-CopyPath.Name = "CopyPath"
-CopyPath.Parent = Background4
-CopyPath.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-CopyPath.BorderSizePixel = 0
-CopyPath.Position = UDim2.new(0, 185, 0, 55)
-CopyPath.Size = UDim2.new(0, 75, 0, 30)
-CopyPath.Font = Enum.Font.SourceSans
-CopyPath.TextSize = 14
-CopyPath.Text = "Copy Path"
-CopyPath.TextColor3 = Color3.new(1, 1, 1)
-CopyPath.ZIndex = 10
-table.insert(Shade2,CopyPath)
-table.insert(Text1,CopyPath)
-
-Directions_3.Name = "Directions"
-Directions_3.Parent = Background4
-Directions_3.BackgroundTransparency = 1
-Directions_3.BorderSizePixel = 0
-Directions_3.Position = UDim2.new(0, 51, 0, 17)
-Directions_3.Size = UDim2.new(0, 257, 0, 32)
-Directions_3.Font = Enum.Font.SourceSans
-Directions_3.TextSize = 14
-Directions_3.Text = 'Click on a part and then click the "Select Part" button below to set it as a teleport location'
-Directions_3.TextColor3 = Color3.new(1, 1, 1)
-Directions_3.TextWrapped = true
-Directions_3.TextYAlignment = Enum.TextYAlignment.Top
-Directions_3.ZIndex = 10
-table.insert(Text1,Directions_3)
-
-Path.Name = "Path"
-Path.Parent = Background4
-Path.BackgroundTransparency = 1
-Path.BorderSizePixel = 0
-Path.Position = UDim2.new(0, 0, 0, 94)
-Path.Size = UDim2.new(0, 360, 0, 16)
-Path.Font = Enum.Font.SourceSansItalic
-Path.TextSize = 14
-Path.Text = ""
-Path.TextColor3 = Color3.new(1, 1, 1)
-Path.TextScaled = true
-Path.TextWrapped = true
-Path.TextYAlignment = Enum.TextYAlignment.Top
-Path.ZIndex = 10
-table.insert(Text1,Path)
-
-Shadow4.Name = "Shadow"
-Shadow4.Parent = ToPartFrame
-Shadow4.BackgroundColor3 = Color3.fromRGB(46, 46, 47)
-Shadow4.BorderSizePixel = 0
-Shadow4.Size = UDim2.new(0, 360, 0, 20)
-Shadow4.ZIndex = 10
-table.insert(Shade2,Shadow4)
-
-PopupText_5.Name = "PopupText"
-PopupText_5.Parent = Shadow4
-PopupText_5.BackgroundTransparency = 1
-PopupText_5.Size = UDim2.new(1, 0, 0.95, 0)
-PopupText_5.ZIndex = 10
-PopupText_5.Font = Enum.Font.SourceSans
-PopupText_5.TextSize = 14
-PopupText_5.Text = "Teleport to Part"
-PopupText_5.TextColor3 = Color3.new(1, 1, 1)
-PopupText_5.TextWrapped = true
-table.insert(Text1,PopupText_5)
-
-Exit_4.Name = "Exit"
-Exit_4.Parent = Shadow4
-Exit_4.BackgroundTransparency = 1
-Exit_4.Position = UDim2.new(1, -20, 0, 0)
-Exit_4.Size = UDim2.new(0, 20, 0, 20)
-Exit_4.Text = ""
-Exit_4.ZIndex = 10
-
-ExitImage_5.Parent = Exit_4
-ExitImage_5.BackgroundColor3 = Color3.new(1, 1, 1)
-ExitImage_5.BackgroundTransparency = 1
-ExitImage_5.Position = UDim2.new(0, 5, 0, 5)
-ExitImage_5.Size = UDim2.new(0, 10, 0, 10)
-ExitImage_5.Image = GetCustomAsset("infiniteyield/assets/close.png")
-ExitImage_5.ZIndex = 10
-
-Logs.Name = RandomString()
-Logs.Parent = ScaledHolder
-Logs.Active = true
-Logs.BackgroundTransparency = 1
-Logs.Position = UDim2.new(0, 0, 1, 10)
-Logs.Size = UDim2.new(0, 338, 0, 20)
-Logs.ZIndex = 10
-
-Shadow.Name = "Shadow"
-Shadow.Parent = Logs
-Shadow.BackgroundColor3 = Color3.new(0.180392, 0.180392, 0.184314)
-Shadow.BorderSizePixel = 0
-Shadow.Position = UDim2.new(0, 0, 0.00999999978, 0)
-Shadow.Size = UDim2.new(0, 338, 0, 20)
-Shadow.ZIndex = 10
-table.insert(Shade2,Shadow)
-
-Hide.Name = "Hide"
-Hide.Parent = Shadow
-Hide.BackgroundTransparency = 1
-Hide.Position = UDim2.new(1, -40, 0, 0)
-Hide.Size = UDim2.new(0, 20, 0, 20)
-Hide.ZIndex = 10
-Hide.Text = ""
-
-ImageLabel.Parent = Hide
-ImageLabel.BackgroundColor3 = Color3.new(1, 1, 1)
-ImageLabel.BackgroundTransparency = 1
-ImageLabel.Position = UDim2.new(0, 3, 0, 3)
-ImageLabel.Size = UDim2.new(0, 14, 0, 14)
-ImageLabel.Image = GetCustomAsset("infiniteyield/assets/minimize.png")
-ImageLabel.ZIndex = 10
-
-PopupText.Name = "PopupText"
-PopupText.Parent = Shadow
-PopupText.BackgroundTransparency = 1
-PopupText.Size = UDim2.new(1, 0, 0.949999988, 0)
-PopupText.ZIndex = 10
-PopupText.Font = Enum.Font.SourceSans
-PopupText.FontSize = Enum.FontSize.Size14
-PopupText.Text = "Logs"
-PopupText.TextColor3 = Color3.new(1, 1, 1)
-PopupText.TextWrapped = true
-table.insert(Text1,PopupText)
-
-Exit.Name = "Exit"
-Exit.Parent = Shadow
-Exit.BackgroundTransparency = 1
-Exit.Position = UDim2.new(1, -20, 0, 0)
-Exit.Size = UDim2.new(0, 20, 0, 20)
-Exit.ZIndex = 10
-Exit.Text = ""
-
-ImageLabel_2.Parent = Exit
-ImageLabel_2.BackgroundColor3 = Color3.new(1, 1, 1)
-ImageLabel_2.BackgroundTransparency = 1
-ImageLabel_2.Position = UDim2.new(0, 5, 0, 5)
-ImageLabel_2.Size = UDim2.new(0, 10, 0, 10)
-ImageLabel_2.Image = GetCustomAsset("infiniteyield/assets/close.png")
-ImageLabel_2.ZIndex = 10
-
-Background.Name = "Background"
-Background.Parent = Logs
-Background.Active = true
-Background.BackgroundColor3 = Color3.new(0.141176, 0.141176, 0.145098)
-Background.BorderSizePixel = 0
-Background.ClipsDescendants = true
-Background.Position = UDim2.new(0, 0, 1, 0)
-Background.Size = UDim2.new(0, 338, 0, 245)
-Background.ZIndex = 10
-
-Chat.Name = "Chat"
-Chat.Parent = Background
-Chat.Active = true
-Chat.BackgroundColor3 = Color3.new(0.141176, 0.141176, 0.145098)
-Chat.BorderSizePixel = 0
-Chat.ClipsDescendants = true
-Chat.Size = UDim2.new(0, 338, 0, 245)
-Chat.ZIndex = 10
-table.insert(Shade1,Chat)
-
-Clear.Name = "Clear"
-Clear.Parent = Chat
-Clear.BackgroundColor3 = Color3.new(0.180392, 0.180392, 0.184314)
-Clear.BorderSizePixel = 0
-Clear.Position = UDim2.new(0, 5, 0, 220)
-Clear.Size = UDim2.new(0, 50, 0, 20)
-Clear.ZIndex = 10
-Clear.Font = Enum.Font.SourceSans
-Clear.FontSize = Enum.FontSize.Size14
-Clear.Text = "Clear"
-Clear.TextColor3 = Color3.new(1, 1, 1)
-table.insert(Shade2,Clear)
-table.insert(Text1,Clear)
-
-SaveChatlogs.Name = "SaveChatlogs"
-SaveChatlogs.Parent = Chat
-SaveChatlogs.BackgroundColor3 = Color3.new(0.180392, 0.180392, 0.184314)
-SaveChatlogs.BorderSizePixel = 0
-SaveChatlogs.Position = UDim2.new(0, 258, 0, 220)
-SaveChatlogs.Size = UDim2.new(0, 75, 0, 20)
-SaveChatlogs.ZIndex = 10
-SaveChatlogs.Font = Enum.Font.SourceSans
-SaveChatlogs.FontSize = Enum.FontSize.Size14
-SaveChatlogs.Text = "Save To .txt"
-SaveChatlogs.TextColor3 = Color3.new(1, 1, 1)
-table.insert(Shade2,SaveChatlogs)
-table.insert(Text1,SaveChatlogs)
-
-Toggle.Name = "Toggle"
-Toggle.Parent = Chat
-Toggle.BackgroundColor3 = Color3.new(0.180392, 0.180392, 0.184314)
-Toggle.BorderSizePixel = 0
-Toggle.Position = UDim2.new(0, 60, 0, 220)
-Toggle.Size = UDim2.new(0, 66, 0, 20)
-Toggle.ZIndex = 10
-Toggle.Font = Enum.Font.SourceSans
-Toggle.FontSize = Enum.FontSize.Size14
-Toggle.Text = "Disabled"
-Toggle.TextColor3 = Color3.new(1, 1, 1)
-table.insert(Shade2,Toggle)
-table.insert(Text1,Toggle)
-
-Scroll2.Name = "Scroll"
-Scroll2.Parent = Chat
-Scroll2.BackgroundColor3 = Color3.new(0.180392, 0.180392, 0.184314)
-Scroll2.BorderSizePixel = 0
-Scroll2.Position = UDim2.new(0, 5, 0, 25)
-Scroll2.Size = UDim2.new(0, 328, 0, 190)
-Scroll2.ZIndex = 10
-Scroll2.BottomImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-Scroll2.CanvasSize = UDim2.new(0, 0, 0, 10)
-Scroll2.ScrollBarThickness = 8
-Scroll2.TopImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-table.insert(Scroll,Scroll2)
-table.insert(Shade2,Scroll2)
-
-Join.Name = "Join"
-Join.Parent = Background
-Join.Active = true
-Join.BackgroundColor3 = Color3.new(0.141176, 0.141176, 0.145098)
-Join.BorderSizePixel = 0
-Join.ClipsDescendants = true
-Join.Size = UDim2.new(0, 338, 0, 245)
-Join.Visible = false
-Join.ZIndex = 10
-table.insert(Shade1,Join)
-
-Toggle_2.Name = "Toggle"
-Toggle_2.Parent = Join
-Toggle_2.BackgroundColor3 = Color3.new(0.180392, 0.180392, 0.184314)
-Toggle_2.BorderSizePixel = 0
-Toggle_2.Position = UDim2.new(0, 60, 0, 220)
-Toggle_2.Size = UDim2.new(0, 66, 0, 20)
-Toggle_2.ZIndex = 10
-Toggle_2.Font = Enum.Font.SourceSans
-Toggle_2.FontSize = Enum.FontSize.Size14
-Toggle_2.Text = "Disabled"
-Toggle_2.TextColor3 = Color3.new(1, 1, 1)
-table.insert(Shade2,Toggle_2)
-table.insert(Text1,Toggle_2)
-
-Clear_2.Name = "Clear"
-Clear_2.Parent = Join
-Clear_2.BackgroundColor3 = Color3.new(0.180392, 0.180392, 0.184314)
-Clear_2.BorderSizePixel = 0
-Clear_2.Position = UDim2.new(0, 5, 0, 220)
-Clear_2.Size = UDim2.new(0, 50, 0, 20)
-Clear_2.ZIndex = 10
-Clear_2.Font = Enum.Font.SourceSans
-Clear_2.FontSize = Enum.FontSize.Size14
-Clear_2.Text = "Clear"
-Clear_2.TextColor3 = Color3.new(1, 1, 1)
-table.insert(Shade2,Clear_2)
-table.insert(Text1,Clear_2)
-
-Scroll3.Name = "Scroll"
-Scroll3.Parent = Join
-Scroll3.BackgroundColor3 = Color3.new(0.180392, 0.180392, 0.184314)
-Scroll3.BorderSizePixel = 0
-Scroll3.Position = UDim2.new(0, 5, 0, 25)
-Scroll3.Size = UDim2.new(0, 328, 0, 190)
-Scroll3.ZIndex = 10
-Scroll3.BottomImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-Scroll3.CanvasSize = UDim2.new(0, 0, 0, 10)
-Scroll3.ScrollBarThickness = 8
-Scroll3.TopImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
-table.insert(Scroll,Scroll3)
-table.insert(Shade2,Scroll3)
-
-SelectChat.Name = "SelectChat"
-SelectChat.Parent = Background
-SelectChat.BackgroundColor3 = Color3.new(0.180392, 0.180392, 0.184314)
-SelectChat.BorderSizePixel = 0
-SelectChat.Position = UDim2.new(0, 5, 0, 5)
-SelectChat.Size = UDim2.new(0, 164, 0, 20)
-SelectChat.ZIndex = 10
-SelectChat.Font = Enum.Font.SourceSans
-SelectChat.FontSize = Enum.FontSize.Size14
-SelectChat.Text = "Chat Logs"
-SelectChat.TextColor3 = Color3.new(1, 1, 1)
-table.insert(Shade2,SelectChat)
-table.insert(Text1,SelectChat)
-
-SelectJoin.Name = "SelectJoin"
-SelectJoin.Parent = Background
-SelectJoin.BackgroundColor3 = Color3.new(0.305882, 0.305882, 0.309804)
-SelectJoin.BorderSizePixel = 0
-SelectJoin.Position = UDim2.new(0, 169, 0, 5)
-SelectJoin.Size = UDim2.new(0, 164, 0, 20)
-SelectJoin.ZIndex = 10
-SelectJoin.Font = Enum.Font.SourceSans
-SelectJoin.FontSize = Enum.FontSize.Size14
-SelectJoin.Text = "Join Logs"
-SelectJoin.TextColor3 = Color3.new(1, 1, 1)
-table.insert(Shade3,SelectJoin)
-table.insert(Text1,SelectJoin)
-
-function create(data)
-	local insts = {}
-	for i in next, data do
-		local v = data[i] insts[v[1]] = Instance.new(v[2]) end
-
-	for _ in next, data do
-		local v = data[_]
-		for prop in next, v[3] do
-		local val = v[3][prop]
-			if type(val) == "table" then
-				insts[v[1]][prop] = insts[val[1]]
-			else
-				insts[v[1]][prop] = val
-			end
-		end
-	end
-
-	return insts[1]
-end
-
-ViewportTextBox = (function()
-
-	local funcs = {}
-	funcs.Update = function(self)
-		local cursorPos = self.TextBox.CursorPosition
-		local text = self.TextBox.Text
-		if text == "" then self.TextBox.Position = UDim2.new(0,2,0,0) return end
-		if cursorPos == -1 then return end
-
-		local cursorText = text:sub(1,cursorPos-1)
-		local pos = nil
-		local leftEnd = -self.TextBox.Position.X.Offset
-		local rightEnd = leftEnd + self.View.AbsoluteSize.X
-
-		local totalTextSize = TextService:GetTextSize(text,self.TextBox.TextSize,self.TextBox.Font,Vector2.new(999999999,100)).X
-		local cursorTextSize = TextService:GetTextSize(cursorText,self.TextBox.TextSize,self.TextBox.Font,Vector2.new(999999999,100)).X
-
-		if cursorTextSize > rightEnd then
-			pos = math.max(-2,cursorTextSize - self.View.AbsoluteSize.X + 2)
-		elseif cursorTextSize < leftEnd then
-			pos = math.max(-2,cursorTextSize-2)
-		elseif totalTextSize < rightEnd then
-			pos = math.max(-2,totalTextSize - self.View.AbsoluteSize.X + 2)
-		end
-
-		if pos then
-			self.TextBox.Position = UDim2.new(0,-pos,0,0)
-			self.TextBox.Size = UDim2.new(1,pos,1,0)
-		end
-	end
-
-	local mt = {}
-	mt.__index = funcs
-
-	local function convert(textbox)
-		local obj = setmetatable({OffsetX = 0, TextBox = textbox},mt)
-
-		local view = Instance.new("Frame")
-		view.BackgroundTransparency = textbox.BackgroundTransparency
-		view.BackgroundColor3 = textbox.BackgroundColor3
-		view.BorderSizePixel = textbox.BorderSizePixel
-		view.BorderColor3 = textbox.BorderColor3
-		view.Position = textbox.Position
-		view.Size = textbox.Size
-		view.ClipsDescendants = true
-		view.Name = textbox.Name
-		view.ZIndex = 10
-		textbox.BackgroundTransparency = 1
-		textbox.Position = UDim2.new(0,4,0,0)
-		textbox.Size = UDim2.new(1,-8,1,0)
-		textbox.TextXAlignment = Enum.TextXAlignment.Left
-		textbox.Name = "Input"
-		table.insert(Text1,textbox)
-		table.insert(Shade2,view)
-
-		obj.View = view
-
-		textbox.Changed:Connect(function(prop)
-			if prop == "Text" or prop == "CursorPosition" or prop == "AbsoluteSize" then
-				obj:Update()
-			end
-		end)
-
-		obj:Update()
-
-		view.Parent = textbox.Parent
-		textbox.Parent = view
-
-		return obj
-	end
-
-	return {convert = convert}
-end)()
-
-ViewportTextBox.convert(Cmdbar).View.ZIndex = 10
-ViewportTextBox.convert(Cmdbar_2).View.ZIndex = 10
-ViewportTextBox.convert(Cmdbar_3).View.ZIndex = 10
-
-
-
-    local WindowObject = {
-        ScreenGui = ScreenGui,
-        Holder = Holder,
-        CmdsFrame = CMDsF,
-        Cmdbar = Cmdbar,
-        SettingsHolder = SettingsHolder,
-    }
-    
-    -- Dragging Logic
-    local Dragging = false
-    local DragInput, DragStart, StartPos
-    
-    Title.InputBegan:Connect(function(Input)
-        if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-            Dragging = true
-            DragStart = Input.Position
-            StartPos = Holder.Position
-            
-            Input.Changed:Connect(function()
-                if Input.UserInputState == Enum.UserInputState.End then
-                    Dragging = false
+    local ScaledHolder = Instance.new("Frame")
+    ScaledHolder.Name = RandomString()
+    ScaledHolder.Size = UDim2.fromScale(1, 1)
+    ScaledHolder.BackgroundTransparency = 1
+    ScaledHolder.Parent = ScreenGui
+
+    -- All themed instances tracking
+    local Themed = {Shade1 = {}, Shade2 = {}, Shade3 = {}, Text1 = {}, Text2 = {}, Scroll = {}}
+
+    local function ApplyTheme()
+        for _, v in pairs(Themed.Shade1) do if v and v.Parent then v.BackgroundColor3 = Theme.Shade1 end end
+        for _, v in pairs(Themed.Shade2) do if v and v.Parent then v.BackgroundColor3 = Theme.Shade2 end end
+        for _, v in pairs(Themed.Shade3) do if v and v.Parent then v.BackgroundColor3 = Theme.Shade3 end end
+        for _, v in pairs(Themed.Text1) do if v and v.Parent then v.TextColor3 = Theme.Text1 end end
+        for _, v in pairs(Themed.Text2) do if v and v.Parent then v.TextColor3 = Theme.Text2 end end
+        for _, v in pairs(Themed.Scroll) do if v and v.Parent then v.ScrollBarImageColor3 = Theme.Scroll end end
+    end
+
+    local function MakeScrollFrame(props)
+        local sf = Instance.new("ScrollingFrame")
+        sf.BackgroundTransparency = 1
+        sf.BorderSizePixel = 0
+        sf.ScrollBarImageColor3 = Theme.Scroll
+        sf.BottomImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
+        sf.MidImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
+        sf.TopImage = "rbxasset://textures/ui/Scroll/Scroll-middle.png"
+        sf.VerticalScrollBarInset = Enum.ScrollBarInset.Always
+        sf.ScrollBarThickness = 8
+        sf.CanvasSize = UDim2.new(0, 0, 0, 0)
+        for k, v in pairs(props or {}) do sf[k] = v end
+        table.insert(Themed.Scroll, sf)
+        return sf
+    end
+
+    local function MakeButton(props)
+        local btn = Instance.new("TextButton")
+        btn.BackgroundColor3 = Theme.Shade2
+        btn.BorderSizePixel = 0
+        btn.Font = Enum.Font.SourceSans
+        btn.TextSize = 14
+        btn.TextColor3 = Theme.Text1
+        btn.AutoButtonColor = true
+        for k, v in pairs(props or {}) do btn[k] = v end
+        table.insert(Themed.Shade2, btn)
+        table.insert(Themed.Text1, btn)
+        return btn
+    end
+
+    local function MakeSmallButton(props)
+        local btn = Instance.new("TextButton")
+        btn.BackgroundColor3 = Theme.Shade3
+        btn.BorderSizePixel = 0
+        btn.Font = Enum.Font.SourceSans
+        btn.TextSize = 14
+        btn.TextColor3 = Theme.Text2
+        btn.AutoButtonColor = true
+        for k, v in pairs(props or {}) do btn[k] = v end
+        table.insert(Themed.Shade3, btn)
+        table.insert(Themed.Text2, btn)
+        return btn
+    end
+
+    local function MakeLabel(props)
+        local lbl = Instance.new("TextLabel")
+        lbl.BackgroundTransparency = 1
+        lbl.Font = Enum.Font.SourceSans
+        lbl.TextSize = 14
+        lbl.TextColor3 = Theme.Text1
+        for k, v in pairs(props or {}) do lbl[k] = v end
+        table.insert(Themed.Text1, lbl)
+        return lbl
+    end
+
+    -- ============ MAIN HOLDER ============
+    local Holder = Instance.new("Frame")
+    Holder.Name = RandomString()
+    Holder.Active = true
+    Holder.BackgroundColor3 = Theme.Shade2
+    Holder.BorderSizePixel = 0
+    Holder.Position = UDim2.new(1, -250, 1, -220)
+    Holder.Size = UDim2.new(0, 250, 0, 220)
+    Holder.ZIndex = 10
+    table.insert(Themed.Shade2, Holder)
+    Holder.Parent = ScaledHolder
+
+    -- Make draggable
+    local dragging, dragInput, dragStart, startPos
+    Holder.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = Holder.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
                 end
             end)
         end
     end)
-    
-    Title.InputChanged:Connect(function(Input)
-        if Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch then
-            DragInput = Input
+    Holder.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
         end
     end)
-    
-    game:GetService("UserInputService").InputChanged:Connect(function(Input)
-        if Input == DragInput and Dragging then
-            local Delta = Input.Position - DragStart
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
             Holder.Position = UDim2.new(
-                StartPos.X.Scale, StartPos.X.Offset + Delta.X, 
-                StartPos.Y.Scale, StartPos.Y.Offset + Delta.Y
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
             )
         end
     end)
 
-    -- WindowObject Methods
-    function WindowObject:AddCommand(CommandOptions)
-        local CommandText = CommandOptions.Text or "Unknown"
-        local Callback = CommandOptions.Callback or function() end
+    -- ============ TITLE BAR ============
+    local TitleBar = Instance.new("Frame")
+    TitleBar.Name = "TitleBar"
+    TitleBar.Size = UDim2.new(0, 250, 0, 20)
+    TitleBar.BackgroundColor3 = Theme.Shade1
+    TitleBar.BorderSizePixel = 0
+    TitleBar.ZIndex = 10
+    table.insert(Themed.Shade1, TitleBar)
+    TitleBar.Parent = Holder
 
-        local CmdButton = Instance.new("TextButton")
-        CmdButton.Name = "CommandButton"
-        CmdButton.Parent = self.CmdsFrame
-        CmdButton.BackgroundTransparency = 1
-        CmdButton.Size = UDim2.new(1, -10, 0, 20)
-        CmdButton.Font = Enum.Font.SourceSans
-        CmdButton.TextSize = 16
-        CmdButton.TextColor3 = Color3.new(1, 1, 1)
-        CmdButton.Text = CommandText
-        CmdButton.TextXAlignment = Enum.TextXAlignment.Left
-        
-        CmdButton.MouseButton1Click:Connect(function()
-            Callback()
+    local TitleLabel = Instance.new("TextLabel")
+    TitleLabel.Name = "Title"
+    TitleLabel.Size = UDim2.new(0, 195, 0, 20)
+    TitleLabel.BackgroundTransparency = 1
+    TitleLabel.Font = Enum.Font.SourceSans
+    TitleLabel.TextSize = 18
+    TitleLabel.Text = DisplayTitle
+    TitleLabel.TextColor3 = Theme.Text1
+    TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    TitleLabel.ZIndex = 10
+    table.insert(Themed.Text1, TitleLabel)
+    TitleLabel.Parent = TitleBar
+
+    local SettingsBtn = Instance.new("ImageButton")
+    SettingsBtn.Name = "SettingsButton"
+    SettingsBtn.Size = UDim2.new(0, 20, 0, 20)
+    SettingsBtn.Position = UDim2.new(0, 230, 0, 0)
+    SettingsBtn.BackgroundTransparency = 1
+    SettingsBtn.Image = GetAsset("settings")
+    SettingsBtn.ZIndex = 10
+    SettingsBtn.Parent = TitleBar
+
+    local MinimizeBtn = Instance.new("ImageButton")
+    MinimizeBtn.Name = "MinimizeButton"
+    MinimizeBtn.Size = UDim2.new(0, 20, 0, 20)
+    MinimizeBtn.Position = UDim2.new(0, 212, 0, 2)
+    MinimizeBtn.BackgroundTransparency = 1
+    MinimizeBtn.Image = GetAsset("minimize")
+    MinimizeBtn.ZIndex = 10
+    MinimizeBtn.Parent = TitleBar
+
+    -- ============ COMMAND BAR ============
+    local Cmdbar = Instance.new("TextBox")
+    Cmdbar.Name = "Cmdbar"
+    Cmdbar.BackgroundTransparency = 1
+    Cmdbar.BorderSizePixel = 0
+    Cmdbar.Position = UDim2.new(0, 5, 0, 20)
+    Cmdbar.Size = UDim2.new(0, 240, 0, 25)
+    Cmdbar.Font = Enum.Font.SourceSans
+    Cmdbar.TextSize = 18
+    Cmdbar.TextXAlignment = Enum.TextXAlignment.Left
+    Cmdbar.TextColor3 = Theme.Text1
+    Cmdbar.Text = ""
+    Cmdbar.PlaceholderText = Prefix .. " Command Bar"
+    Cmdbar.ZIndex = 10
+    Cmdbar.ClearTextOnFocus = false
+    table.insert(Themed.Text1, Cmdbar)
+    Cmdbar.Parent = Holder
+
+    -- ============ COMMAND LIST ============
+    local CMDsF = MakeScrollFrame({
+        Name = "CMDs",
+        Position = UDim2.new(0, 5, 0, 45),
+        Size = UDim2.new(0, 245, 0, 175),
+        ZIndex = 10,
+    })
+    CMDsF.Parent = Holder
+
+    local CmdListLayout = Instance.new("UIListLayout")
+    CmdListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    CmdListLayout.Parent = CMDsF
+
+    -- ============ DARK BACKGROUND (behind cmd list) ============
+    local Dark = Instance.new("Frame")
+    Dark.Name = "Dark"
+    Dark.Active = true
+    Dark.BackgroundColor3 = Theme.Shade1
+    Dark.BorderSizePixel = 0
+    Dark.Position = UDim2.new(0, 0, 0, 45)
+    Dark.Size = UDim2.new(0, 250, 0, 175)
+    Dark.ZIndex = 9
+    table.insert(Themed.Shade1, Dark)
+    Dark.Parent = Holder
+
+    CMDsF.ZIndex = 10
+
+    -- ============ SETTINGS PANEL ============
+    local Settings = Instance.new("Frame")
+    Settings.Name = "Settings"
+    Settings.Active = true
+    Settings.BackgroundColor3 = Theme.Shade1
+    Settings.BorderSizePixel = 0
+    Settings.Position = UDim2.new(0, 0, 0, 220)
+    Settings.Size = UDim2.new(0, 250, 0, 175)
+    Settings.Visible = false
+    Settings.ZIndex = 10
+    table.insert(Themed.Shade1, Settings)
+    Settings.Parent = Holder
+
+    -- Settings title
+    local SettingsTitle = Instance.new("Frame")
+    SettingsTitle.Size = UDim2.new(0, 250, 0, 20)
+    SettingsTitle.BackgroundColor3 = Theme.Shade2
+    SettingsTitle.BorderSizePixel = 0
+    SettingsTitle.ZIndex = 10
+    table.insert(Themed.Shade2, SettingsTitle)
+    SettingsTitle.Parent = Settings
+
+    local SettingsTitleLabel = Instance.new("TextLabel")
+    SettingsTitleLabel.Size = UDim2.new(0, 220, 0, 20)
+    SettingsTitleLabel.BackgroundTransparency = 1
+    SettingsTitleLabel.Font = Enum.Font.SourceSans
+    SettingsTitleLabel.TextSize = 14
+    SettingsTitleLabel.Text = "Settings"
+    SettingsTitleLabel.TextColor3 = Theme.Text1
+    SettingsTitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    SettingsTitleLabel.ZIndex = 10
+    table.insert(Themed.Text1, SettingsTitleLabel)
+    SettingsTitleLabel.Parent = SettingsTitle
+
+    local SettingsCloseBtn = MakeSmallButton({
+        Size = UDim2.new(0, 20, 0, 20),
+        Position = UDim2.new(1, -20, 0, 0),
+        Text = "X",
+        ZIndex = 10,
+    })
+    SettingsCloseBtn.Parent = SettingsTitle
+
+    local SettingsHolder = MakeScrollFrame({
+        Name = "Holder",
+        Size = UDim2.new(1, 0, 1, -20),
+        Position = UDim2.new(0, 0, 0, 20),
+        CanvasSize = UDim2.new(0, 0, 0, 235),
+        ZIndex = 10,
+    })
+    SettingsHolder.Parent = Settings
+
+    -- Settings: Prefix
+    local PrefixLabel = MakeLabel({
+        Text = "Prefix",
+        Size = UDim2.new(1, -10, 0, 20),
+        Position = UDim2.new(0, 5, 0, 5),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 10,
+    })
+    PrefixLabel.Parent = SettingsHolder
+
+    local PrefixBox = Instance.new("TextBox")
+    PrefixBox.Name = "PrefixBox"
+    PrefixBox.BackgroundColor3 = Theme.Shade3
+    PrefixBox.BorderSizePixel = 0
+    PrefixBox.Position = UDim2.new(1, -20, 0, 5)
+    PrefixBox.Size = UDim2.new(0, 20, 0, 20)
+    PrefixBox.Font = Enum.Font.SourceSansBold
+    PrefixBox.TextSize = 14
+    PrefixBox.Text = Prefix
+    PrefixBox.TextColor3 = Theme.Text2
+    PrefixBox.ZIndex = 10
+    table.insert(Themed.Shade3, PrefixBox)
+    table.insert(Themed.Text2, PrefixBox)
+    PrefixBox.Parent = SettingsHolder
+
+    PrefixBox.FocusLost:Connect(function(enter)
+        if enter and #PrefixBox.Text > 0 then
+            Prefix = PrefixBox.Text
+            Cmdbar.PlaceholderText = Prefix .. " Command Bar"
+            OnPrefixChange(Prefix)
+        else
+            PrefixBox.Text = Prefix
+        end
+    end)
+
+    -- Settings: Stay Open toggle
+    local StayOpenLabel = MakeLabel({
+        Text = "Keep Menu Open",
+        Size = UDim2.new(1, -10, 0, 20),
+        Position = UDim2.new(0, 5, 0, 30),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 10,
+    })
+    StayOpenLabel.Parent = SettingsHolder
+
+    local StayOpenBtnBg = Instance.new("Frame")
+    StayOpenBtnBg.BackgroundColor3 = Theme.Shade3
+    StayOpenBtnBg.BorderSizePixel = 0
+    StayOpenBtnBg.Size = UDim2.new(0, 20, 0, 20)
+    StayOpenBtnBg.Position = UDim2.new(1, -20, 0, 30)
+    StayOpenBtnBg.ZIndex = 10
+    table.insert(Themed.Shade3, StayOpenBtnBg)
+    StayOpenBtnBg.Parent = SettingsHolder
+
+    local StayOpenToggle = Instance.new("TextButton")
+    StayOpenToggle.BackgroundTransparency = 1
+    StayOpenToggle.Size = UDim2.new(0, 16, 0, 16)
+    StayOpenToggle.Position = UDim2.new(0, 2, 0, 2)
+    StayOpenToggle.Text = ""
+    StayOpenToggle.ZIndex = 10
+    StayOpenToggle.Parent = StayOpenBtnBg
+
+    local function UpdateStayOpenVisual()
+        if StayOpen then
+            StayOpenToggle.Text = "✓"
+            StayOpenToggle.TextColor3 = Theme.Text1
+        else
+            StayOpenToggle.Text = ""
+        end
+    end
+
+    StayOpenToggle.MouseButton1Click:Connect(function()
+        StayOpen = not StayOpen
+        UpdateStayOpenVisual()
+    end)
+
+    -- Helper: settings row button with icon
+    local function MakeSettingsRow(name, iconAsset, yOffset, iconOffset)
+        local row = Instance.new("TextButton")
+        row.BackgroundColor3 = Theme.Shade2
+        row.BorderSizePixel = 0
+        row.Size = UDim2.new(1, -10, 0, 25)
+        row.Position = UDim2.new(0, 5, 0, yOffset)
+        row.Text = ""
+        row.ZIndex = 10
+        row.AutoButtonColor = true
+        table.insert(Themed.Shade2, row)
+        row.Parent = SettingsHolder
+
+        local icon = Instance.new("ImageLabel")
+        icon.Size = UDim2.new(0, 16, 0, 16)
+        icon.Position = UDim2.new(0, 5, 0, 5)
+        icon.BackgroundTransparency = 1
+        icon.Image = iconAsset
+        icon.ZIndex = 10
+        if iconOffset then
+            icon.ScaleType = Enum.ScaleType.Crop
+            icon.ImageRectSize = Vector2.new(16, 16)
+            icon.ImageRectOffset = Vector2.new(iconOffset, 0)
+        end
+        icon.Parent = row
+
+        local lbl = MakeLabel({
+            Text = name,
+            Position = UDim2.new(0, 28, 0, 0),
+            Size = UDim2.new(1, -28, 1, 0),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 10,
+        })
+        lbl.Parent = row
+
+        return row
+    end
+
+    local ColorsBtn = MakeSettingsRow("Edit Theme", GetAsset("edittheme"), 55)
+    local KeybindsBtn = MakeSettingsRow("Edit Keybinds", GetAsset("editkeybinds"), 85)
+    local AliasesBtn = MakeSettingsRow("Edit Aliases", GetAsset("editaliases"), 115)
+    local WaypointsBtn = MakeSettingsRow("Edit/Goto Waypoints", GetAsset("editwaypoints"), 145)
+    local PluginsBtn = MakeSettingsRow("Manage Plugins", GetAsset("bindsandplugins"), 175, 743)
+    local EventBindsBtn = MakeSettingsRow("Edit Event Binds", GetAsset("bindsandplugins"), 205, 759)
+
+    -- ============ TOOLTIP ============
+    local Tooltip = Instance.new("Frame")
+    Tooltip.Name = RandomString()
+    Tooltip.Active = true
+    Tooltip.BackgroundColor3 = Theme.Shade1
+    Tooltip.BackgroundTransparency = 0.1
+    Tooltip.BorderSizePixel = 0
+    Tooltip.Size = UDim2.new(0, 200, 0, 96)
+    Tooltip.Visible = false
+    Tooltip.ZIndex = 100
+    table.insert(Themed.Shade1, Tooltip)
+    Tooltip.Parent = ScaledHolder
+
+    local TooltipTitle = Instance.new("Frame")
+    TooltipTitle.Size = UDim2.new(0, 200, 0, 20)
+    TooltipTitle.BackgroundColor3 = Theme.Shade2
+    TooltipTitle.BackgroundTransparency = 0.1
+    TooltipTitle.BorderSizePixel = 0
+    TooltipTitle.ZIndex = 100
+    table.insert(Themed.Shade2, TooltipTitle)
+    TooltipTitle.Parent = Tooltip
+
+    local TooltipTitleLabel = MakeLabel({
+        Size = UDim2.new(0, 190, 0, 20),
+        Position = UDim2.new(0, 5, 0, 0),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTransparency = 0.1,
+        ZIndex = 100,
+    })
+    TooltipTitleLabel.Parent = TooltipTitle
+
+    local TooltipDesc = MakeLabel({
+        Size = UDim2.new(0, 180, 0, 72),
+        Position = UDim2.new(0, 10, 0, 18),
+        TextWrapped = true,
+        TextTransparency = 0.1,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        ZIndex = 100,
+    })
+    TooltipDesc.Parent = Tooltip
+
+    local function ShowTooltip(title, desc, x, y)
+        TooltipTitleLabel.Text = title
+        TooltipDesc.Text = desc or ""
+        local textSize = TextService:GetTextSize(TooltipDesc.Text, 16, Enum.Font.SourceSans, Vector2.new(180, 1000))
+        local neededHeight = math.max(96, textSize.Y + 24)
+        Tooltip.Size = UDim2.new(0, 200, 0, neededHeight)
+        TooltipDesc.Size = UDim2.new(0, 180, 0, neededHeight - 24)
+        -- Position tooltip
+        local viewportSize = workspace.CurrentCamera.ViewportSize
+        local posX = math.min(x + 15, viewportSize.X - 210)
+        local posY = math.max(y - neededHeight - 5, 5)
+        if posY < 5 then
+            posY = math.min(y + 25, viewportSize.Y - neededHeight - 5)
+        end
+        Tooltip.Position = UDim2.new(0, posX, 0, posY)
+        Tooltip.Visible = true
+    end
+
+    local function HideTooltip()
+        Tooltip.Visible = false
+    end
+
+    -- ============ NOTIFICATION ============
+    local Notification = Instance.new("Frame")
+    Notification.Name = RandomString()
+    Notification.BackgroundColor3 = Theme.Shade1
+    Notification.BorderSizePixel = 0
+    Notification.Position = UDim2.new(1, -500, 1, 20)
+    Notification.Size = UDim2.new(0, 250, 0, 100)
+    Notification.Visible = false
+    Notification.ZIndex = 50
+    table.insert(Themed.Shade1, Notification)
+    Notification.Parent = ScaledHolder
+
+    local NotifTitle = Instance.new("Frame")
+    NotifTitle.Size = UDim2.new(0, 250, 0, 20)
+    NotifTitle.BackgroundColor3 = Theme.Shade2
+    NotifTitle.BorderSizePixel = 0
+    NotifTitle.ZIndex = 50
+    table.insert(Themed.Shade2, NotifTitle)
+    NotifTitle.Parent = Notification
+
+    local NotifTitleLabel = MakeLabel({
+        Size = UDim2.new(0, 190, 0, 20),
+        Position = UDim2.new(0, 5, 0, 0),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 50,
+    })
+    NotifTitleLabel.Parent = NotifTitle
+
+    local NotifText = MakeLabel({
+        Position = UDim2.new(0, 5, 0, 25),
+        Size = UDim2.new(0, 240, 0, 75),
+        TextWrapped = true,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        ZIndex = 50,
+    })
+    NotifText.Parent = Notification
+
+    local NotifCloseBtn = Instance.new("TextButton")
+    NotifCloseBtn.BackgroundTransparency = 1
+    NotifCloseBtn.Size = UDim2.new(0, 20, 0, 20)
+    NotifCloseBtn.Position = UDim2.new(1, -20, 0, 0)
+    NotifCloseBtn.Text = ""
+    NotifCloseBtn.ZIndex = 50
+    NotifCloseBtn.Parent = NotifTitle
+
+    local NotifCloseImg = Instance.new("ImageLabel")
+    NotifCloseImg.BackgroundTransparency = 1
+    NotifCloseImg.Size = UDim2.new(0, 10, 0, 10)
+    NotifCloseImg.Position = UDim2.new(0, 5, 0, 5)
+    NotifCloseImg.Image = GetAsset("close")
+    NotifCloseImg.ZIndex = 50
+    NotifCloseImg.Parent = NotifCloseBtn
+
+    local NotifPinBtn = Instance.new("TextButton")
+    NotifPinBtn.BackgroundTransparency = 1
+    NotifPinBtn.Size = UDim2.new(0, 20, 0, 20)
+    NotifPinBtn.Position = UDim2.new(1, -40, 0, 0)
+    NotifPinBtn.Text = ""
+    NotifPinBtn.ZIndex = 50
+    NotifPinBtn.Parent = NotifTitle
+
+    local NotifPinImg = Instance.new("ImageLabel")
+    NotifPinImg.BackgroundTransparency = 1
+    NotifPinImg.Size = UDim2.new(0, 14, 0, 14)
+    NotifPinImg.Position = UDim2.new(0, 3, 0, 3)
+    NotifPinImg.Image = GetAsset("pin")
+    NotifPinImg.ZIndex = 50
+    NotifPinImg.Parent = NotifPinBtn
+
+    -- Notification draggable
+    local notifDragging, notifDragInput, notifDragStart, notifStartPos
+    NotifTitle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            notifDragging = true
+            notifDragStart = input.Position
+            notifStartPos = Notification.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then notifDragging = false end
+            end)
+        end
+    end)
+    NotifTitle.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then notifDragInput = input end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == notifDragInput and notifDragging then
+            local delta = input.Position - notifDragStart
+            Notification.Position = UDim2.new(
+                notifStartPos.X.Scale, notifStartPos.X.Offset + delta.X,
+                notifStartPos.Y.Scale, notifStartPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    local NotifDismissTime = 4
+    local NotifTimer = nil
+
+    local function DismissNotification()
+        if PinnedNotification then return end
+        if NotifTimer then
+            NotifTimer:Disconnect()
+            NotifTimer = nil
+        end
+        Notification.Visible = false
+        CurrentNotification = nil
+        -- Process queue
+        if #NotificationQueue > 0 then
+            local next = table.remove(NotificationQueue, 1)
+            Library.Notify(next.Title, next.Text, next.Duration)
+        end
+    end
+
+    NotifCloseBtn.MouseButton1Click:Connect(function()
+        PinnedNotification = nil
+        DismissNotification()
+    end)
+
+    NotifPinBtn.MouseButton1Click:Connect(function()
+        if PinnedNotification then
+            PinnedNotification = nil
+            NotifPinImg.ImageTransparency = 0
+            if NotifTimer then NotifTimer:Disconnect() NotifTimer = nil end
+            NotifTimer = spawn(function()
+                wait(NotifDismissTime)
+                DismissNotification()
+            end)
+        else
+            PinnedNotification = true
+            NotifPinImg.ImageTransparency = 0.5
+            if NotifTimer then NotifTimer:Disconnect() NotifTimer = nil end
+        end
+    end)
+
+    function Library.Notify(title, text, duration)
+        duration = duration or NotifDismissTime
+        if CurrentNotification and not PinnedNotification then
+            table.insert(NotificationQueue, {Title = title, Text = text, Duration = duration})
+            return
+        elseif CurrentNotification and PinnedNotification then
+            table.insert(NotificationQueue, {Title = title, Text = text, Duration = duration})
+            return
+        end
+        CurrentNotification = {Title = title, Text = text}
+        NotifTitleLabel.Text = title or "Notification"
+        NotifText.Text = text or ""
+        -- Auto-size notification height
+        local textSize = TextService:GetTextSize(NotifText.Text, 16, Enum.Font.SourceSans, Vector2.new(240, 1000))
+        local neededHeight = math.max(60, textSize.Y + 30)
+        Notification.Size = UDim2.new(0, 250, 0, neededHeight)
+        NotifText.Size = UDim2.new(0, 240, 0, neededHeight - 30)
+        Notification.Position = UDim2.new(1, -500, 1, 20)
+        Notification.Visible = true
+        PinnedNotification = nil
+        NotifPinImg.ImageTransparency = 0
+        -- Slide in
+        local tweenIn = TweenService:Create(Notification, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
+            Position = UDim2.new(1, -260, 1, -neededHeight - 10)
+        })
+        tweenIn:Play()
+        if NotifTimer then NotifTimer:Disconnect() end
+        NotifTimer = spawn(function()
+            wait(duration)
+            DismissNotification()
         end)
-        
-        return CmdButton
     end
 
-    function WindowObject:SetTheme(ThemeOptions)
-        if ThemeOptions.Background then
-            self.Holder.BackgroundColor3 = ThemeOptions.Background
-            Dark.BackgroundColor3 = ThemeOptions.Background
+    -- ============ SUB-FRAMES (Keybinds, Aliases, Waypoints, Plugins) ============
+    -- These are rendered inside the Settings panel area
+
+    local SubFrames = {}
+    local function CreateSubFrame(name)
+        local frame = Instance.new("Frame")
+        frame.Name = name
+        frame.Active = true
+        frame.BackgroundColor3 = Theme.Shade1
+        frame.BorderSizePixel = 0
+        frame.Size = UDim2.new(0, 250, 0, 175)
+        frame.Position = UDim2.new(0, 0, 0, 175)
+        frame.Visible = false
+        frame.ZIndex = 11
+        table.insert(Themed.Shade1, frame)
+        frame.Parent = Settings
+
+        -- Title bar
+        local titleBar = Instance.new("Frame")
+        titleBar.Size = UDim2.new(0, 250, 0, 20)
+        titleBar.BackgroundColor3 = Theme.Shade2
+        titleBar.BorderSizePixel = 0
+        titleBar.ZIndex = 11
+        table.insert(Themed.Shade2, titleBar)
+        titleBar.Parent = frame
+
+        local titleLbl = MakeLabel({
+            Text = name,
+            Size = UDim2.new(0, 210, 0, 20),
+            Position = UDim2.new(0, 5, 0, 0),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 11,
+        })
+        titleLbl.Parent = titleBar
+
+        local closeBtn = MakeSmallButton({
+            Size = UDim2.new(0, 20, 0, 20),
+            Position = UDim2.new(1, -20, 0, 0),
+            Text = "X",
+            ZIndex = 11,
+        })
+        closeBtn.Parent = titleBar
+
+        local listFrame = MakeScrollFrame({
+            Size = UDim2.new(0, 250, 0, 145),
+            Position = UDim2.new(0, 0, 0, 20),
+            ScrollBarThickness = 0,
+            ZIndex = 11,
+        })
+        listFrame.Parent = frame
+
+        local listLayout = Instance.new("UIListLayout")
+        listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        listLayout.Parent = listFrame
+
+        SubFrames[name] = {
+            Frame = frame,
+            List = listFrame,
+            Layout = listLayout,
+            CloseBtn = closeBtn,
+            TitleLabel = titleLbl,
+        }
+
+        closeBtn.MouseButton1Click:Connect(function()
+            frame.Visible = false
+        end)
+
+        return SubFrames[name]
+    end
+
+    local KeybindsFrame = CreateSubFrame("Keybinds")
+    local AliasesFrame = CreateSubFrame("Aliases")
+    local WaypointsFrame = CreateSubFrame("Waypoints")
+    local PluginsFrame = CreateSubFrame("Plugins")
+    local EventBindsFrame = CreateSubFrame("Event Binds")
+
+    -- Add button rows to sub-frames
+    local function AddSubFrameButtons(frameData, buttons)
+        local yOff = 0
+        for i, btnData in ipairs(buttons) do
+            local btn = MakeButton({
+                Text = btnData.Text,
+                Size = UDim2.new(0, btnData.Width or 40, 0, 20),
+                Position = UDim2.new(0, 5 + (i - 1) * ((btnData.Width or 40) + 5), 0, 150),
+                ZIndex = 11,
+            })
+            btn.Parent = frameData.Frame
+            if btnData.Callback then
+                btn.MouseButton1Click:Connect(btnData.Callback)
+            end
         end
-        if ThemeOptions.TitleBackground then
-            Title.BackgroundColor3 = ThemeOptions.TitleBackground
+    end
+
+    AddSubFrameButtons(KeybindsFrame, {
+        {Text = "Add", Callback = function()
+            Library.Notify("Keybinds", "Use the keybind editor popup to add keybinds.", 3)
+        end},
+        {Text = "Clear", Callback = function()
+            Keybinds = {}
+            RefreshKeybindsList()
+            Library.Notify("Keybinds", "All keybinds cleared.", 2)
+        end},
+    })
+
+    AddSubFrameButtons(AliasesFrame, {
+        {Text = "Clear", Callback = function()
+            Aliases = {}
+            RefreshAliasesList()
+            Library.Notify("Aliases", "All aliases cleared.", 2)
+        end},
+    })
+
+    AddSubFrameButtons(WaypointsFrame, {
+        {Text = "Part", Callback = function()
+            Library.Notify("Waypoints", "Select a part in the game to save as a waypoint.", 3)
+        end},
+        {Text = "Clear", Callback = function()
+            Waypoints = {}
+            RefreshWaypointsList()
+            Library.Notify("Waypoints", "All waypoints cleared.", 2)
+        end},
+    })
+
+    AddSubFrameButtons(PluginsFrame, {
+        {Text = "Add", Callback = function()
+            Library.Notify("Plugins", "Use the plugin editor to add .iy plugin files.", 3)
+        end},
+        {Text = "Clear", Callback = function()
+            Plugins = {}
+            RefreshPluginsList()
+            Library.Notify("Plugins", "All plugins cleared.", 2)
+        end},
+    })
+
+    AddSubFrameButtons(EventBindsFrame, {
+        {Text = "Add", Callback = function()
+            Library.Notify("Event Binds", "Event binds allow binding commands to game events.", 3)
+        end},
+        {Text = "Clear", Callback = function()
+            EventBinds = {}
+            RefreshEventBindsList()
+            Library.Notify("Event Binds", "All event binds cleared.", 2)
+        end},
+    })
+
+    -- Hints for empty sub-frames
+    local function AddHint(frameData, text)
+        local hint = MakeLabel({
+            Text = text,
+            Size = UDim2.new(0, 200, 0, 50),
+            Position = UDim2.new(0, 25, 0, 40),
+            Font = Enum.Font.SourceSansItalic,
+            TextSize = 16,
+            TextWrapped = true,
+            ZIndex = 11,
+        })
+        hint.Parent = frameData.Frame
+        hint.Name = "Hint"
+        return hint
+    end
+
+    AddHint(AliasesFrame, "Add aliases using the 'addalias' command")
+    AddHint(PluginsFrame, "Add plugins using the 'addplugin' command")
+    AddHint(WaypointsFrame, "Save waypoints using the 'waypoint' command")
+    AddHint(KeybindsFrame, "Add keybinds using the 'bind' command")
+    AddHint(EventBindsFrame, "Add event binds using the 'eventbind' command")
+
+    -- ============ REFRESH FUNCTIONS FOR SUB-FRAMES ============
+    local function ClearList(frameData)
+        for _, child in pairs(frameData.List:GetChildren()) do
+            if child:IsA("Frame") or child:IsA("TextButton") then
+                child:Destroy()
+            end
+        end
+        local hint = frameData.Frame:FindFirstChild("Hint")
+        if hint then hint.Visible = true end
+    end
+
+    function RefreshKeybindsList()
+        ClearList(KeybindsFrame)
+        for i, kb in ipairs(Keybinds) do
+            local hint = KeybindsFrame.Frame:FindFirstChild("Hint")
+            if hint then hint.Visible = false end
+            local row = Instance.new("Frame")
+            row.BackgroundColor3 = Theme.Shade2
+            row.BorderSizePixel = 0
+            row.Size = UDim2.new(0, 250, 0, 20)
+            row.ZIndex = 11
+            table.insert(Themed.Shade2, row)
+            row.Parent = KeybindsFrame.List
+
+            local lbl = MakeLabel({
+                Text = tostring(kb.Key) .. " > " .. tostring(kb.Command),
+                Size = UDim2.new(0, 200, 0, 20),
+                Position = UDim2.new(0, 5, 0, 0),
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = 11,
+            })
+            lbl.Parent = row
+
+            local del = MakeSmallButton({
+                Text = "Delete",
+                Size = UDim2.new(0, 40, 0, 20),
+                Position = UDim2.new(0, 200, 0, 0),
+                ZIndex = 11,
+            })
+            del.Parent = row
+            del.MouseButton1Click:Connect(function()
+                table.remove(Keybinds, i)
+                RefreshKeybindsList()
+            end)
         end
     end
 
-    function WindowObject:Destroy()
-        self.ScreenGui:Destroy()
+    function RefreshAliasesList()
+        ClearList(AliasesFrame)
+        for alias, cmd in pairs(Aliases) do
+            local hint = AliasesFrame.Frame:FindFirstChild("Hint")
+            if hint then hint.Visible = false end
+            local row = Instance.new("Frame")
+            row.BackgroundColor3 = Theme.Shade2
+            row.BorderSizePixel = 0
+            row.Size = UDim2.new(0, 250, 0, 20)
+            row.ZIndex = 11
+            table.insert(Themed.Shade2, row)
+            row.Parent = AliasesFrame.List
+
+            local lbl = MakeLabel({
+                Text = alias .. " > " .. cmd,
+                Size = UDim2.new(0, 200, 0, 20),
+                Position = UDim2.new(0, 5, 0, 0),
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = 11,
+            })
+            lbl.Parent = row
+
+            local capturedAlias = alias
+            local del = MakeSmallButton({
+                Text = "Delete",
+                Size = UDim2.new(0, 40, 0, 20),
+                Position = UDim2.new(0, 200, 0, 0),
+                ZIndex = 11,
+            })
+            del.Parent = row
+            del.MouseButton1Click:Connect(function()
+                Aliases[capturedAlias] = nil
+                RefreshAliasesList()
+            end)
+        end
     end
 
-    return WindowObject
+    function RefreshWaypointsList()
+        ClearList(WaypointsFrame)
+        for name, pos in pairs(Waypoints) do
+            local hint = WaypointsFrame.Frame:FindFirstChild("Hint")
+            if hint then hint.Visible = false end
+            local row = Instance.new("Frame")
+            row.BackgroundColor3 = Theme.Shade2
+            row.BorderSizePixel = 0
+            row.Size = UDim2.new(0, 250, 0, 20)
+            row.ZIndex = 11
+            table.insert(Themed.Shade2, row)
+            row.Parent = WaypointsFrame.List
+
+            local lbl = MakeLabel({
+                Text = name .. " [" .. math.floor(pos.X) .. ", " .. math.floor(pos.Y) .. ", " .. math.floor(pos.Z) .. "]",
+                Size = UDim2.new(0, 150, 0, 20),
+                Position = UDim2.new(0, 5, 0, 0),
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = 11,
+            })
+            lbl.Parent = row
+
+            local capturedName = name
+            local capturedPos = pos
+
+            local gotoBtn = MakeSmallButton({
+                Text = "Goto",
+                Size = UDim2.new(0, 40, 0, 20),
+                Position = UDim2.new(0, 155, 0, 0),
+                ZIndex = 11,
+            })
+            gotoBtn.Parent = row
+            gotoBtn.MouseButton1Click:Connect(function()
+                local char = PlayersService.LocalPlayer.Character
+                if char and char:FindFirstChild("HumanoidRootPart") then
+                    char.HumanoidRootPart.CFrame = CFrame.new(capturedPos)
+                    Library.Notify("Waypoints", "Teleported to " .. capturedName, 2)
+                end
+            end)
+
+            local del = MakeSmallButton({
+                Text = "Delete",
+                Size = UDim2.new(0, 40, 0, 20),
+                Position = UDim2.new(0, 200, 0, 0),
+                ZIndex = 11,
+            })
+            del.Parent = row
+            del.MouseButton1Click:Connect(function()
+                Waypoints[capturedName] = nil
+                RefreshWaypointsList()
+            end)
+        end
+    end
+
+    function RefreshPluginsList()
+        ClearList(PluginsFrame)
+        for i, pluginName in ipairs(Plugins) do
+            local hint = PluginsFrame.Frame:FindFirstChild("Hint")
+            if hint then hint.Visible = false end
+            local row = Instance.new("Frame")
+            row.BackgroundColor3 = Theme.Shade2
+            row.BorderSizePixel = 0
+            row.Size = UDim2.new(0, 250, 0, 20)
+            row.ZIndex = 11
+            table.insert(Themed.Shade2, row)
+            row.Parent = PluginsFrame.List
+
+            local lbl = MakeLabel({
+                Text = pluginName,
+                Size = UDim2.new(0, 200, 0, 20),
+                Position = UDim2.new(0, 5, 0, 0),
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = 11,
+            })
+            lbl.Parent = row
+
+            local del = MakeSmallButton({
+                Text = "Delete",
+                Size = UDim2.new(0, 40, 0, 20),
+                Position = UDim2.new(0, 200, 0, 0),
+                ZIndex = 11,
+            })
+            del.Parent = row
+            del.MouseButton1Click:Connect(function()
+                table.remove(Plugins, i)
+                RefreshPluginsList()
+            end)
+        end
+    end
+
+    function RefreshEventBindsList()
+        ClearList(EventBindsFrame)
+        for i, eb in ipairs(EventBinds) do
+            local hint = EventBindsFrame.Frame:FindFirstChild("Hint")
+            if hint then hint.Visible = false end
+            local row = Instance.new("Frame")
+            row.BackgroundColor3 = Theme.Shade2
+            row.BorderSizePixel = 0
+            row.Size = UDim2.new(0, 250, 0, 20)
+            row.ZIndex = 11
+            table.insert(Themed.Shade2, row)
+            row.Parent = EventBindsFrame.List
+
+            local lbl = MakeLabel({
+                Text = tostring(eb.Event) .. " > " .. tostring(eb.Command),
+                Size = UDim2.new(0, 200, 0, 20),
+                Position = UDim2.new(0, 5, 0, 0),
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = 11,
+            })
+            lbl.Parent = row
+
+            local del = MakeSmallButton({
+                Text = "Delete",
+                Size = UDim2.new(0, 40, 0, 20),
+                Position = UDim2.new(0, 200, 0, 0),
+                ZIndex = 11,
+            })
+            del.Parent = row
+            del.MouseButton1Click:Connect(function()
+                table.remove(EventBinds, i)
+                RefreshEventBindsList()
+            end)
+        end
+    end
+
+    -- ============ THEME EDITOR POPUP ============
+    local ThemeEditor = Instance.new("Frame")
+    ThemeEditor.Name = RandomString()
+    ThemeEditor.Active = true
+    ThemeEditor.BackgroundTransparency = 1
+    ThemeEditor.Position = UDim2.new(0.5, -150, 0, -500)
+    ThemeEditor.Size = UDim2.new(0, 300, 0, 20)
+    ThemeEditor.ZIndex = 60
+    ThemeEditor.Parent = ScaledHolder
+
+    local ThemeEditorTitle = Instance.new("Frame")
+    ThemeEditorTitle.Size = UDim2.new(0, 300, 0, 20)
+    ThemeEditorTitle.BackgroundColor3 = Theme.Shade2
+    ThemeEditorTitle.BorderSizePixel = 0
+    ThemeEditorTitle.ZIndex = 60
+    table.insert(Themed.Shade2, ThemeEditorTitle)
+    ThemeEditorTitle.Parent = ThemeEditor
+
+    local ThemeEditorTitleLabel = MakeLabel({
+        Text = "Edit Theme",
+        Size = UDim2.new(0, 270, 0, 20),
+        Position = UDim2.new(0, 5, 0, 0),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 60,
+    })
+    ThemeEditorTitleLabel.Parent = ThemeEditorTitle
+
+    local ThemeEditorClose = MakeSmallButton({
+        Size = UDim2.new(0, 20, 0, 20),
+        Position = UDim2.new(1, -20, 0, 0),
+        Text = "X",
+        ZIndex = 60,
+    })
+    ThemeEditorClose.Parent = ThemeEditorTitle
+
+    local ThemeEditorBg = Instance.new("Frame")
+    ThemeEditorBg.Size = UDim2.new(0, 300, 0, 200)
+    ThemeEditorBg.Position = UDim2.new(0, 0, 0, 20)
+    ThemeEditorBg.BackgroundColor3 = Theme.Shade1
+    ThemeEditorBg.BorderSizePixel = 0
+    ThemeEditorBg.ZIndex = 60
+    table.insert(Themed.Shade1, ThemeEditorBg)
+    ThemeEditorBg.Parent = ThemeEditor
+
+    -- Color pickers for each theme element
+    local ThemeColors = {
+        {Name = "Shade 1 (Dark)", Key = "Shade1", Default = Color3.fromRGB(36, 36, 37)},
+        {Name = "Shade 2 (Medium)", Key = "Shade2", Default = Color3.fromRGB(46, 46, 47)},
+        {Name = "Shade 3 (Light)", Key = "Shade3", Default = Color3.fromRGB(78, 78, 79)},
+        {Name = "Text 1 (Primary)", Key = "Text1", Default = Color3.new(1, 1, 1)},
+        {Name = "Text 2 (Secondary)", Key = "Text2", Default = Color3.new(0, 0, 0)},
+        {Name = "Accent", Key = "Accent", Default = Color3.fromRGB(150, 150, 151)},
+    }
+
+    for i, colorData in ipairs(ThemeColors) do
+        local y = 5 + (i - 1) * 32
+        local lbl = MakeLabel({
+            Text = colorData.Name,
+            Size = UDim2.new(0, 180, 0, 20),
+            Position = UDim2.new(0, 10, 0, y),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 60,
+        })
+        lbl.Parent = ThemeEditorBg
+
+        local preview = Instance.new("Frame")
+        preview.Size = UDim2.new(0, 20, 0, 20)
+        preview.Position = UDim2.new(0, 195, 0, y)
+        preview.BackgroundColor3 = Theme[colorData.Key]
+        preview.BorderSizePixel = 0
+        preview.ZIndex = 60
+        preview.Parent = ThemeEditorBg
+
+        local colorBtn = MakeSmallButton({
+            Text = "Pick",
+            Size = UDim2.new(0, 40, 0, 20),
+            Position = UDim2.new(0, 220, 0, y),
+            ZIndex = 60,
+        })
+        colorBtn.Parent = ThemeEditorBg
+
+        colorBtn.MouseButton1Click:Connect(function()
+            -- Simple color cycle since we can't use Color3Picker easily
+            local colors = {
+                Color3.fromRGB(36, 36, 37),
+                Color3.fromRGB(46, 46, 47),
+                Color3.fromRGB(78, 78, 79),
+                Color3.fromRGB(100, 100, 100),
+                Color3.fromRGB(30, 30, 30),
+                Color3.fromRGB(20, 20, 25),
+                Color3.fromRGB(50, 50, 60),
+                Color3.fromRGB(60, 40, 40),
+                Color3.fromRGB(40, 60, 40),
+                Color3.fromRGB(40, 40, 60),
+                Color3.new(1, 1, 1),
+                Color3.new(0, 0, 0),
+                Color3.fromRGB(200, 50, 50),
+                Color3.fromRGB(50, 200, 50),
+                Color3.fromRGB(50, 50, 200),
+                Color3.fromRGB(200, 200, 50),
+                Color3.fromRGB(200, 50, 200),
+                Color3.fromRGB(50, 200, 200),
+            }
+            local current = Theme[colorData.Key]
+            local found = false
+            for j, c in ipairs(colors) do
+                if (c - current).Magnitude < 0.05 then
+                    if j < #colors then
+                        Theme[colorData.Key] = colors[j + 1]
+                    else
+                        Theme[colorData.Key] = colors[1]
+                    end
+                    found = true
+                    break
+                end
+            end
+            if not found then
+                Theme[colorData.Key] = colors[1]
+            end
+            preview.BackgroundColor3 = Theme[colorData.Key]
+            ApplyTheme()
+        end)
+    end
+
+    local ResetThemeBtn = MakeButton({
+        Text = "Reset to Default",
+        Size = UDim2.new(0, 120, 0, 20),
+        Position = UDim2.new(0, 10, 0, 175),
+        ZIndex = 60,
+    })
+    ResetThemeBtn.Parent = ThemeEditorBg
+    ResetThemeBtn.MouseButton1Click:Connect(function()
+        Theme.Shade1 = Color3.fromRGB(36, 36, 37)
+        Theme.Shade2 = Color3.fromRGB(46, 46, 47)
+        Theme.Shade3 = Color3.fromRGB(78, 78, 79)
+        Theme.Text1 = Color3.new(1, 1, 1)
+        Theme.Text2 = Color3.new(0, 0, 0)
+        Theme.Accent = Color3.fromRGB(150, 150, 151)
+        Theme.Scroll = Color3.fromRGB(78, 78, 79)
+        ApplyTheme()
+        -- Update previews
+        for _, child in pairs(ThemeEditorBg:GetChildren()) do
+            if child:IsA("Frame") and child ~= ThemeEditorBg then
+                -- Will be refreshed on next open
+            end
+        end
+        Library.Notify("Theme", "Theme reset to default.", 2)
+    end)
+
+    ThemeEditorClose.MouseButton1Click:Connect(function()
+        ThemeEditor.Position = UDim2.new(0.5, -150, 0, -500)
+    end)
+
+    -- Theme editor draggable
+    local teDragging, teDragInput, teDragStart, teStartPos
+    ThemeEditorTitle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            teDragging = true
+            teDragStart = input.Position
+            teStartPos = ThemeEditor.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then teDragging = false end
+            end)
+        end
+    end)
+    ThemeEditorTitle.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then teDragInput = input end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == teDragInput and teDragging then
+            local delta = input.Position - teDragStart
+            ThemeEditor.Position = UDim2.new(
+                teStartPos.X.Scale, teStartPos.X.Offset + delta.X,
+                teStartPos.Y.Scale, teStartPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    -- ============ KEYBIND EDITOR POPUP ============
+    local KeybindEditor = Instance.new("Frame")
+    KeybindEditor.Name = RandomString()
+    KeybindEditor.Active = true
+    KeybindEditor.BackgroundTransparency = 1
+    KeybindEditor.Position = UDim2.new(0.5, -180, 0, -500)
+    KeybindEditor.Size = UDim2.new(0, 360, 0, 20)
+    KeybindEditor.ZIndex = 60
+    KeybindEditor.Parent = ScaledHolder
+
+    local KeTitleBar = Instance.new("Frame")
+    KeTitleBar.Size = UDim2.new(0, 360, 0, 20)
+    KeTitleBar.BackgroundColor3 = Theme.Shade2
+    KeTitleBar.BorderSizePixel = 0
+    KeTitleBar.ZIndex = 60
+    table.insert(Themed.Shade2, KeTitleBar)
+    KeTitleBar.Parent = KeybindEditor
+
+    local KeTitleLabel = MakeLabel({
+        Text = "Set Keybinds",
+        Size = UDim2.new(0, 330, 0, 20),
+        Position = UDim2.new(0, 5, 0, 0),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 60,
+    })
+    KeTitleLabel.Parent = KeTitleBar
+
+    local KeClose = MakeSmallButton({
+        Size = UDim2.new(0, 20, 0, 20),
+        Position = UDim2.new(1, -20, 0, 0),
+        Text = "X",
+        ZIndex = 60,
+    })
+    KeClose.Parent = KeTitleBar
+
+    local KeBg = Instance.new("Frame")
+    KeBg.Size = UDim2.new(0, 360, 0, 185)
+    KeBg.Position = UDim2.new(0, 0, 0, 20)
+    KeBg.BackgroundColor3 = Theme.Shade1
+    KeBg.BorderSizePixel = 0
+    KeBg.ZIndex = 60
+    table.insert(Themed.Shade1, KeBg)
+    KeBg.Parent = KeybindEditor
+
+    -- Divider
+    local KeDivider = Instance.new("Frame")
+    KeDivider.Size = UDim2.new(0, 2, 0, 185)
+    KeDivider.Position = UDim2.new(0, 135, 0, 0)
+    KeDivider.BackgroundColor3 = Theme.Shade2
+    KeDivider.BorderSizePixel = 0
+    KeDivider.ZIndex = 60
+    table.insert(Themed.Shade2, KeDivider)
+    KeDivider.Parent = KeBg
+
+    -- Left side: key binding
+    local KeDirections = MakeLabel({
+        Text = "Click the button below and press a key/mouse button. Then select what you want to bind it to.",
+        Size = UDim2.new(0, 115, 0, 90),
+        Position = UDim2.new(0, 10, 0, 15),
+        TextWrapped = true,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        ZIndex = 60,
+    })
+    KeDirections.Parent = KeBg
+
+    local BindToBtn = MakeButton({
+        Text = "Click to bind",
+        Size = UDim2.new(0, 115, 0, 50),
+        Position = UDim2.new(0, 10, 0, 95),
+        ZIndex = 60,
+    })
+    BindToBtn.Parent = KeBg
+
+    local KeTriggerLabel = MakeLabel({
+        Text = "Trigger:",
+        Size = UDim2.new(0, 45, 0, 20),
+        Position = UDim2.new(0, 10, 0, 155),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 60,
+    })
+    KeTriggerLabel.Parent = KeBg
+
+    local TriggerSelect = MakeButton({
+        Text = "KeyDown",
+        Size = UDim2.new(0, 65, 0, 20),
+        Position = UDim2.new(0, 60, 0, 155),
+        ZIndex = 60,
+    })
+    TriggerSelect.Parent = KeBg
+
+    local TriggerModes = {"KeyDown", "KeyUp", "KeyPressed"}
+    local TriggerIndex = 1
+    TriggerSelect.MouseButton1Click:Connect(function()
+        TriggerIndex = TriggerIndex % #TriggerModes + 1
+        TriggerSelect.Text = TriggerModes[TriggerIndex]
+    end)
+
+    -- Right side: command input
+    local KeCmdLabel = MakeLabel({
+        Text = "Command to run:",
+        Size = UDim2.new(0, 200, 0, 20),
+        Position = UDim2.new(0, 150, 0, 10),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 60,
+    })
+    KeCmdLabel.Parent = KeBg
+
+    local KeCmdBox = Instance.new("TextBox")
+    KeCmdBox.BackgroundColor3 = Theme.Shade2
+    KeCmdBox.BorderSizePixel = 0
+    KeCmdBox.Size = UDim2.new(0, 195, 0, 20)
+    KeCmdBox.Position = UDim2.new(0, 150, 0, 35)
+    KeCmdBox.Font = Enum.Font.SourceSans
+    KeCmdBox.TextSize = 14
+    KeCmdBox.PlaceholderText = "Command"
+    KeCmdBox.Text = ""
+    KeCmdBox.TextColor3 = Theme.Text1
+    KeCmdBox.TextXAlignment = Enum.TextXAlignment.Left
+    KeCmdBox.ZIndex = 60
+    table.insert(Themed.Shade2, KeCmdBox)
+    table.insert(Themed.Text1, KeCmdBox)
+    KeCmdBox.Parent = KeBg
+
+    local KeCmdBox2 = Instance.new("TextBox")
+    KeCmdBox2.BackgroundColor3 = Theme.Shade2
+    KeCmdBox2.BorderSizePixel = 0
+    KeCmdBox2.Size = UDim2.new(0, 195, 0, 20)
+    KeCmdBox2.Position = UDim2.new(0, 150, 0, 60)
+    KeCmdBox2.Font = Enum.Font.SourceSans
+    KeCmdBox2.TextSize = 14
+    KeCmdBox2.PlaceholderText = "Command 2 (optional)"
+    KeCmdBox2.Text = ""
+    KeCmdBox2.TextColor3 = Theme.Text1
+    KeCmdBox2.TextXAlignment = Enum.TextXAlignment.Left
+    KeCmdBox2.ZIndex = 60
+    table.insert(Themed.Shade2, KeCmdBox2)
+    table.insert(Themed.Text1, KeCmdBox2)
+    KeCmdBox2.Parent = KeBg
+
+    -- Toggle option
+    local KeToggleLabel = MakeLabel({
+        Text = "Create Toggle",
+        Size = UDim2.new(0, 170, 0, 20),
+        Position = UDim2.new(0, 152, 0, 85),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 60,
+    })
+    KeToggleLabel.Parent = KeBg
+
+    local KeToggleBg = Instance.new("Frame")
+    KeToggleBg.BackgroundColor3 = Theme.Shade3
+    KeToggleBg.BorderSizePixel = 0
+    KeToggleBg.Size = UDim2.new(0, 20, 0, 20)
+    KeToggleBg.Position = UDim2.new(0, 322, 0, 85)
+    KeToggleBg.ZIndex = 60
+    table.insert(Themed.Shade3, KeToggleBg)
+    KeToggleBg.Parent = KeBg
+
+    local KeToggleBtn = Instance.new("TextButton")
+    KeToggleBtn.BackgroundTransparency = 1
+    KeToggleBtn.Size = UDim2.new(0, 16, 0, 16)
+    KeToggleBtn.Position = UDim2.new(0, 2, 0, 2)
+    KeToggleBtn.Text = ""
+    KeToggleBtn.ZIndex = 60
+    KeToggleBtn.Parent = KeToggleBg
+
+    local KeIsToggle = false
+    KeToggleBtn.MouseButton1Click:Connect(function()
+        KeIsToggle = not KeIsToggle
+        KeToggleBtn.Text = KeIsToggle and "✓" or ""
+        KeToggleBtn.TextColor3 = Theme.Text1
+    end)
+
+    -- Quick toggle options
+    local KeQuickToggles = MakeScrollFrame({
+        Size = UDim2.new(0, 195, 0, 50),
+        Position = UDim2.new(0, 150, 0, 110),
+        ScrollBarThickness = 8,
+        CanvasSize = UDim2.new(0, 0, 0, 50),
+        ZIndex = 60,
+    })
+    KeQuickToggles.Parent = KeBg
+
+    local QuickToggleOptions = {"Click TP (Hold Key & Click)", "Click Delete (Hold Key & Click)"}
+    for i, opt in ipairs(QuickToggleOptions) do
+        local row = MakeButton({
+            Text = "    " .. opt,
+            Size = UDim2.new(0, 195, 0, 20),
+            Position = UDim2.new(0, 0, 0, (i - 1) * 25),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 60,
+        })
+        row.Parent = KeQuickToggles
+        local addBtn = MakeSmallButton({
+            Text = "Add",
+            Size = UDim2.new(0, 35, 0, 20),
+            Position = UDim2.new(0, 155, 0, 0),
+            ZIndex = 60,
+        })
+        addBtn.Parent = row
+    end
+
+    -- Add button
+    local KeAddBtn = MakeButton({
+        Text = "Add",
+        Size = UDim2.new(0, 40, 0, 20),
+        Position = UDim2.new(0, 310, 0, 160),
+        ZIndex = 60,
+    })
+    KeAddBtn.Parent = KeBg
+
+    -- Bind capture state
+    local CapturingBind = false
+    local CapturedKey = nil
+
+    BindToBtn.MouseButton1Click:Connect(function()
+        CapturingBind = true
+        CapturedKey = nil
+        BindToBtn.Text = "Press a key..."
+    end)
+
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if CapturingBind and not gameProcessed then
+            CapturedKey = input.KeyCode.Name
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                CapturedKey = "MouseButton1"
+            elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+                CapturedKey = "MouseButton2"
+            elseif input.UserInputType == Enum.UserInputType.MouseButton3 then
+                CapturedKey = "MouseButton3"
+            end
+            BindToBtn.Text = CapturedKey
+            CapturingBind = false
+        end
+    end)
+
+    KeAddBtn.MouseButton1Click:Connect(function()
+        if not CapturedKey then
+            Library.Notify("Keybinds", "Please bind a key first.", 2)
+            return
+        end
+        local cmd1 = KeCmdBox.Text
+        if #cmd1 == 0 then
+            Library.Notify("Keybinds", "Please enter a command.", 2)
+            return
+        end
+        local cmd2 = KeCmdBox2.Text
+        local entry = {
+            Key = CapturedKey,
+            Command = cmd1,
+            Command2 = #cmd2 > 0 and cmd2 or nil,
+            Trigger = TriggerModes[TriggerIndex],
+            Toggle = KeIsToggle,
+        }
+        table.insert(Keybinds, entry)
+        RefreshKeybindsList()
+        Library.Notify("Keybinds", "Bound " .. CapturedKey .. " to " .. cmd1, 2)
+        -- Reset
+        CapturedKey = nil
+        BindToBtn.Text = "Click to bind"
+        KeCmdBox.Text = ""
+        KeCmdBox2.Text = ""
+        KeIsToggle = false
+        KeToggleBtn.Text = ""
+    end)
+
+    KeClose.MouseButton1Click:Connect(function()
+        KeybindEditor.Position = UDim2.new(0.5, -180, 0, -500)
+    end)
+
+    -- Keybind editor draggable
+    local keDragging, keDragInput, keDragStart, keStartPos
+    KeTitleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            keDragging = true
+            keDragStart = input.Position
+            keStartPos = KeybindEditor.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then keDragging = false end
+            end)
+        end
+    end)
+    KeTitleBar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then keDragInput = input end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == keDragInput and keDragging then
+            local delta = input.Position - keDragStart
+            KeybindEditor.Position = UDim2.new(
+                keStartPos.X.Scale, keStartPos.X.Offset + delta.X,
+                keStartPos.Y.Scale, keStartPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    -- ============ PLUGIN EDITOR POPUP ============
+    local PluginEditor = Instance.new("Frame")
+    PluginEditor.Name = RandomString()
+    PluginEditor.Active = true
+    PluginEditor.BackgroundTransparency = 1
+    PluginEditor.Position = UDim2.new(0.5, -180, 0, -500)
+    PluginEditor.Size = UDim2.new(0, 360, 0, 20)
+    PluginEditor.ZIndex = 60
+    PluginEditor.Parent = ScaledHolder
+
+    local PeTitleBar = Instance.new("Frame")
+    PeTitleBar.Size = UDim2.new(0, 360, 0, 20)
+    PeTitleBar.BackgroundColor3 = Theme.Shade2
+    PeTitleBar.BorderSizePixel = 0
+    PeTitleBar.ZIndex = 60
+    table.insert(Themed.Shade2, PeTitleBar)
+    PeTitleBar.Parent = PluginEditor
+
+    local PeTitleLabel = MakeLabel({
+        Text = "Add Plugins",
+        Size = UDim2.new(0, 330, 0, 20),
+        Position = UDim2.new(0, 5, 0, 0),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 60,
+    })
+    PeTitleLabel.Parent = PeTitleBar
+
+    local PeClose = MakeSmallButton({
+        Size = UDim2.new(0, 20, 0, 20),
+        Position = UDim2.new(1, -20, 0, 0),
+        Text = "X",
+        ZIndex = 60,
+    })
+    PeClose.Parent = PeTitleBar
+
+    local PeBg = Instance.new("Frame")
+    PeBg.Size = UDim2.new(0, 360, 0, 160)
+    PeBg.Position = UDim2.new(0, 0, 0, 20)
+    PeBg.BackgroundColor3 = Theme.Shade1
+    PeBg.BorderSizePixel = 0
+    PeBg.ZIndex = 60
+    table.insert(Themed.Shade1, PeBg)
+    PeBg.Parent = PluginEditor
+
+    local PeDivider = Instance.new("Frame")
+    PeDivider.Size = UDim2.new(0, 2, 0, 160)
+    PeDivider.Position = UDim2.new(0, 222, 0, 0)
+    PeDivider.BackgroundColor3 = Theme.Shade2
+    PeDivider.BorderSizePixel = 0
+    PeDivider.ZIndex = 60
+    table.insert(Themed.Shade2, PeDivider)
+    PeDivider.Parent = PeBg
+
+    local PeAbout = MakeLabel({
+        Text = "Plugins are .iy files and should be located in the 'workspace' folder of your exploit.",
+        Size = UDim2.new(0, 187, 0, 49),
+        Position = UDim2.new(0, 17, 0, 10),
+        TextWrapped = true,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        ZIndex = 60,
+    })
+    PeAbout.Parent = PeBg
+
+    local PeDirections = MakeLabel({
+        Text = "Type the name of the plugin file you want to add below.",
+        Size = UDim2.new(0, 187, 0, 49),
+        Position = UDim2.new(0, 17, 0, 60),
+        TextWrapped = true,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        ZIndex = 60,
+    })
+    PeDirections.Parent = PeBg
+
+    local PeFileBox = Instance.new("TextBox")
+    PeFileBox.BackgroundColor3 = Theme.Shade2
+    PeFileBox.BorderSizePixel = 0
+    PeFileBox.Size = UDim2.new(0, 200, 0, 50)
+    PeFileBox.Position = UDim2.new(0, 10, 0, 100)
+    PeFileBox.Font = Enum.Font.SourceSans
+    PeFileBox.TextSize = 14
+    PeFileBox.PlaceholderText = "Plugin File Name"
+    PeFileBox.Text = ""
+    PeFileBox.TextColor3 = Theme.Text1
+    PeFileBox.ZIndex = 60
+    table.insert(Themed.Shade2, PeFileBox)
+    table.insert(Themed.Text1, PeFileBox)
+    PeFileBox.Parent = PeBg
+
+    local PeImg = Instance.new("ImageLabel")
+    PeImg.Size = UDim2.new(0, 100, 0, 95)
+    PeImg.Position = UDim2.new(0, 242, 0, 3)
+    PeImg.BackgroundTransparency = 1
+    PeImg.Image = GetAsset("imgstudiopluginlogo")
+    PeImg.ZIndex = 60
+    PeImg.Parent = PeBg
+
+    local PeAddBtn = MakeButton({
+        Text = "Add Plugin",
+        Size = UDim2.new(0, 115, 0, 50),
+        Position = UDim2.new(0, 235, 0, 100),
+        ZIndex = 60,
+    })
+    PeAddBtn.Parent = PeBg
+
+    PeAddBtn.MouseButton1Click:Connect(function()
+        local name = PeFileBox.Text
+        if #name > 0 then
+            table.insert(Plugins, name)
+            RefreshPluginsList()
+            Library.Notify("Plugins", "Added plugin: " .. name, 2)
+            PeFileBox.Text = ""
+        else
+            Library.Notify("Plugins", "Please enter a plugin file name.", 2)
+        end
+    end)
+
+    PeClose.MouseButton1Click:Connect(function()
+        PluginEditor.Position = UDim2.new(0.5, -180, 0, -500)
+    end)
+
+    -- Plugin editor draggable
+    local peDragging, peDragInput, peDragStart, peStartPos
+    PeTitleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            peDragging = true
+            peDragStart = input.Position
+            peStartPos = PluginEditor.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then peDragging = false end
+            end)
+        end
+    end)
+    PeTitleBar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then peDragInput = input end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == peDragInput and peDragging then
+            local delta = input.Position - peDragStart
+            PluginEditor.Position = UDim2.new(
+                peStartPos.X.Scale, peStartPos.X.Offset + delta.X,
+                peStartPos.Y.Scale, peStartPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    -- ============ SETTINGS BUTTON LOGIC ============
+    local ActiveSubFrame = nil
+
+    local function HideAllSubFrames()
+        for name, data in pairs(SubFrames) do
+            data.Frame.Visible = false
+        end
+        ActiveSubFrame = nil
+    end
+
+    local function ToggleSubFrame(name)
+        if ActiveSubFrame == name then
+            HideAllSubFrames()
+            return
+        end
+        HideAllSubFrames()
+        if SubFrames[name] then
+            SubFrames[name].Frame.Visible = true
+            ActiveSubFrame = name
+        end
+    end
+
+    SettingsBtn.MouseButton1Click:Connect(function()
+        SettingsOpen = not SettingsOpen
+        Settings.Visible = SettingsOpen
+        if not SettingsOpen then
+            HideAllSubFrames()
+        end
+        -- Adjust holder size
+        local targetSize = SettingsOpen and UDim2.new(0, 250, 0, 395) or UDim2.new(0, 250, 0, 220)
+        TweenService:Create(Holder, TweenInfo.new(0.2), {Size = targetSize}):Play()
+        CMDsF.Size = SettingsOpen and UDim2.new(0, 245, 0, 175) or UDim2.new(0, 245, 0, 175)
+    end)
+
+    SettingsCloseBtn.MouseButton1Click:Connect(function()
+        SettingsOpen = false
+        Settings.Visible = false
+        HideAllSubFrames()
+        TweenService:Create(Holder, TweenInfo.new(0.2), {Size = UDim2.new(0, 250, 0, 220)}):Play()
+    end)
+
+    MinimizeBtn.MouseButton1Click:Connect(function()
+        Minimized = not Minimized
+        if Minimized then
+            -- Hide everything except title bar
+            Dark.Visible = false
+            CMDsF.Visible = false
+            Cmdbar.Visible = false
+            Settings.Visible = false
+            SettingsOpen = false
+            HideAllSubFrames()
+            TweenService:Create(Holder, TweenInfo.new(0.2), {Size = UDim2.new(0, 250, 0, 20)}):Play()
+        else
+            Dark.Visible = true
+            CMDsF.Visible = true
+            Cmdbar.Visible = true
+            TweenService:Create(Holder, TweenInfo.new(0.2), {Size = UDim2.new(0, 250, 0, 220)}):Play()
+        end
+    end)
+
+    ColorsBtn.MouseButton1Click:Connect(function()
+        -- Show theme editor centered
+        ThemeEditor.Position = UDim2.new(0.5, -150, 0.5, -110)
+    end)
+
+    KeybindsBtn.MouseButton1Click:Connect(function()
+        ToggleSubFrame("Keybinds")
+    end)
+
+    AliasesBtn.MouseButton1Click:Connect(function()
+        ToggleSubFrame("Aliases")
+    end)
+
+    WaypointsBtn.MouseButton1Click:Connect(function()
+        ToggleSubFrame("Waypoints")
+    end)
+
+    PluginsBtn.MouseButton1Click:Connect(function()
+        ToggleSubFrame("Plugins")
+        -- Also show plugin editor
+        PluginEditor.Position = UDim2.new(0.5, -180, 0.5, -90)
+    end)
+
+    EventBindsBtn.MouseButton1Click:Connect(function()
+        ToggleSubFrame("Event Binds")
+    end)
+
+    -- ============ COMMAND SYSTEM ============
+    local CommandButtons = {}
+
+    local function ClearCommandList()
+        for _, btn in pairs(CommandButtons) do
+            if btn and btn.Parent then btn:Destroy() end
+        end
+        CommandButtons = {}
+    end
+
+    local function RebuildCommandList(filter)
+        ClearCommandList()
+        filter = filter or ""
+        local filtered = {}
+        for name, cmd in pairs(Commands) do
+            if #filter == 0 or name:lower():find(filter:lower(), 1, true) then
+                table.insert(filtered, {Name = name, Data = cmd})
+            end
+        end
+        -- Also check aliases
+        for alias, cmd in pairs(Aliases) do
+            if #filter == 0 or alias:lower():find(filter:lower(), 1, true) then
+                if not Commands[alias] then
+                    table.insert(filtered, {Name = alias, Data = {Description = "Alias for: " .. cmd, Aliased = cmd}})
+                end
+            end
+        end
+        table.sort(filtered, function(a, b) return a.Name < b.Name end)
+
+        CMDsF.CanvasSize = UDim2.new(0, 0, 0, #filtered * 20)
+
+        for i, entry in ipairs(filtered) do
+            local btn = Instance.new("TextButton")
+            btn.BackgroundColor3 = Theme.Shade2
+            btn.BorderSizePixel = 0
+            btn.Size = UDim2.new(0, 240, 0, 20)
+            btn.Font = Enum.Font.SourceSans
+            btn.TextSize = 14
+            btn.Text = entry.Name
+            btn.TextColor3 = Theme.Text1
+            btn.TextXAlignment = Enum.TextXAlignment.Left
+            btn.ZIndex = 10
+            btn.LayoutOrder = i
+            table.insert(Themed.Shade2, btn)
+            table.insert(Themed.Text1, btn)
+            btn.Parent = CMDsF
+            CommandButtons[entry.Name] = btn
+
+            -- Click to fill command bar
+            btn.MouseButton1Click:Connect(function()
+                Cmdbar.Text = Prefix .. entry.Name .. " "
+                Cmdbar:CaptureFocus()
+            end)
+
+            -- Tooltip on hover
+            btn.MouseEnter:Connect(function(x, y)
+                local desc = entry.Data.Description or "No description available."
+                if entry.Data.Aliased then desc = "Alias for: " .. entry.Data.Aliased end
+                ShowTooltip(entry.Name, desc, x, y)
+            end)
+            btn.MouseLeave:Connect(function()
+                HideTooltip()
+            end)
+        end
+    end
+
+    -- AddCommand - THE MAIN FUNCTION
+    function Library:AddCommand(name, description, callback)
+        Commands[name] = {
+            Description = description or "",
+            Callback = callback or function() end,
+        }
+        RebuildCommandList(Cmdbar.Text)
+    end
+
+    -- RemoveCommand
+    function Library:RemoveCommand(name)
+        Commands[name] = nil
+        RebuildCommandList(Cmdbar.Text)
+    end
+
+    -- AddAlias (public)
+    function Library:AddAlias(alias, command)
+        Aliases[alias] = command
+        RefreshAliasesList()
+        RebuildCommandList(Cmdbar.Text)
+    end
+
+    -- RemoveAlias (public)
+    function Library:RemoveAlias(alias)
+        Aliases[alias] = nil
+        RefreshAliasesList()
+        RebuildCommandList(Cmdbar.Text)
+    end
+
+    -- AddWaypoint (public)
+    function Library:AddWaypoint(name, position)
+        Waypoints[name] = position
+        RefreshWaypointsList()
+    end
+
+    -- RemoveWaypoint (public)
+    function Library:RemoveWaypoint(name)
+        Waypoints[name] = nil
+        RefreshWaypointsList()
+    end
+
+    -- AddKeybind (public)
+    function Library:AddKeybind(key, command, options)
+        options = options or {}
+        table.insert(Keybinds, {
+            Key = key,
+            Command = command,
+            Command2 = options.Command2,
+            Trigger = options.Trigger or "KeyDown",
+            Toggle = options.Toggle or false,
+        })
+        RefreshKeybindsList()
+    end
+
+    -- AddPlugin (public)
+    function Library:AddPlugin(name)
+        table.insert(Plugins, name)
+        RefreshPluginsList()
+    end
+
+    -- AddEventBind (public)
+    function Library:AddEventBind(eventName, command)
+        table.insert(EventBinds, {Event = eventName, Command = command})
+        RefreshEventBindsList()
+    end
+
+    -- SetPrefix (public)
+    function Library:SetPrefix(newPrefix)
+        Prefix = newPrefix
+        PrefixBox.Text = newPrefix
+        Cmdbar.PlaceholderText = Prefix .. " Command Bar"
+        OnPrefixChange(Prefix)
+    end
+
+    -- GetPrefix (public)
+    function Library:GetPrefix()
+        return Prefix
+    end
+
+    -- RunCommand (public)
+    function Library:RunCommand(input)
+        local text = input:gsub("^" .. Prefix, ""):match("^%s*(.-)%s*$")
+        if not text or #text == 0 then return false end
+
+        local parts = {}
+        for part in text:gmatch("%S+") do
+            table.insert(parts, part)
+        end
+        local cmdName = parts[1]
+        local args = {}
+        for i = 2, #parts do
+            table.insert(args, parts[i])
+        end
+
+        -- Check aliases first
+        local resolvedCmd = Aliases[cmdName] or cmdName
+
+        -- Check if it's an alias pointing to another command
+        if Aliases[cmdName] then
+            local aliasParts = {}
+            for part in Aliases[cmdName]:gmatch("%S+") do
+                table.insert(aliasParts, part)
+            end
+            if #aliasParts > 0 then
+                resolvedCmd = aliasParts[1]
+                for i = 2, #aliasParts do
+                    table.insert(args, 1, aliasParts[i])
+                end
+            end
+        end
+
+        if Commands[resolvedCmd] then
+            local success, err = pcall(function()
+                Commands[resolvedCmd].Callback(unpack(args))
+            end)
+            if not success then
+                Library.Notify("Error", "Command '" .. resolvedCmd .. "' error: " .. tostring(err), 4)
+            end
+            OnCommandRun(resolvedCmd, args)
+            return true
+        else
+            Library.Notify("Error", "Unknown command: " .. cmdName, 2)
+            return false
+        end
+    end
+
+    -- SetTheme (public)
+    function Library:SetTheme(themeTable)
+        for k, v in pairs(themeTable) do
+            if Theme[k] then
+                Theme[k] = v
+            end
+        end
+        ApplyTheme()
+    end
+
+    -- GetTheme (public)
+    function Library:GetTheme()
+        local copy = {}
+        for k, v in pairs(Theme) do
+            copy[k] = v
+        end
+        return copy
+    end
+
+    -- Show/Hide (public)
+    function Library:Show()
+        Holder.Visible = true
+    end
+
+    function Library:Hide()
+        Holder.Visible = false
+    end
+
+    function Library:Toggle()
+        Holder.Visible = not Holder.Visible
+    end
+
+    -- GetElements (public)
+    function Library:GetElements()
+        return {
+            Holder = Holder,
+            Cmdbar = Cmdbar,
+            CMDsF = CMDsF,
+            Settings = Settings,
+            Notification = Notification,
+            Tooltip = Tooltip,
+            ThemeEditor = ThemeEditor,
+            KeybindEditor = KeybindEditor,
+            PluginEditor = PluginEditor,
+            ScreenGui = ScreenGui,
+        }
+    end
+
+    -- ============ COMMAND BAR LOGIC ============
+    Cmdbar:GetPropertyChangedSignal("Text"):Connect(function()
+        local text = Cmdbar.Text
+        -- Strip prefix for filtering
+        local filter = text:gsub("^" .. Prefix, ""):match("^%s*(.-)%s*$") or ""
+        -- If text starts with prefix, filter commands
+        if text:sub(1, #Prefix) == Prefix then
+            RebuildCommandList(filter)
+        elseif #text > 0 then
+            RebuildCommandList(filter)
+        else
+            RebuildCommandList("")
+        end
+    end)
+
+    Cmdbar.FocusLost:Connect(function(enter)
+        if enter then
+            local text = Cmdbar.Text
+            if #text > 0 then
+                local ran = Library:RunCommand(text)
+                if not StayOpen then
+                    Cmdbar.Text = ""
+                    RebuildCommandList("")
+                end
+                if ran then
+                    table.insert(CommandHistory, text)
+                    HistoryIndex = #CommandHistory + 1
+                end
+            end
+        end
+    end)
+
+    -- Command history navigation
+    Cmdbar.InputBegan:Connect(function(input)
+        if input.KeyCode == Enum.KeyCode.Up then
+            if HistoryIndex > 1 then
+                HistoryIndex = HistoryIndex - 1
+                Cmdbar.Text = CommandHistory[HistoryIndex]
+            end
+        elseif input.KeyCode == Enum.KeyCode.Down then
+            if HistoryIndex < #CommandHistory then
+                HistoryIndex = HistoryIndex + 1
+                Cmdbar.Text = CommandHistory[HistoryIndex]
+            else
+                HistoryIndex = #CommandHistory + 1
+                Cmdbar.Text = ""
+            end
+        elseif input.KeyCode == Enum.KeyCode.Tab then
+            -- Autocomplete
+            local text = Cmdbar.Text:gsub("^" .. Prefix, ""):match("^%s*(.-)%s*$") or ""
+            if #text > 0 then
+                for name, _ in pairs(Commands) do
+                    if name:lower():sub(1, #text) == text:lower() then
+                        Cmdbar.Text = Prefix .. name .. " "
+                        Cmdbar:CaptureFocus()
+                        break
+                    end
+                end
+                -- Also check aliases
+                for alias, _ in pairs(Aliases) do
+                    if alias:lower():sub(1, #text) == text:lower() then
+                        Cmdbar.Text = Prefix .. alias .. " "
+                        Cmdbar:CaptureFocus()
+                        break
+                    end
+                end
+            end
+        end
+    end)
+
+    -- ============ KEYBIND EXECUTION ============
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        local keyName = input.KeyCode.Name
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then keyName = "MouseButton1" end
+        if input.UserInputType == Enum.UserInputType.MouseButton2 then keyName = "MouseButton2" end
+        if input.UserInputType == Enum.UserInputType.MouseButton3 then keyName = "MouseButton3" end
+
+        for _, kb in ipairs(Keybinds) do
+            if kb.Key == keyName and (kb.Trigger == "KeyDown" or kb.Trigger == "KeyPressed") then
+                Library:RunCommand(Prefix .. kb.Command)
+                if kb.Command2 then
+                    Library:RunCommand(Prefix .. kb.Command2)
+                end
+            end
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        local keyName = input.KeyCode.Name
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then keyName = "MouseButton1" end
+        if input.UserInputType == Enum.UserInputType.MouseButton2 then keyName = "MouseButton2" end
+        if input.UserInputType == Enum.UserInputType.MouseButton3 then keyName = "MouseButton3" end
+
+        for _, kb in ipairs(Keybinds) do
+            if kb.Key == keyName and kb.Trigger == "KeyUp" then
+                Library:RunCommand(Prefix .. kb.Command)
+                if kb.Command2 then
+                    Library:RunCommand(Prefix .. kb.Command2)
+                end
+            end
+        end
+    end)
+
+    -- ============ INITIAL BUILD ============
+    RebuildCommandList("")
+    ApplyTheme()
+
+    -- Return the library interface
+    return Library
 end
 
 return Library
