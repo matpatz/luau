@@ -2409,6 +2409,33 @@ AddFunction("decompile", function(Script)
     }).Body
 end)
 
+local CachedDecompile = decompile
+local last = 0
+getgenv().decompile = function(scr) -- lua.expert
+    local ok, bytecode = pcall(getscriptbytecode, scr)
+    if not ok then
+        return "-- failed to read script bytecode\n--[[\n" .. tostring(bytecode) .. "\n--]]"
+    end
+
+    local encoder = base64_encode
+    local res = request({
+        Url = "https://api.lua.expert/decompile",
+        Method = "POST",
+        Headers = {
+            ["content-type"] = "application/json"
+        },
+        Body = Services.HttpService:JSONEncode({
+            script = encoder(bytecode)
+        })
+    })
+
+    if not res or res.StatusCode ~= 200 then
+        return "-- api request error\n--[[\n" .. (res and res.Body or "no response") .. "\n--]]"
+    end
+
+    return res.Body
+end
+
 AddFunction("getscripthash", function(Script)
     if typeof(Script) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(Script), 2) end
     return crypt.hash(getscriptbytecode(Script))
