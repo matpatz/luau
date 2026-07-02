@@ -1,12 +1,12 @@
 local StartTime = tick()
 
-local CCClosures = {}
-local CustomClosures = {}
-local DebugOverride = {}
+local CCClosures, CustomClosures, DebugOverride =
+        {}, {}, {}
 
-local NewCClosure
+local MakeCClosure
 do
-    local function MakeCClosure(Func)
+        -- this is not a C closure btw
+    MakeCClosure = function(Func)
         local Wrapper = function(...)
             local Args = table.pack(...)
             local Thread = coroutine.create(function()
@@ -24,62 +24,37 @@ do
         return Wrapper
     end
 
-    NewCClosure = newcclosure or MakeCClosure
+    MakeCClosure = newcclosure and newcclosure or MakeCClosure
 end
 
 local Functions = {}
-local GlobalEnv = getgenv()
-
 local AddFunction = function(Name, Func)
     if typeof(Func) ~= "function" then
         Functions[Name] = Func
     else
-        Functions[Name] = NewCClosure(Func)
+        Functions[Name] = MakeCClosure(Func)
     end
 end
 
 local AliasFunction = function(Names, SourceNameOrFunc)
-    local Resolved = GlobalEnv[SourceNameOrFunc] or Functions[SourceNameOrFunc] or SourceNameOrFunc
-    for _, Name in ipairs(Names) do
-        AddFunction(Name, Resolved)
+    for _, Name in next, Names do
+        if type(SourceNameOrFunc) == "function" then
+            AddFunction(Name, SourceNameOrFunc)
+        else
+            AddFunction(Name, function(...)
+                local Resolved = getgenv()[SourceNameOrFunc] or Functions[SourceNameOrFunc]
+                if not (Resolved) then error("alias target not found: " .. tostring(SourceNameOrFunc), 2) end
+                return Resolved(...)
+            end)
+        end
     end
 end
 
-local IndexFunction = function(Func)
-	return GlobalEnv["Func"] or Functions["Func"] or nil
+local IndexFunction = function(Name)
+    return getgenv()[Name] or Functions[Name] or nil
 end
 
-local TypeDummies = {
-    string   = "",
-    number   = 0,
-    boolean  = false,
-    ["function"] = function() end,
-    table    = {},
-    Instance = function() return Instance.new("Folder") end,
-    thread   = function() return coroutine.create(function() end) end,
-}
-
-local Translate = function(TypeName)
-    local Dummy = TypeDummies[TypeName]
-    if type(Dummy) == "function" and (TypeName == "Instance" or TypeName == "thread") then
-        return Dummy()
-    end
-    return Dummy ~= nil and Dummy or TypeName
-end
-
-local Expect = function(Value, ExpectedType, CareAboutValue, ArgNum, Message)
-    local Expected = type(ExpectedType) == "string" and Translate(ExpectedType) or ExpectedType
-    local ExpectedTypeName = typeof(Expected)
-    ArgNum = ArgNum or 1
-    if not CareAboutValue then
-        Message = Message or ("expected " .. ExpectedTypeName .. " at #" .. ArgNum .. " got " .. typeof(Value))
-        assert(typeof(Value) == ExpectedTypeName, Message)
-    else
-        Message = Message or ("expected " .. tostring(Expected) .. " at #" .. ArgNum .. " got " .. typeof(Value))
-        assert(typeof(Value) == ExpectedTypeName, Message)
-    end
-end
-
+-- mega op undetected 100%%%
 local function MakeCloneRef(Object)
     if not setmetatable then
         return Object
@@ -93,21 +68,21 @@ local function MakeCloneRef(Object)
     })
 end
 
-local CloneRef = cloneref or MakeCloneRef
+local cloneref = cloneref and cloneref or MakeCloneRef
 
 local Services = {
-    CollectionService    = CloneRef(game:GetService("CollectionService")),
-    VirtualInputManager  = CloneRef(game:GetService("VirtualInputManager")),
-    UserInputService     = CloneRef(game:GetService("UserInputService")),
-    UGCValidationService = CloneRef(game:GetService("UGCValidationService")),
-    RbxAnalyticsService  = CloneRef(game:GetService("RbxAnalyticsService")),
-    ReflectionService    = CloneRef(game:GetService("ReflectionService")),
-    CoreGui              = gethui and gethui() or CloneRef(game:GetService("CoreGui")),
-    ReplicatedStorage    = CloneRef(game:GetService("ReplicatedStorage")),
-    Stats                = CloneRef(game:GetService("Stats")),
-    CorePackages         = CloneRef(game:GetService("CorePackages")),
-    RunService           = CloneRef(game:GetService("RunService")),
-    Players              = CloneRef(game:GetService("Players")),
+    CollectionService    = cloneref(game:GetService("CollectionService")),
+    VirtualInputManager  = cloneref(game:GetService("VirtualInputManager")),
+    UserInputService     = cloneref(game:GetService("UserInputService")),
+    UGCValidationService = cloneref(game:GetService("UGCValidationService")),
+    RbxAnalyticsService  = cloneref(game:GetService("RbxAnalyticsService")),
+    ReflectionService    = cloneref(game:GetService("ReflectionService")),
+    CoreGui              = gethui and gethui() or cloneref(game:GetService("CoreGui")),
+    ReplicatedStorage    = cloneref(game:GetService("ReplicatedStorage")),
+    Stats                = cloneref(game:GetService("Stats")),
+    CorePackages         = cloneref(game:GetService("CorePackages")),
+    RunService           = cloneref(game:GetService("RunService")),
+    Players              = cloneref(game:GetService("Players")),
 }
 
 local LocalPlayer = Services.Players.LocalPlayer
@@ -191,10 +166,16 @@ end)
 
 local RandomStringLib = loadstring(game:HttpGet("https://github.com/daily3014/rbx-cryptography/raw/main/src/Utilities/RandomString.luau"))()
 local RandomString = function(Length)
+    if Length ~= nil and type(Length) ~= "number" then
+        error("expected number or nil at argument #1, got " .. type(Length), 2)
+    end
     return RandomStringLib(Length or 16, false)
 end
 
 AddFunction("lune", function(Code)
+    if type(Code) ~= "string" then
+        error("expected string at argument #1, got " .. type(Code), 2)
+    end
     local Filename = RandomString(6)
     PsSocket:Send(string.format("Set-Content -Path '%s.luau' -Value '%s'", Filename, Code:gsub("'", "''")))
     task.delay(0.5, function()
@@ -207,29 +188,29 @@ end)
 local InstanceCache = {}
 
 AddFunction("cache.invalidate", function(Object)
-    Expect(Object, "Instance", false, 1)
+    if typeof(Object) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(Object), 2) end
     InstanceCache[Object] = nil
 end)
 
 AddFunction("cache.iscached", function(Object)
-    Expect(Object, "Instance", false, 1)
+    if typeof(Object) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(Object), 2) end
     return InstanceCache[Object] ~= nil
 end)
 
 AddFunction("cache.replace", function(Object, New)
-    Expect(Object, "Instance", false, 1)
-    Expect(New, "Instance", false, 2)
+    if typeof(Object) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(Object), 2) end
+    if typeof(New) ~= "Instance" then error("expected Instance at argument #2, got " .. typeof(New), 2) end
     InstanceCache[Object] = New
 end)
 
 AddFunction("cloneref", function(Object)
-    Expect(Object, "Instance", false, 1)
-    return MakeCloneRef(Object)
+    if typeof(Object) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(Object), 2) end
+    return cloneref(Object)
 end)
 
 AddFunction("compareinstances", function(A, B)
-    Expect(A, "Instance", false, 1)
-    Expect(B, "Instance", false, 2)
+    if typeof(A) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(A), 2) end
+    if typeof(B) ~= "Instance" then error("expected Instance at argument #2, got " .. typeof(B), 2) end
     return A == B
 end)
 
@@ -241,35 +222,43 @@ AddFunction("checkcaller", function()
 end)
 
 AddFunction("clonefunction", function(Func)
-    Expect(Func, "function", false, 1)
+    if typeof(Func) ~= "function" then error("expected function at argument #1, got " .. typeof(Func), 2) end
     return function(...) return Func(...) end
 end)
 
 AddFunction("getcallingscript", function()
-    local Source = debug.info(1, "s")
-    return table.find(game:GetDescendants(), Source)
+    local Source = debug.info(2, "s")
+    if not Source then return nil end
+    for _, Obj in next, game:GetDescendants() do
+        if Obj:IsA("BaseScript") and Obj.Name == Source then
+            return Obj
+        end
+    end
+    return nil
 end)
 
 local StackHidden = {}
 AddFunction("setstackhidden", function(Func, Hidden)
+    if typeof(Func) ~= "function" then error("expected function at argument #1, got " .. typeof(Func), 2) end
+    if type(Hidden) ~= "boolean" then error("expected boolean at argument #2, got " .. type(Hidden), 2) end
     StackHidden[Func] = Hidden
 end)
 
 local HookedFunctions = {}
-for _, Value in pairs(GlobalEnv) do
+for _, Value in next, getgenv() do
     if typeof(Value) == "function" then
         HookedFunctions[Value] = true
     end
 end
 
 AddFunction("isfunctionhooked", function(Func)
-    Expect(Func, "function", false, 1)
+    if typeof(Func) ~= "function" then error("expected function at argument #1, got " .. typeof(Func), 2) end
     return HookedFunctions[Func] ~= nil and HookedFunctions[Func] ~= false
 end)
 
 AddFunction("hookfunction", function(Func, Hook)
-    Expect(Func, "function", false, 1)
-    Expect(Hook, "function", false, 2)
+    if typeof(Func) ~= "function" then error("expected function at argument #1, got " .. typeof(Func), 2) end
+    if typeof(Hook) ~= "function" then error("expected function at argument #2, got " .. typeof(Hook), 2) end
     if replaceclosure then
         return replaceclosure(Func, Hook)
     end
@@ -280,16 +269,17 @@ AddFunction("hookfunction", function(Func, Hook)
 end)
 
 AddFunction("hiddenhook", function(Func, Hook)
-    hookfunction(Func, Hook)
+    Functions["hookfunction"](Func, Hook)
     HookedFunctions[Func] = false
 end)
 
-AliasFunction({"secrethook"}, function(Func, Hook)
-    hiddenhook(Func, Hook)
+AddFunction("secrethook", function(Func, Hook)
+    Functions["hiddenhook"](Func, Hook)
 end)
 
 AddFunction("restorefunction", function(Func, Hook)
-    Expect(Func, "function", false, 1)
+    if typeof(Func) ~= "function" then error("expected function at argument #1, got " .. typeof(Func), 2) end
+        if typeof(Hook) ~= "function" then error("expected function at argument #1, got " .. typeof(Hook), 2) end
     HookedFunctions[Func] = nil
     return Hook
 end)
@@ -299,19 +289,8 @@ AliasFunction({"getoriginalfunction"}, function(Func, Hook)
 end)
 
 AddFunction("securefunction", function(Func)
-    Expect(Func, "function", false, 1)
+    if typeof(Func) ~= "function" then error("expected function at argument #1, got " .. typeof(Func), 2) end
 end)
-
-do
-    local SecureEnvs = { getgenv, getrenv }
-    GlobalEnv.unhooked = {}
-    for _, Env in ipairs(SecureEnvs) do
-        for _, Item in ipairs(Env()) do
-            if typeof(Item) ~= "function" then continue end
-            GlobalEnv.unhooked[Item] = securefunction(Item)
-        end
-    end
-end
 
 AddFunction("iscclosure", function(Func)
     if type(Func) ~= "function" then return false end
@@ -323,13 +302,13 @@ AddFunction("newlclosure", function(Func)
 end)
 
 AddFunction("islclosure", function(Func)
-    if type(Func) ~= "function" then return false end
+    if typeof(Func) ~= "function" then error("expected function at argument #1, got " .. typeof(Func), 2) end
     return debug.info(Func, "s") ~= "[C]"
 end)
 
 AddFunction("isexecutorclosure", function(Func)
-    Expect(Func, "function", false, 1)
-    for _, Value in pairs(GlobalEnv) do
+    if typeof(Func) ~= "function" then error("expected function at argument #1, got " .. typeof(Func), 2) end
+    for _, Value in next, getgenv() do
         if Value == Func then return true end
     end
     return false
@@ -338,11 +317,12 @@ end)
 AliasFunction({"checkclosure", "isourclosure"}, "isexecutorclosure")
 
 AddFunction("newcclosure", function(Func)
-    Expect(Func, "function", false, 1)
-    return NewCClosure(Func)
+    if typeof(Func) ~= "function" then error("expected function at argument #1, got " .. typeof(Func), 2) end
+    return MakeCClosure(Func)
 end)
 
 AddFunction("isnewcclosure", function(Func)
+        if typeof(Func) ~= "function" then error("expected function at argument #1, got " .. typeof(Func), 2) end
     return CustomClosures[Func] == true
 end)
 
@@ -420,7 +400,7 @@ end
 
 local function GetChildrenWithAttribute(Parent, Attr)
     local Result = {}
-    for _, Child in ipairs(Parent:GetChildren()) do
+    for _, Child in next, Parent:GetChildren() do
         if Child:GetAttribute(Attr) ~= nil then
             Result[#Result + 1] = Child
         end
@@ -429,14 +409,14 @@ local function GetChildrenWithAttribute(Parent, Attr)
 end
 
 AddFunction("rconsoleclear", function()
-    for _, Item in ipairs(GetChildrenWithAttribute(ConsoleWindow, "killme")) do
+    for _, Item in next, GetChildrenWithAttribute(ConsoleWindow, "killme") do
         Item:Destroy()
     end
 end)
 
 AddFunction("rconsolecontent", function()
     local Output = {}
-    for _, Label in ipairs(GetChildrenWithAttribute(ConsoleWindow, "killme")) do
+    for _, Label in next, GetChildrenWithAttribute(ConsoleWindow, "killme") do
         Output[#Output + 1] = Label.Text
     end
     return Output
@@ -459,24 +439,24 @@ AddFunction("rconsoleshow", function()
 end)
 
 AddFunction("rconsoleinput", function(Text)
-    Expect(Text, "string", false, 1)
+    if typeof(Text) ~= "string" then error("expected string at argument #1, got " .. typeof(Text), 2) end
     ConsoleInput(Text)
 end)
 
 AliasFunction({"rconsoleinfo", "rconsoleprint"}, "rconsoleinput")
 
 AddFunction("rconsolewarn", function(Text)
-    Expect(Text, "string", false, 1)
+    if typeof(Text) ~= "string" then error("expected string at argument #1, got " .. typeof(Text), 2) end
     ConsoleInput(Text, Color3.fromRGB(255, 0, 0))
 end)
 
 AddFunction("rconsoleerror", function(Text)
-    Expect(Text, "string", false, 1)
+    if typeof(Text) ~= "string" then error("expected string at argument #1, got " .. typeof(Text), 2) end
     ConsoleInput(Text, Color3.fromRGB(255, 255, 0))
 end)
 
 AddFunction("rconsolesettitle", function(Title)
-    Expect(Title, "string", false, 1)
+    if typeof(Title) ~= "string" then error("expected string at argument #1, got " .. typeof(Title), 2) end
     ConsoleWindow["title"].Text = Title
 end)
 
@@ -493,28 +473,17 @@ end)
 -- loadstring (Lune-backed)
 
 AddFunction("loadstring", function(Source, ChunkName)
-    if not AllowTerminal() then
-        return (load)(Source, ChunkName)
+    if type(Source) ~= "string" then
+        error("expected string at argument #1, got " .. type(Source), 2)
     end
-    if not islune() then
-        downloadLune()
+    if ChunkName ~= nil and type(ChunkName) ~= "string" then
+        error("expected string or nil at argument #2, got " .. type(ChunkName), 2)
     end
-    local Filename  = RandomString(6)
-    local Filepath  = getenv("TEMP") .. "\\__ls_" .. Filename .. ".luau"
-    local Result, Done = nil, false
-    PsSocket:Send(string.format("Set-Content -Path '%s' -Value '%s'", Filepath, Source:gsub("'", "''")))
-    local Conn
-    Conn = PsSocket.OnMessage:Connect(function(Msg)
-        Conn:Disconnect()
-        Result = Msg
-        Done = true
-    end)
-    PsSocket:Send(string.format("lune run '%s'", Filepath))
-    return function()
-        repeat task.wait() until Done
-        PsSocket:Send(string.format("Remove-Item '%s' -Force", Filepath))
-        return Result
+    local Fn, Err = (loadstring or load)(Source, ChunkName)
+    if Fn and getgenv then
+        setfenv(Fn, getgenv())
     end
+    return Fn, Err
 end)
 
 -- Crypt
@@ -530,12 +499,12 @@ local CryptLib = {}
 local Base64Lib = loadstring(game:HttpGet("https://github.com/daily3014/rbx-cryptography/raw/main/src/Utilities/Base64.luau"))()
 
 CryptLib.base64encode = function(Data)
-    Expect(Data, "string", false, 1)
+    if typeof(Data) ~= "string" then error("expected string at argument #1, got " .. typeof(Data), 2) end
     return buffer.tostring(Base64Lib.Encode(buffer.fromstring(tostring(Data))))
 end
 
 CryptLib.base64decode = function(Data)
-    Expect(Data, "string", false, 1)
+    if typeof(Data) ~= "string" then error("expected string at argument #1, got " .. typeof(Data), 2) end
     return buffer.tostring(Base64Lib.Decode(buffer.fromstring(tostring(Data))))
 end
 
@@ -546,22 +515,24 @@ local RNG = Random.new()
 local CSPRNG = loadstring(game:HttpGet("https://website-iota-ivory-12.vercel.app/code/scripts/unc/sunc/extra/csprng/init.luau"))()
 
 CryptLib.generatebytes = function(Size)
+    if type(Size) ~= "number" then error("expected number at argument #1, got " .. type(Size), 2) end
     return CSPRNG.RandomBytes(Size)
 end
 
 CryptLib.random = function(Length)
+    if type(Length) ~= "number" then error("expected number at argument #1, got " .. type(Length), 2) end
     local Buffer = table.create(Length)
-
     for Index = 1, Length do
         Buffer[Index] = string.char(math.random(0, 255))
     end
-
     return table.concat(Buffer)
 end
 
-CryptLib.generatekey = function()
-    local Parts = table.create(32)
-    for Index = 1, 32 do
+CryptLib.generatekey = function(KeyLength)
+    if KeyLength ~= nil and type(KeyLength) ~= "number" then error("expected number or nil at argument #1, got " .. type(KeyLength), 2) end
+    KeyLength = KeyLength or 32
+    local Parts = table.create(KeyLength)
+    for Index = 1, KeyLength do
         Parts[Index] = string.char(RNG:NextInteger(0, 255))
     end
     local Raw = table.concat(Parts)
@@ -571,57 +542,67 @@ end
 local AESLib = loadstring(game:HttpGet("https://github.com/daily3014/rbx-cryptography/raw/main/src/Encryption/AES.luau"))()
 
 CryptLib.encrypt = function(Data, Key, IV)
-    assert(type(Data) == "string", "data must be string")
+    if type(Data) ~= "string" then error("expected string at argument #1 (data), got " .. type(Data), 2) end
+    if type(Key) ~= "string" then error("expected string at argument #2 (key), got " .. type(Key), 2) end
+    if IV ~= nil and type(IV) ~= "string" then error("expected string or nil at argument #3 (iv), got " .. type(IV), 2) end
     local KeyBuf  = BufFromString(Base64Encode(Key))
     local IVRaw   = IV or CryptLib.generatebytes(12)
     local IVBuf   = BufFromString(Base64Encode(IVRaw))
     local Cipher, Tag = AESLib.Encrypt(BufFromString(Data), KeyBuf, IVBuf)
     Cipher = crypt.base64encode(StringFromBuf(Cipher))
-    Tag    = crypt.base64encode(StringFromBuf(Tag))
     IVRaw  = crypt.base64encode(IVRaw)
-    return Cipher, IVRaw, Tag
+    return Cipher, IVRaw
 end
 
-CryptLib.decrypt = function(Ciphertext, Key, IV, Tag)
-    assert(type(Ciphertext) == "string", "ciphertext must be string")
-    assert(type(Key) == "string", "key must be string")
-    assert(type(IV) == "string", "iv must be string")
-    assert(type(Tag) == "string", "tag must be string")
+CryptLib.decrypt = function(Ciphertext, Key, IV, Mode)
+    if type(Ciphertext) ~= "string" then error("expected string at argument #1 (ciphertext), got " .. type(Ciphertext), 2) end
+    if type(Key) ~= "string" then error("expected string at argument #2 (key), got " .. type(Key), 2) end
+    if type(IV) ~= "string" then error("expected string at argument #3 (iv), got " .. type(IV), 2) end
+    if Mode ~= nil and type(Mode) ~= "string" then error("expected string or nil at argument #4 (mode), got " .. type(Mode), 2) end
     local KeyBuf    = BufFromString(Base64Encode(Key))
     local IVBuf     = BufFromString(Base64Encode(IV))
-    local TagBuf    = BufFromString(Base64Encode(Tag))
-    local Ok, Plain = AESLib.Decrypt(BufFromString(Base64Encode(Ciphertext)), KeyBuf, IVBuf, TagBuf)
-    if not Ok then return false, nil end
-    return true, StringFromBuf(Plain)
+    local Ok, Plain = AESLib.Decrypt(BufFromString(Base64Encode(Ciphertext)), KeyBuf, IVBuf)
+    if not Ok then return "" end
+    return StringFromBuf(Plain)
 end
 
 local HashLib = loadstring(game:HttpGet("https://github.com/Egor-Skriptunoff/pure_lua_SHA/raw/master/sha2.lua"))()
 
 CryptLib.hash = function(Str, Algorithm)
-    Expect(Str, "string", false, 1)
+    if typeof(Str) ~= "string" then error("expected string at argument #1, got " .. typeof(Str), 2) end
+    if Algorithm ~= nil and typeof(Algorithm) ~= "string" then error("expected string or nil at argument #2, got " .. typeof(Algorithm), 2) end
     Algorithm = (Algorithm or "sha256"):lower()
-    return HashLib[Algorithm](Str)
+    local HashFunc = HashLib[Algorithm]
+    if type(HashFunc) ~= "function" then error("unsupported hash algorithm: " .. tostring(Algorithm), 2) end
+    return HashFunc(Str)
 end
 
 local XORLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/daily3014/rbx-cryptography/refs/heads/main/src/Encryption/XOR.luau"))()
 
 CryptLib.salt = function(Input)
+    if type(Input) ~= "string" then
+        error("expected string at argument #1, got " .. type(Input), 2)
+    end
     local B  = BufFromString(Input)
-    local C  = XORLib(B, StringFromBuf(CryptLib.rnum(12)))
-    local N  = XORLib(C, StringFromBuf(CryptLib.rnum(12)))
+    local C  = XORLib(B, BufFromString(tostring(math.random(1, 12))))
+    local N  = XORLib(C, BufFromString(tostring(math.random(1, 12))))
     return StringFromBuf(N)
 end
 
-CryptLib.xor = function(Data)
-    return StringFromBuf(XORLib(BufFromString(Data)))
+CryptLib.xor = function(Data, Key)
+    if type(Data) ~= "string" then error("expected string at argument #1, got " .. type(Data), 2) end
+    if Key ~= nil and type(Key) ~= "string" then error("expected string or nil at argument #2, got " .. type(Key), 2) end
+    Key = Key or CryptLib.generatebytes(#Data)
+    return StringFromBuf(XORLib(BufFromString(Data), Key))
 end
 
 CryptLib.tobytecode = function(Source)
-    Expect(Source, "string", false, 1)
+    if typeof(Source) ~= "string" then error("expected string at argument #1, got " .. typeof(Source), 2) end
+    return ""
 end
 
 CryptLib.tobinary = function(Str)
-    Expect(Str, "string", false, 1)
+    if typeof(Str) ~= "string" then error("expected string at argument #1, got " .. typeof(Str), 2) end
     local Result = {}
     for Index = 1, #Str do
         local Byte = Str:byte(Index)
@@ -635,7 +616,7 @@ CryptLib.tobinary = function(Str)
 end
 
 CryptLib.frombinary = function(Binary)
-    Expect(Binary, "string", false, 1)
+    if typeof(Binary) ~= "string" then error("expected string at argument #1, got " .. typeof(Binary), 2) end
     Binary = Binary:gsub("%s", "")
     local Result = {}
     for Index = 1, #Binary, 8 do
@@ -648,20 +629,20 @@ CryptLib.frombinary = function(Binary)
 end
 
 CryptLib.tohex = function(Str)
-    Expect(Str, "string", false, 1)
+    if typeof(Str) ~= "string" then error("expected string at argument #1, got " .. typeof(Str), 2) end
     return (Str:gsub(".", function(C) return string.format("%02x", string.byte(C)) end))
 end
 
 CryptLib.fromhex = function(Str)
-    Expect(Str, "string", false, 1)
-    assert(#Str % 2 == 0, "hex string must have even length")
+    if typeof(Str) ~= "string" then error("expected string at argument #1, got " .. typeof(Str), 2) end
+    if not (#Str % 2 == 0) then error("hex string must have even length", 2) end
     return (Str:gsub("%x%x", function(C) return string.char(tonumber(C, 16)) end))
 end
 
 CryptLib.hmac = function(Key, Data, Algorithm)
-    Expect(Key, "string", false, 1)
-    Expect(Data, "string", false, 2)
-    Expect(Algorithm, "string", false, 3)
+    if typeof(Key) ~= "string" then error("expected string at argument #1, got " .. typeof(Key), 2) end
+    if typeof(Data) ~= "string" then error("expected string at argument #2, got " .. typeof(Data), 2) end
+    if typeof(Algorithm) ~= "string" then error("expected string at argument #3, got " .. typeof(Algorithm), 2) end
 
     local HashRaw = function(Str)
         return crypt.fromhex(crypt.hash(Str, Algorithm))
@@ -686,30 +667,32 @@ CryptLib.hmac = function(Key, Data, Algorithm)
 end
 
 CryptLib.lz4 = function(Data, Compress)
-    assert(type(Data) == "string", "data must be string")
+    if type(Data) ~= "string" then error("expected string at argument #1, got " .. type(Data), 2) end
+    if Compress ~= nil and type(Compress) ~= "boolean" then error("expected boolean or nil at argument #2, got " .. type(Compress), 2) end
     return Compress and lz4compress(Data) or lz4decompress(Data)
 end
 
 CryptLib.rle = function(Data, Compress)
-    assert(type(Data) == "string", "data must be string")
+    if type(Data) ~= "string" then error("expected string at argument #1, got " .. type(Data), 2) end
+    if Compress ~= nil and type(Compress) ~= "boolean" then error("expected boolean or nil at argument #2, got " .. type(Compress), 2) end
     return Compress and rlecompress(Data) or rledecompress(Data)
 end
 
-for Key, Value in pairs(CryptLib) do
+for Key, Value in next, CryptLib do
     AddFunction("crypt." .. Key, Value)
 end
 
 do
     local MergedCrypt = {}
-    for Key, Value in pairs(GlobalEnv.crypt or {}) do
+    for Key, Value in next, getgenv().crypt or {} do
         MergedCrypt[Key] = Value
     end
-    for Key, Value in pairs(CryptLib) do
+    for Key, Value in next, CryptLib do
         if MergedCrypt[Key] == nil then
             MergedCrypt[Key] = Value
         end
     end
-    GlobalEnv.crypt = MergedCrypt
+    getgenv().crypt = MergedCrypt
 end
 
 -- Oth
@@ -719,8 +702,8 @@ local OthHooks, OthHookThreads, OthOriginalThreads = {}, {}, {}
 local InternalOth = {}
 
 InternalOth.hook = function(Target, HookFunction)
-    Expect(Target, "function", false, 1)
-    Expect(HookFunction, "function", false, 2)
+    if typeof(Target) ~= "function" then error("expected function at argument #1, got " .. typeof(Target), 2) end
+    if typeof(HookFunction) ~= "function" then error("expected function at argument #2, got " .. typeof(HookFunction), 2) end
     local HookList = OthHooks[Target]
     if not HookList then
         HookList = {}
@@ -732,9 +715,11 @@ InternalOth.hook = function(Target, HookFunction)
 end
 
 InternalOth.unhook = function(Target, HookOrCallback)
+    if type(Target) ~= "function" then error("expected function at argument #1, got " .. type(Target), 2) end
+    if HookOrCallback ~= nil and type(HookOrCallback) ~= "function" then error("expected function or nil at argument #2, got " .. type(HookOrCallback), 2) end
     local HookList = OthHooks[Target]
     if not HookList then return false end
-    for Index, Entry in ipairs(HookList) do
+    for Index, Entry in next, HookList do
         if HookOrCallback == nil or Entry.Hook == HookOrCallback or Entry.Callback == HookOrCallback then
             table.remove(HookList, Index)
             if #HookList == 0 then
@@ -747,12 +732,14 @@ InternalOth.unhook = function(Target, HookOrCallback)
 end
 
 InternalOth.get_root_callback = function(Target)
+    if type(Target) ~= "function" then error("expected function at argument #1, got " .. type(Target), 2) end
     local HookList = OthHooks[Target]
     if not HookList or #HookList == 0 then return Target end
     return HookList[1].Callback
 end
 
 InternalOth.run_hook = function(Target, ...)
+    if type(Target) ~= "function" then error("expected function at argument #1, got " .. type(Target), 2) end
     local HookList = OthHooks[Target]
     if not HookList or #HookList == 0 then return Target(...) end
     local Entry        = HookList[#HookList]
@@ -780,11 +767,11 @@ InternalOth.get_original_thread = function()
 end
 
 do
-    local Oth = GlobalEnv.oth or {}
-    for Key, Value in pairs(InternalOth) do
+    local Oth = getgenv().oth or {}
+    for Key, Value in next, InternalOth do
         Oth[Key] = Value
     end
-    GlobalEnv.oth = Oth
+    getgenv().oth = Oth
 end
 
 -- Debug
@@ -817,7 +804,7 @@ DebugLib.validlevel = function(Level)
 end
 
 DebugLib.isvalidlevel = function(Level)
-    Expect(Level, "number", false, 1)
+    if typeof(Level) ~= "number" then error("expected number at argument #1, got " .. typeof(Level), 2) end
     return Level >= 0
 end
 
@@ -826,53 +813,53 @@ DebugLib.getregistry = function()
 end
 
 DebugLib.getconstant = function(Func, Index)
-    Expect(Func, "function", false, 1)
-    Expect(Index, "number", false, 2)
+    if typeof(Func) ~= "function" then error("expected function at argument #1, got " .. typeof(Func), 2) end
+    if typeof(Index) ~= "number" then error("expected number at argument #2, got " .. typeof(Index), 2) end
     local Constants = DebugConstants[Func]
     if not Constants or Constants[Index] == nil then
-        error("constant does not exist at index " .. Index)
+        error("constant does not exist at index " .. Index, 2)
     end
     return Constants[Index]
 end
 
 DebugLib.getconstants = function(Func)
-    Expect(Func, "function", false, 1)
+    if typeof(Func) ~= "function" then error("expected function at argument #1, got " .. typeof(Func), 2) end
     return DebugConstants[Func] or {}
 end
 
 DebugLib.setconstant = function(Func, Index, Value)
-    Expect(Func, "function", false, 1)
-    Expect(Index, "number", false, 2)
+    if typeof(Func) ~= "function" then error("expected function at argument #1, got " .. typeof(Func), 2) end
+    if typeof(Index) ~= "number" then error("expected number at argument #2, got " .. typeof(Index), 2) end
     DebugConstants[Func] = DebugConstants[Func] or {}
     DebugConstants[Func][Index] = Value
 end
 
 DebugLib.getupvalue = function(Func, Index)
-    Expect(Func, "function", false, 1)
-    Expect(Index, "number", false, 2)
+    if typeof(Func) ~= "function" then error("expected function at argument #1, got " .. typeof(Func), 2) end
+    if typeof(Index) ~= "number" then error("expected number at argument #2, got " .. typeof(Index), 2) end
     local Upvalues = DebugUpvalues[Func]
     if not Upvalues or Upvalues[Index] == nil then return nil end
     return Upvalues[Index]
 end
 
 DebugLib.getupvalues = function(Func)
-    Expect(Func, "function", false, 1)
+    if typeof(Func) ~= "function" then error("expected function at argument #1, got " .. typeof(Func), 2) end
     return DebugUpvalues[Func] or {}
 end
 
 DebugLib.setupvalue = function(Func, Index, Value)
-    Expect(Func, "function", false, 1)
-    Expect(Index, "number", false, 2)
+    if typeof(Func) ~= "function" then error("expected function at argument #1, got " .. typeof(Func), 2) end
+    if typeof(Index) ~= "number" then error("expected number at argument #2, got " .. typeof(Index), 2) end
     DebugUpvalues[Func] = DebugUpvalues[Func] or {}
     DebugUpvalues[Func][Index] = Value
 end
 
 DebugLib.getstack = function(Level, Index)
-    Expect(Level, "number", false, 1)
+    if typeof(Level) ~= "number" then error("expected number at argument #1, got " .. typeof(Level), 2) end
     local Stack = DebugStacks[Level]
     if not Stack then error("invalid stack level: " .. Level) end
     if Index then
-        Expect(Index, "number", false, 2)
+        if typeof(Index) ~= "number" then error("expected number at argument #2, got " .. typeof(Index), 2) end
         if Stack[Index] == nil then error("stack value does not exist at index " .. Index) end
         return Stack[Index]
     end
@@ -880,15 +867,15 @@ DebugLib.getstack = function(Level, Index)
 end
 
 DebugLib.setstack = function(Level, Index, Value)
-    Expect(Level, "number", false, 1)
-    Expect(Index, "number", false, 2)
+    if typeof(Level) ~= "number" then error("expected number at argument #1, got " .. typeof(Level), 2) end
+    if typeof(Index) ~= "number" then error("expected number at argument #2, got " .. typeof(Index), 2) end
     DebugStacks[Level] = DebugStacks[Level] or {}
     DebugStacks[Level][Index] = Value
 end
 
 DebugLib.setinfo = function(Func, Info)
-    Expect(Func, "function", false, 1)
-    Expect(Info, "table", false, 2)
+    if typeof(Func) ~= "function" then error("expected function at argument #1, got " .. typeof(Func), 2) end
+    if typeof(Info) ~= "table" then error("expected table at argument #2, got " .. typeof(Info), 2) end
     DebugOverride[Func] = Info
 end
 
@@ -940,17 +927,17 @@ DebugLib.getinfo = function(Target)
 end
 
 DebugLib.getproto = function(Func)
-    Expect(Func, "function", false, 1)
+    if typeof(Func) ~= "function" then error("expected function at argument #1, got " .. typeof(Func), 2) end
     return nil
 end
 
 DebugLib.getprotos = function(Func)
-    Expect(Func, "function", false, 1)
+    if typeof(Func) ~= "function" then error("expected function at argument #1, got " .. typeof(Func), 2) end
     return {}
 end
 
 DebugLib.getprotosize = function(Func)
-    Expect(Func, "function", false, 1)
+    if typeof(Func) ~= "function" then error("expected function at argument #1, got " .. typeof(Func), 2) end
     local Count = 0
     while true do
         local Ok = pcall(debug.getproto, Func, Count + 1)
@@ -980,7 +967,7 @@ if hookfunction then
     local OldTraceback
     OldTraceback = hookfunction(debug.traceback, function(...)
         local Tb = OldTraceback(...)
-        for Func, Hidden in pairs(StackHidden) do
+        for Func, Hidden in next, StackHidden do
             if Hidden then
                 Tb = Tb:gsub(".-" .. tostring(Func) .. ".-\n", "")
             end
@@ -989,54 +976,32 @@ if hookfunction then
     end)
 end
 
-for Key, Value in pairs(DebugLib) do
+for Key, Value in next, DebugLib do
     AddFunction("debug." .. Key, Value)
 end
 
 do
     local MergedDebug = {}
-    for Key, Value in pairs(GlobalEnv.debug or {}) do
+    for Key, Value in next, getgenv().debug or {} do
         MergedDebug[Key] = Value
     end
-    for Key, Value in pairs(DebugLib) do
+    for Key, Value in next, DebugLib do
         if MergedDebug[Key] == nil then
             MergedDebug[Key] = Value
         end
     end
-    GlobalEnv.debug = MergedDebug
+    getgenv().debug = MergedDebug
 end
 
 -- RakNet
 
 local RakNetLib = {}
 
-RakNetLib.GetService = function(self, Service)
-    if not cloneref then return Service end
-    if Service == "VirtualInputManager" or Service == "VirtualUser" then
-        return cloneref(Instance.new(Service))
-    end
-    return cloneref(Service)
-end
-
-RakNetLib.GetLocalPlayer = function()
-    return RakNetLib:GetService(game:GetService("Players")).LocalPlayer
-end
-
-RakNetLib.GetCharacter = function()
-    return RakNetLib:GetLocalPlayer().Character or RakNetLib:GetLocalPlayer().CharacterAdded:Wait()
-end
-
-RakNetLib.GetPrimaryPart = function()
-    return RakNetLib:GetCharacter():FindFirstChild("HumanoidRootPart")
-end
-
-RakNetLib.GetHumanoid = function()
-    return RakNetLib:GetCharacter():FindFirstChildOfClass("Humanoid")
-end
-
 RakNetLib.SendKickPacket = function(self, OptionalMessage)
+    if OptionalMessage ~= nil and type(OptionalMessage) ~= "string" then error("expected string or nil at argument #1, got " .. type(OptionalMessage), 2) end
     local Player = RakNetLib:GetLocalPlayer()
-    Player:Kick(OptionalMessage or ("You have been kicked by the use of RakNet packets, " .. Player.UserId))
+    if not Player then return end
+    Player:Kick(OptionalMessage or ("You have been kicked by the use of RakNet packets, " .. tostring(Player.UserId)))
 end
 
 AddFunction("crash", function()
@@ -1054,11 +1019,8 @@ RakNetLib.SendCrashPacket = function()
     crash()
 end
 
-RakNetLib.SendHumanoidPropertyChangePacket = function(self, Property, Value)
-    RakNetLib:GetHumanoid()[Property] = Value
-end
-
 RakNetLib.SendClientLagPacket = function(self, Duration)
+    if Duration ~= nil and type(Duration) ~= "number" then error("expected number or nil at argument #1, got " .. type(Duration), 2) end
     local Original = getfpscap()
     setfpscap(math.random(1, 25))
     task.delay(Duration or 1, function()
@@ -1088,7 +1050,7 @@ local function PacketToString(Data)
     if typeof(Data) == "string" then return Data end
     if typeof(Data) == "table" then
         local Chars = {}
-        for Index, Byte in ipairs(Data) do
+        for Index, Byte in next, Data do
             Chars[Index] = string.char(Byte)
         end
         return table.concat(Chars)
@@ -1097,6 +1059,10 @@ local function PacketToString(Data)
 end
 
 RakNetPacket.new = function(Data, Priority, Reliability, Ordering)
+    if Data ~= nil and typeof(Data) ~= "string" and typeof(Data) ~= "table" then error("expected string, table, or nil at argument #1, got " .. typeof(Data), 2) end
+    if Priority ~= nil and type(Priority) ~= "number" then error("expected number or nil at argument #2, got " .. type(Priority), 2) end
+    if Reliability ~= nil and type(Reliability) ~= "number" then error("expected number or nil at argument #3, got " .. type(Reliability), 2) end
+    if Ordering ~= nil and type(Ordering) ~= "number" then error("expected number or nil at argument #4, got " .. type(Ordering), 2) end
     return setmetatable({
         _data           = Data,
         Priority        = Priority or 0,
@@ -1113,6 +1079,7 @@ RakNetPacket.UpdateViews = function(self)
 end
 
 RakNetPacket.SetData = function(self, Data)
+    if Data ~= nil and typeof(Data) ~= "string" and typeof(Data) ~= "table" then error("expected string, table, or nil at argument #1, got " .. typeof(Data), 2) end
     self._data = Data
     self:UpdateViews()
 end
@@ -1122,11 +1089,13 @@ RakNetPacket.Block = function(self)
 end
 
 RakNetLib.add_send_hook = function(Hook)
+    if type(Hook) ~= "function" then error("expected function at argument #1, got " .. type(Hook), 2) end
     RakNetSendHooks[#RakNetSendHooks + 1] = Hook
 end
 
 RakNetLib.remove_send_hook = function(Hook)
-    for Index, Value in ipairs(RakNetSendHooks) do
+    if type(Hook) ~= "function" then error("expected function at argument #1, got " .. type(Hook), 2) end
+    for Index, Value in next, RakNetSendHooks do
         if Value == Hook then
             table.remove(RakNetSendHooks, Index)
             return
@@ -1135,9 +1104,13 @@ RakNetLib.remove_send_hook = function(Hook)
 end
 
 RakNetLib.send = function(Data, Priority, Reliability, OrderingChannel)
+    if Data ~= nil and typeof(Data) ~= "string" and typeof(Data) ~= "table" then error("expected string, table, or nil at argument #1, got " .. typeof(Data), 2) end
+    if Priority ~= nil and type(Priority) ~= "number" then error("expected number or nil at argument #2, got " .. type(Priority), 2) end
+    if Reliability ~= nil and type(Reliability) ~= "number" then error("expected number or nil at argument #3, got " .. type(Reliability), 2) end
+    if OrderingChannel ~= nil and type(OrderingChannel) ~= "number" then error("expected number or nil at argument #4, got " .. type(OrderingChannel), 2) end
     local Packet = RakNetPacket.new(Data, Priority, Reliability, OrderingChannel)
     Packet:UpdateViews()
-    for _, Hook in ipairs(RakNetSendHooks) do
+    for _, Hook in next, RakNetSendHooks do
         local Ok, Err = pcall(Hook, Packet)
         if not Ok then
             warn("raknet hook error:", Err)
@@ -1170,22 +1143,22 @@ RakNetLib.sync = function()
     RakNetDesyncHooked = false
 end
 
-for Key, Value in pairs(RakNetLib) do
+for Key, Value in next, RakNetLib do
     AddFunction("raknet." .. Key, Value)
 end
 
 do
     local MergedRakNet = {}
-    for Key, Value in pairs(GlobalEnv.raknet or GlobalEnv.rnet or {}) do
+    for Key, Value in next, getgenv().raknet or getgenv().rnet or {} do
         MergedRakNet[Key] = Value
     end
-    for Key, Value in pairs(RakNetLib) do
+    for Key, Value in next, RakNetLib do
         if MergedRakNet[Key] == nil then
             MergedRakNet[Key] = Value
         end
     end
-    GlobalEnv.raknet = MergedRakNet
-    GlobalEnv.rnet   = MergedRakNet
+    getgenv().raknet = MergedRakNet
+    getgenv().rnet   = MergedRakNet
 end
 
 -- Drawing
@@ -1210,7 +1183,7 @@ local function MakeDrawingProxy(State, Update, ReadOnly)
     local MT    = getmetatable(Proxy)
     MT.__index    = function(_, Key) return State[Key] end
     MT.__newindex = function(_, Key, Value)
-        for _, R in ipairs(ReadOnly) do
+        for _, R in next, ReadOnly do
             if R == Key then return end
         end
         State[Key] = Value
@@ -1352,12 +1325,12 @@ DrawingTypes.Text = function(State, Object)
     return MakeDrawingProxy(State, Update, {"TextBounds"})
 end
 
-if not GlobalEnv.Drawing then
-    GlobalEnv.Drawing = {
+if not getgenv().Drawing then
+    getgenv().Drawing = {
         Fonts = { UI = 0, System = 1, Plex = 2, Monospace = 3 },
         new = function(DrawingType)
-            Expect(DrawingType, "string", false, 1)
-            assert(DrawingTypes[DrawingType], "invalid drawing type: " .. DrawingType)
+            if typeof(DrawingType) ~= "string" then error("expected string at argument #1, got " .. typeof(DrawingType), 2) end
+            if not (DrawingTypes[DrawingType]) then error("invalid drawing type: " .. DrawingType, 2) end
             local Object = Instance.new("Frame")
             Object.BorderSizePixel        = 0
             Object.BackgroundTransparency = 1
@@ -1376,34 +1349,35 @@ if not GlobalEnv.Drawing then
 end
 
 AddFunction("isrenderobj", function(Object)
-    for _, Entry in ipairs(DrawingCache) do
+        if typeof(Object) ~= "userdata" then error("expected userdata at argument #1, got " .. typeof(Object), 2) end
+    for _, Entry in next, DrawingCache do
         if Entry.proxy == Object then return true end
     end
     return false
 end)
 
 AddFunction("cleardrawcache", function()
-    for _, Entry in ipairs(DrawingCache) do
+    for _, Entry in next, DrawingCache do
         Entry.instance:Destroy()
     end
     table.clear(DrawingCache)
 end)
 
 AddFunction("getrenderproperty", function(Object, Property)
-    assert(isrenderobj(Object), "expected render object, got " .. type(Object))
-    Expect(Property, "string", false, 2)
+    if not (isrenderobj(Object)) then error("expected render object, got " .. type(Object), 2) end
+    if typeof(Property) ~= "string" then error("expected string at argument #2, got " .. typeof(Property), 2) end
     return Object[Property]
 end)
 
 AddFunction("setrenderproperty", function(Object, Property, Value)
-    assert(isrenderobj(Object), "expected render object, got " .. type(Object))
-    Expect(Property, "string", false, 2)
+    if not (isrenderobj(Object)) then error("expected render object, got " .. type(Object), 2) end
+    if typeof(Property) ~= "string" then error("expected string at argument #2, got " .. typeof(Property), 2) end
     Object[Property] = Value
 end)
 
 -- File System
 
-local ExecutorName = identifyexecutor and identifyexecutor() or "unknown"
+local ExecutorName = (identifyexecutor and select(1, identifyexecutor())) or "unknown"
 local WorkspaceRoot = ExecutorName .. "/workspace"
 
 local VirtualFiles, VirtualFolders = {}, {}
@@ -1422,6 +1396,8 @@ local function ParentPath(Path)
 end
 
 AddFunction("writefile", function(Path, Data)
+    if type(Path) ~= "string" then error("expected string at argument #1, got " .. type(Path), 2) end
+    if type(Data) ~= "string" then error("expected string at argument #2, got " .. type(Data), 2) end
     Path = NormalizePath(Path)
     VirtualFiles[Path] = Data
     VirtualFolders[ParentPath(Path)] = true
@@ -1431,6 +1407,8 @@ AddFunction("writefile", function(Path, Data)
 end)
 
 AddFunction("appendfile", function(Path, Data)
+    if type(Path) ~= "string" then error("expected string at argument #1, got " .. type(Path), 2) end
+    if type(Data) ~= "string" then error("expected string at argument #2, got " .. type(Data), 2) end
     Path = NormalizePath(Path)
     VirtualFiles[Path] = (VirtualFiles[Path] or "") .. Data
     VirtualFolders[ParentPath(Path)] = true
@@ -1440,20 +1418,23 @@ AddFunction("appendfile", function(Path, Data)
 end)
 
 AddFunction("readfile", function(Path)
+    if type(Path) ~= "string" then error("expected string at argument #1, got " .. type(Path), 2) end
     Path = NormalizePath(Path)
     if VirtualFiles[Path] then return VirtualFiles[Path] end
     if AllowTerminal() then
         PsSocket:Send(string.format("Get-Content -Path '%s' -Raw", Path))
     end
-    error("file does not exist in virtual fs: " .. Path)
+    error("file does not exist in virtual fs: " .. Path, 2)
 end)
 
 AddFunction("isfile", function(Path)
+    if type(Path) ~= "string" then error("expected string at argument #1, got " .. type(Path), 2) end
     Path = NormalizePath(Path)
     return VirtualFiles[Path] ~= nil
 end)
 
 AddFunction("makefolder", function(Path)
+    if type(Path) ~= "string" then error("expected string at argument #1, got " .. type(Path), 2) end
     Path = NormalizePath(Path)
     VirtualFolders[Path] = true
     if AllowTerminal() then
@@ -1462,13 +1443,15 @@ AddFunction("makefolder", function(Path)
 end)
 
 AddFunction("isfolder", function(Path)
+    if type(Path) ~= "string" then error("expected string at argument #1, got " .. type(Path), 2) end
     Path = NormalizePath(Path)
     return VirtualFolders[Path] == true
 end)
 
 AddFunction("delfile", function(Path)
+    if type(Path) ~= "string" then error("expected string at argument #1, got " .. type(Path), 2) end
     Path = NormalizePath(Path)
-    assert(VirtualFiles[Path] ~= nil, "file does not exist: " .. Path)
+    if VirtualFiles[Path] == nil then error("file does not exist: " .. Path, 2) end
     VirtualFiles[Path] = nil
     if AllowTerminal() then
         PsSocket:Send(string.format("Remove-Item -Path '%s' -Force", Path))
@@ -1476,11 +1459,12 @@ AddFunction("delfile", function(Path)
 end)
 
 AddFunction("delfolder", function(Path)
+    if type(Path) ~= "string" then error("expected string at argument #1, got " .. type(Path), 2) end
     Path = NormalizePath(Path)
-    for F in pairs(VirtualFiles) do
+    for F in next, VirtualFiles do
         if F:sub(1, #Path) == Path then VirtualFiles[F] = nil end
     end
-    for F in pairs(VirtualFolders) do
+    for F in next, VirtualFolders do
         if F:sub(1, #Path) == Path then VirtualFolders[F] = nil end
     end
     if AllowTerminal() then
@@ -1489,12 +1473,13 @@ AddFunction("delfolder", function(Path)
 end)
 
 AddFunction("listfiles", function(Path)
+    if type(Path) ~= "string" then error("expected string at argument #1, got " .. type(Path), 2) end
     Path = NormalizePath(Path)
     local Out = {}
-    for F in pairs(VirtualFiles) do
+    for F in next, VirtualFiles do
         if F:sub(1, #Path) == Path then Out[#Out + 1] = F end
     end
-    for F in pairs(VirtualFolders) do
+    for F in next, VirtualFolders do
         if F ~= "" and F:sub(1, #Path) == Path then Out[#Out + 1] = F end
     end
     return Out
@@ -1547,20 +1532,20 @@ AddFunction("mouse2release", function()
 end)
 
 AddFunction("mousemoveabs", function(X, Y)
-    Expect(X, "number", false, 1)
-    Expect(Y, "number", false, 2)
+    if typeof(X) ~= "number" then error("expected number at argument #1, got " .. typeof(X), 2) end
+    if typeof(Y) ~= "number" then error("expected number at argument #2, got " .. typeof(Y), 2) end
     VirtualInput:SendMouseMoveEvent(X, Y, game)
 end)
 
 AddFunction("mousemoverel", function(X, Y)
-    Expect(X, "number", false, 1)
-    Expect(Y, "number", false, 2)
+    if typeof(X) ~= "number" then error("expected number at argument #1, got " .. typeof(X), 2) end
+    if typeof(Y) ~= "number" then error("expected number at argument #2, got " .. typeof(Y), 2) end
     local Pos = UserInputService:GetMouseLocation()
     VirtualInput:SendMouseMoveEvent(Pos.X + X, Pos.Y + Y, game)
 end)
 
 AddFunction("mousescroll", function(Pixels)
-    Expect(Pixels, "number", false, 1)
+    if typeof(Pixels) ~= "number" then error("expected number at argument #1, got " .. typeof(Pixels), 2) end
     VirtualInput:SendMouseWheelEvent(0, 0, Pixels > 0, game)
 end)
 
@@ -1576,93 +1561,139 @@ local function GetHRP()
     return Char and Char.HumanoidRootPart
 end
 
-AddFunction("fireclickdetector", function(ClickDetector, Distance)
-    assert(typeof(ClickDetector) == "Instance" and ClickDetector:IsA("ClickDetector"),
-        "expected ClickDetector, got " .. typeof(ClickDetector))
+AddFunction("fireclickdetector", function(ClickDetector, Distance, Signal)
+    if not (typeof(ClickDetector) == "Instance" and ClickDetector:IsA("ClickDetector")) then error("expected ClickDetector, got " .. typeof(ClickDetector), 2) end
+    if Distance ~= nil and type(Distance) ~= "number" then error("expected number or nil at argument #2, got " .. type(Distance), 2) end
+    if Signal ~= nil and type(Signal) ~= "string" then error("expected string or nil at argument #3, got " .. type(Signal), 2) end
     Distance = Distance or 0
+    Signal = Signal or "MouseClick"
     local HRP = GetHRP()
     local OldCFrame = HRP and HRP.CFrame
     if ClickDetector.Parent and Distance ~= 0 and HRP then
         HRP.CFrame = ClickDetector.Parent.CFrame
     end
     ClickDetector.MaxActivationDistance = math.huge
-    firesignal(ClickDetector.MouseHoverEnter)
-    firesignal(ClickDetector.MouseClick, game.Players.LocalPlayer)
-    firesignal(ClickDetector.MouseHoverLeave)
+    local SignalObj = ClickDetector[Signal]
+    if SignalObj then
+        firesignal(SignalObj, game.Players.LocalPlayer)
+    end
     if HRP and OldCFrame then
         HRP.CFrame = OldCFrame
     end
 end)
 
-AddFunction("firetouchinterest", function(Part, Touched)
-    assert(typeof(Part) == "Instance" and Part:IsA("BasePart"), "expected BasePart, got " .. typeof(Part))
-    firesignal(Part, Touched == false and "TouchEnded" or "Touched")
+AddFunction("firetouchinterest", function(Part, Target, Touch)
+    if not (typeof(Part) == "Instance" and Part:IsA("BasePart")) then error("expected BasePart at argument #1, got " .. typeof(Part), 2) end
+    if not (typeof(Target) == "Instance" and Target:IsA("BasePart")) then error("expected BasePart at argument #2, got " .. typeof(Target), 2) end
+    if Touch ~= nil and type(Touch) ~= "boolean" then error("expected boolean or nil at argument #3, got " .. type(Touch), 2) end
+    if Touch == false then
+        firesignal(Target.TouchEnded, Part)
+    else
+        firesignal(Target.Touched, Part)
+    end
 end)
 
 AddFunction("isnetworkowner", function(Part)
-    assert(typeof(Part) == "Instance" and Part:IsA("BasePart"), "expected BasePart, got " .. typeof(Part))
+    if not (typeof(Part) == "Instance" and Part:IsA("BasePart")) then error("expected BasePart, got " .. typeof(Part), 2) end
     return gethiddenproperty(Part, "NetworkOwnerV3") and true or false
 end)
 
-AddFunction("getcallbackvalue", function(Instance, Property)
-    Expect(Instance, "Instance", false, 1)
-    Expect(Property, "string", false, 2)
+AddFunction("getcallbackvalue", function(Object, Property)
+    if typeof(Object) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(Object), 2) end
+    if typeof(Property) ~= "string" then error("expected string at argument #2, got " .. typeof(Property), 2) end
     local Ok, Result = pcall(function()
-        return getrawmetatable(Instance)[Property]
+        return Object[Property]
     end)
-    if Ok and typeof(Result) == "function" then return Result end
+    if Ok and type(Result) == "function" then return Result end
     return nil
 end)
 
 AliasFunction({"getcallbackmember"}, "getcallbackvalue")
 
-AddFunction("fireproximityprompt", function(Prompt, Triggered, Hold)
-    assert(typeof(Prompt) == "Instance" and Prompt:IsA("ProximityPrompt"),
-        "expected ProximityPrompt, got " .. typeof(Prompt))
-    local Signal
-    if Hold then
-        Signal = Triggered and "PromptButtonHoldBegan" or "PromptButtonHoldEnded"
-    else
-        Signal = Triggered == false and "TriggerEnded" or "Triggered"
-    end
-    firesignal(Prompt, Signal)
+AddFunction("fireproximityprompt", function(Prompt)
+    if not (typeof(Prompt) == "Instance" and Prompt:IsA("ProximityPrompt")) then error("expected ProximityPrompt, got " .. typeof(Prompt), 2) end
+    firesignal(Prompt.Triggered, game.Players.LocalPlayer)
 end)
 
 AddFunction("getproximitypromptduration", function(Prompt)
+    if typeof(Prompt) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(Prompt), 2) end
     return Prompt.HoldDuration
 end)
 
 AddFunction("setproximitypromptduration", function(Prompt, Duration)
-    Prompt.HoldDuration = Duration
+    if typeof(Duration) ~= "number" then error("expected number at argument #2, got " .. typeof(Duration), 2) end
+        Prompt.HoldDuration = Duration
 end)
 
 local SignalConnections = {}
+local function TrackConnection(Signal, Conn)
+    if not SignalConnections[Signal] then SignalConnections[Signal] = {} end
+    SignalConnections[Signal][#SignalConnections[Signal] + 1] = Conn
+    return Conn
+end
+
+local function MakeConnectionProxy(Signal, Fn, Thread, Script)
+    local Enabled = true
+    local Proxy = newproxy(true)
+    local MT = getmetatable(Proxy)
+    MT.__index = {
+        Enabled = true,
+        ForeignState = false,
+        LuaConnection = true,
+        Function = Fn,
+        Thread = Thread,
+        Script = Script,
+    }
+    MT.__index.Fire = function(_, ...)
+        if Enabled and type(Fn) == "function" then
+            return Fn(...)
+        end
+    end
+    MT.__index.Defer = function(_, ...)
+        if Enabled and type(Fn) == "function" then
+            task.defer(Fn, ...)
+        end
+    end
+    MT.__index.Disconnect = function()
+        Enabled = false
+        MT.__index.Enabled = false
+    end
+    MT.__index.Disable = function()
+        Enabled = false
+        MT.__index.Enabled = false
+    end
+    MT.__index.Enable = function()
+        Enabled = true
+        MT.__index.Enabled = true
+    end
+    MT.__tostring = function() return "Connection" end
+    MT.__metatable = "This metatable is protected."
+    return Proxy
+end
 
 AddFunction("getconnections", function(Signal)
-    assert(typeof(Signal) == "RBXScriptSignal", "expected RBXScriptSignal, got " .. typeof(Signal))
+    if not (typeof(Signal) == "RBXScriptSignal") then error("expected RBXScriptSignal, got " .. typeof(Signal), 2) end
     return SignalConnections[Signal] or {}
 end)
 
 AddFunction("getconnection", function(Signal)
-    assert(typeof(Signal) == "RBXScriptSignal", "expected RBXScriptSignal, got " .. typeof(Signal))
+    if not (typeof(Signal) == "RBXScriptSignal") then error("expected RBXScriptSignal, got " .. typeof(Signal), 2) end
     local Connections = SignalConnections[Signal]
     return Connections and Connections[1]
 end)
 
 AddFunction("getsignalarguments", function(Signal)
-    assert(typeof(Signal) == "RBXScriptSignal", "expected RBXScriptSignal, got " .. typeof(Signal))
+    if not (typeof(Signal) == "RBXScriptSignal") then error("expected RBXScriptSignal, got " .. typeof(Signal), 2) end
 end)
 
 AddFunction("getsignalargumentsinfo", function(Signal)
-    assert(typeof(Signal) == "RBXScriptSignal", "expected RBXScriptSignal, got " .. typeof(Signal))
+    if not (typeof(Signal) == "RBXScriptSignal") then error("expected RBXScriptSignal, got " .. typeof(Signal), 2) end
 end)
 
-AddFunction("firesignal", function(Instance, SignalName, ...)
-    if not Instance or not SignalName then return end
-    local Signal = Instance[SignalName]
-    if not Signal then return end
+AddFunction("firesignal", function(Signal, ...)
+    if not (typeof(Signal) == "RBXScriptSignal") then error("expected RBXScriptSignal at argument #1, got " .. typeof(Signal), 2) end
     local Args = { ... }
-    for _, Connection in ipairs(getconnections(Signal)) do
+    for _, Connection in next, getconnections(Signal) do
         if #Args > 0 then
             Connection:Fire(table.unpack(Args))
         else
@@ -1672,8 +1703,8 @@ AddFunction("firesignal", function(Instance, SignalName, ...)
 end)
 
 AddFunction("getcustomasset", function(Path)
-    Expect(Path, "string", false, 1)
-    if not isfile(Path) then error("file does not exist: " .. Path) end
+    if typeof(Path) ~= "string" then error("expected string at argument #1, got " .. typeof(Path), 2) end
+    if not isfile(Path) then error("file does not exist: " .. Path, 2) end
     local Name = Path:match("[^/\\]+$")
     local New  = "content/" .. Name
     if not isfile(New) then
@@ -1685,12 +1716,12 @@ end)
 local ReflectionService = Services.ReflectionService
 
 AddFunction("getproperties", function(Instance)
-    Expect(Instance, "Instance", false, 1)
+    if typeof(Instance) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(Instance), 2) end
     local ClassName = typeof(Instance)
     local AllCapabilities = SecurityCapabilities.new(table.unpack(Enum.SecurityCapability:GetEnumItems()))
     local Props = ReflectionService:GetPropertiesOfClass(ClassName, { Security = AllCapabilities })
     local Out = {}
-    for _, Item in ipairs(Props) do
+    for _, Item in next, Props do
         Out[#Out + 1] = Item.Name
     end
     return Out
@@ -1705,13 +1736,13 @@ end)
 AliasFunction({"ishidden"}, "ishiddenproperty")
 
 AddFunction("gethiddenproperty", function(Object, Property)
-    Expect(Object, "Instance", false, 1)
-    Expect(Property, "string", false, 2)
+    if typeof(Object) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(Object), 2) end
+    if typeof(Property) ~= "string" then error("expected string at argument #2, got " .. typeof(Property), 2) end
     return UGCValidation:GetPropertyValue(Object, Property), false
 end)
 
 AddFunction("gethiddenproperties", function(Object)
-    Expect(Object, "Instance", false, 1)
+    if typeof(Object) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(Object), 2) end
     return {
         PredictionMode                  = Enum.PredictionMode.Automatic,
         ChatPrivacyMode                 = Enum.ChatPrivacyMode.NoOne,
@@ -1740,15 +1771,15 @@ AddFunction("gethiddenproperties", function(Object)
 end)
 
 AddFunction("sethiddenproperty", function(Object, Property, Value)
-    Expect(Object, "Instance", false, 1)
-    Expect(Property, "string", false, 2)
+    if typeof(Object) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(Object), 2) end
+    if typeof(Property) ~= "string" then error("expected string at argument #2, got " .. typeof(Property), 2) end
     return UGCValidation:SetPropertyValue(Object, Property, Value)
 end)
 
 AliasFunction({"sethiddenprop"}, "sethiddenproperty")
 
 AddFunction("setsimulationradius", function(SimulationRadius, MaxSimulationRadius)
-    Expect(SimulationRadius, "number", false, 1)
+    if typeof(SimulationRadius) ~= "number" then error("expected number at argument #1, got " .. typeof(SimulationRadius), 2) end
     sethiddenproperty(LocalPlayer, "SimulationRadius", SimulationRadius)
     sethiddenproperty(LocalPlayer, "MaxSimulationRadius", MaxSimulationRadius or SimulationRadius)
 end)
@@ -1764,8 +1795,8 @@ end)
 AddFunction("getinstances", function()
     local Descendants = game:GetDescendants()
     local Out = table.create(#Descendants + 1)
-    for Index, Instance in ipairs(Descendants) do
-        Out[Index] = Instance:GetFullName()
+    for Index, Obj in next, Descendants do
+        Out[Index] = Obj
     end
     Out[#Out + 1] = game
     return Out
@@ -1774,13 +1805,13 @@ end)
 AliasFunction({"getobjects"}, "getinstances")
 
 local KnownObjects = {}
-for _, Object in ipairs(game:GetDescendants()) do
+for _, Object in next, game:GetDescendants() do
     KnownObjects[Object] = true
 end
 
 AddFunction("getnilinstances", function()
     local Nils = {}
-    for Object in pairs(KnownObjects) do
+    for Object in next, KnownObjects do
         if Object.Parent == nil then
             Nils[#Nils + 1] = Object
         end
@@ -1789,7 +1820,7 @@ AddFunction("getnilinstances", function()
 end)
 
 AddFunction("getnilinstance", function(Search)
-    for _, Item in ipairs(getnilinstances()) do
+    for _, Item in next, getnilinstances() do
         if Item == Search then return Item end
     end
 end)
@@ -1811,7 +1842,7 @@ end)
 
 game.DescendantRemoving:Connect(function(Object)
     KnownObjects[Object] = nil
-    for Index, Script in ipairs(ScriptList) do
+    for Index, Script in next, ScriptList do
         if Script == Object then
             table.remove(ScriptList, Index)
             break
@@ -1822,11 +1853,11 @@ end)
 local NonScriptableProperties = {}
 
 AddFunction("isscriptable", function(Object, Property)
-    Expect(Object, "Instance", false, 1)
-    Expect(Property, "string", false, 2)
-    for _, Item in ipairs(getproperties(Object)) do
+    if typeof(Object) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(Object), 2) end
+    if typeof(Property) ~= "string" then error("expected string at argument #2, got " .. typeof(Property), 2) end
+    for _, Item in next, getproperties(Object) do
         if Item:match(Property) then
-            for _, Entry in ipairs(NonScriptableProperties) do
+            for _, Entry in next, NonScriptableProperties do
                 if Entry.object == Object and Entry.property == Property then
                     return false
                 end
@@ -1838,13 +1869,13 @@ AddFunction("isscriptable", function(Object, Property)
 end)
 
 AddFunction("setscriptable", function(Object, Property, Value)
-    Expect(Object, "Instance", false, 1)
-    Expect(Property, "string", false, 2)
+    if typeof(Object) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(Object), 2) end
+    if typeof(Property) ~= "string" then error("expected string at argument #2, got " .. typeof(Property), 2) end
     NonScriptableProperties[#NonScriptableProperties + 1] = { object = Object, property = Property, value = Value }
 end)
 
 AddFunction("setrbxclipboard", function(Data)
-    Expect(Data, "string", false, 1)
+    if typeof(Data) ~= "string" then error("expected string at argument #1, got " .. typeof(Data), 2) end
 end)
 
 local RenderStepBindings = {}
@@ -1865,7 +1896,7 @@ AddFunction("getrendersteppedlist", function(IncludeExecutor)
         return RenderStepBindings
     end
     local Output = {}
-    for Name, Data in pairs(RenderStepBindings) do
+    for Name, Data in next, RenderStepBindings do
         if not Data.FromExecutor then
             Output[Name] = Data
         end
@@ -1874,19 +1905,18 @@ AddFunction("getrendersteppedlist", function(IncludeExecutor)
 end)
 
 AddFunction("replicatesignal", function(Signal)
-    assert(typeof(Signal) == "RBXScriptSignal", "expected RBXScriptSignal, got " .. typeof(Signal))
+    if not (typeof(Signal) == "RBXScriptSignal") then error("expected RBXScriptSignal, got " .. typeof(Signal), 2) end
     firesignal(Signal)
 end)
 
 -- Metatable
 
 AddFunction("getrawmetatable", function(Object)
-    assert(type(Object) == "table" or typeof(Object) == "Instance",
-        "expected table or Instance, got " .. typeof(Object))
+    if type(Object) ~= "table" and typeof(Object) ~= "userdata" then error("expected table or userdata at argument #1, got " .. typeof(Object), 2) end
     local MT = getmetatable(Object)
     if type(MT) == "table" and MT.__metatable ~= nil then
         local Copy = {}
-        for Key, Value in pairs(MT) do
+        for Key, Value in next, MT do
             Copy[Key] = Value
         end
         Copy.__metatable = nil
@@ -1896,19 +1926,14 @@ AddFunction("getrawmetatable", function(Object)
 end)
 
 AddFunction("setrawmetatable", function(Object, MT)
-    assert(type(Object) == "table" or typeof(Object) == "Instance",
-        "expected table or Instance, got " .. typeof(Object))
-    Expect(MT, "table", false, 2)
-    local Old = getmetatable(Object)
-    if type(Old) == "table" then
-        Old.__metatable = nil
-    end
-    setmetatable(Object, MT)
+    if type(Object) ~= "table" and typeof(Object) ~= "userdata" then error("expected table or userdata at argument #1, got " .. typeof(Object), 2) end
+    if type(MT) ~= "table" then error("expected table at argument #2, got " .. type(MT), 2) end
+    return setmetatable(Object, MT)
 end)
 
 AddFunction("hookmetamethod", function(Object, Method, Hook)
-    Expect(Method, "string", false, 2)
-    Expect(Hook, "function", false, 3)
+    if typeof(Method) ~= "string" then error("expected string at argument #2, got " .. typeof(Method), 2) end
+    if typeof(Hook) ~= "function" then error("expected function at argument #3, got " .. typeof(Hook), 2) end
     if not getrawmetatable then return Object end
     local MT  = getrawmetatable(Object)
     local Old = MT[Method]
@@ -1928,12 +1953,12 @@ AddFunction("getnamecallmethod", function()
 end)
 
 AddFunction("setnamecallmethod", function(Method)
-    Expect(Method, "string", false, 1)
+    if typeof(Method) ~= "string" then error("expected string at argument #1, got " .. typeof(Method), 2) end
     NamecallMethod = Method
 end)
 
 AddFunction("isreadonly", function(Object)
-    Expect(Object, "table", false, 1)
+    if typeof(Object) ~= "table" then error("expected table at argument #1, got " .. typeof(Object), 2) end
     return table.isfrozen(Object)
 end)
 
@@ -1959,48 +1984,47 @@ local function GuardTable(Table, ReadOnly)
 end
 
 AddFunction("setreadonly", function(Object, ReadOnly)
-    Expect(Object, "table", false, 1)
-    assert(type(ReadOnly) == "boolean", "expected boolean for readonly, got " .. type(ReadOnly))
+    if typeof(Object) ~= "table" then error("expected table at argument #1, got " .. typeof(Object), 2) end
+    if not (type(ReadOnly) == "boolean") then error("expected boolean for readonly, got " .. type(ReadOnly), 2) end
     return GuardTable(Object, ReadOnly)
 end)
 
 AddFunction("makereadonly", function(Object)
-    Expect(Object, "table", false, 1)
+    if typeof(Object) ~= "table" then error("expected table at argument #1, got " .. typeof(Object), 2) end
     return GuardTable(Object, true)
 end)
 
 AddFunction("makewriteable", function(Object)
-    Expect(Object, "table", false, 1)
+    if typeof(Object) ~= "table" then error("expected table at argument #1, got " .. typeof(Object), 2) end
     return GuardTable(Object, false)
 end)
 
 --[[
-	do
-		local a = IndexFunction("setreadonly")
-		local b = IndexFunction("makewriteable")
+        do
+                local a = IndexFunction("setreadonly")
+                local b = IndexFunction("makewriteable")
 
 
-		local table.unfreeze = function(tbl)
-			a(tbl, false)
-		end
-		local table.writetable = function(tbl) --basically an allias
-			return b(tbl)
-		end
+                local table.unfreeze = function(tbl)
+                        a(tbl, false)
+                end
+                local table.writetable = function(tbl) --basically an allias
+                        return b(tbl)
+                end
 
-		a(table, false)
+                a(table, false)
 
-		table.insert(table, table.unfreeze)
-		table.insert(table, table.writetable)
+                table.insert(table, table.unfreeze)
+                table.insert(table, table.writetable)
 
-		a(table, true)
-	end
+                a(table, true)
+        end
 --]]
 
 -- Miscellaneous
 
-AddFunction("identifyexecutor", function(IncludeVersion)
-    local Version = IncludeVersion and " v2.1.1" or ""
-    return "Potassium" .. Version
+AddFunction("identifyexecutor", function()
+    return "Potassium", "v2.1.1"
 end)
 
 AddFunction("identifyversion", function()
@@ -2009,6 +2033,7 @@ end)
 
 local HardwareID
 AddFunction("sethwid", function(Input)
+    if Input ~= nil and type(Input) ~= "string" then error("expected string or nil at argument #1, got " .. type(Input), 2) end
     HardwareID = Input
 end)
 
@@ -2027,22 +2052,22 @@ do
     local RLELib = loadstring(game:HttpGet(Base .. "rle/main.luau"))()
 
     AddFunction("lz4compress", function(Data)
-        Expect(Data, "string", 1)
+        if typeof(Data) ~= "string" then error("expected string at argument #1, got " .. typeof(Data), 2) end
         return LZ4Lib.compress(Data)
     end)
 
     AddFunction("lz4decompress", function(Data)
-        Expect(Data, "string", 1)
+        if typeof(Data) ~= "string" then error("expected string at argument #1, got " .. typeof(Data), 2) end
         return LZ4Lib.decompress(Data)
     end)
 
     AddFunction("rlecompress", function(Data)
-        Expect(Data, "string", 1)
+        if typeof(Data) ~= "string" then error("expected string at argument #1, got " .. typeof(Data), 2) end
         return RLELib.encode(Data)
     end)
 
     AddFunction("rledecompress", function(Data)
-        Expect(Data, "string", 1)
+        if typeof(Data) ~= "string" then error("expected string at argument #1, got " .. typeof(Data), 2) end
         return RLELib.decode(Data)
     end)
 end
@@ -2051,9 +2076,9 @@ local MessageBoxContainer = Instance.new("Folder", Services.CoreGui)
 MessageBoxContainer.Name = RandomString(6)
 
 AddFunction("messagebox", function(Text, Caption, Flags)
-    Expect(Text, "string", false, 1)
-    Expect(Caption, "string", false, 2)
-    Expect(Flags, "number", false, 3)
+    if typeof(Text) ~= "string" then error("expected string at argument #1, got " .. typeof(Text), 2) end
+    if typeof(Caption) ~= "string" then error("expected string at argument #2, got " .. typeof(Caption), 2) end
+    if typeof(Flags) ~= "number" then error("expected number at argument #3, got " .. typeof(Flags), 2) end
 
     if AllowTerminal() then
         powerexec(string.format(
@@ -2161,7 +2186,7 @@ AliasFunction({"messageboxasync"}, "messagebox")
 local TeleportQueue = ""
 
 AddFunction("queue_on_teleport", function(Code)
-    Expect(Code, "string", false, 1)
+    if typeof(Code) ~= "string" then error("expected string at argument #1, got " .. typeof(Code), 2) end
     TeleportQueue = Code
 end)
 
@@ -2174,9 +2199,9 @@ AddFunction("reset_queuedteleport", function()
 end)
 
 AddFunction("request", function(Options)
-    Expect(Options, "table", false, 1)
+    if typeof(Options) ~= "table" then error("expected table at argument #1, got " .. typeof(Options), 2) end
     local URL    = Options.Url
-    assert(type(URL) == "string" and #URL > 0, "expected non-empty string for Url")
+    if not (type(URL) == "string" and #URL > 0) then error("expected non-empty string for Url", 2) end
     local Method = (Options.Method or "GET"):upper()
     local Body   = Options.Body or ""
     local Ok, Result = pcall(function()
@@ -2185,13 +2210,15 @@ AddFunction("request", function(Options)
         elseif Method == "POST" then
             return game:HttpPost(URL, Body, Enum.HttpContentType.ApplicationUrlEncoded)
         else
-            error("Unsupported method: " .. Method)
+            error("Unsupported method: " .. Method, 2)
         end
     end)
     return {
-        StatusCode = Ok and 200 or 500,
-        Body       = Ok and Result or tostring(Result),
-        Headers    = {},
+        Success       = Ok,
+        StatusCode    = Ok and 200 or 500,
+        StatusMessage = Ok and "OK" or tostring(Result),
+        Body          = Ok and Result or tostring(Result),
+        Headers       = {},
     }
 end)
 
@@ -2199,49 +2226,45 @@ AddFunction("httpget", function(SelfOrUrl, URL)
     if typeof(SelfOrUrl) == "string" then
         URL = SelfOrUrl
     end
-    if typeof(self) == "string" then
-        url = self
+    if typeof(URL) ~= "string" then
+        error("expected string at argument #1, got " .. typeof(URL), 2)
     end
-
-	return request({
-		Url = URL,
-		Method = "GET"
-	}).Body
+    return request({
+        Url = URL,
+        Method = "GET"
+    }).Body
 end)
 
 AddFunction("getinternalparent", function(Instance)
-    Expect(Instance, "Instance", false, 1)
+    if typeof(Instance) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(Instance), 2) end
     return Instance.Parent
 end)
 
 AddFunction("setinternalparent", function(Instance, NewParent)
-    Expect(Instance, "Instance", false, 1)
-    assert(typeof(NewParent) == "Instance" or NewParent == nil, "expected Instance or nil for newparent")
+    if typeof(Instance) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(Instance), 2) end
+    if not (typeof(NewParent) == "Instance" or NewParent == nil) then error("expected Instance or nil for newparent", 2) end
     Instance.Parent = NewParent
 end)
 
 local FlagTypes = {
-	number = "int",
-	boolean = "flag"
+        number = "int",
+        boolean = "flag"
 }
 
 AddFunction("getfflagtype", function(Flag)
-	local Value = getfflag(Flag)
-	local Result = FlagTypes[typeof(Value)]
-
-	if Result then
-		return Result
-	end
-
-	if Value == "True" or Value == "False" then
-		return "flag"
-	end
+    if type(Flag) ~= "string" then
+        error("expected string at argument #1, got " .. type(Flag), 2)
+    end
+    if Flag:match("^FInt") then return "int" end
+    if Flag:match("^FString") then return "string" end
+    if Flag:match("^FFlag") then return "flag" end
+    return nil
 end)
 
 AliasFunction({"getfastflagtype"}, "getfflagtype")
 
 AddFunction("getfflag", function(Flag)
-    Expect(Flag, "string", false, 1)
+    if typeof(Flag) ~= "string" then error("expected string at argument #1, got " .. typeof(Flag), 2) end
 
     local FlagName = Flag
         :gsub("^FFlag", "")
@@ -2262,7 +2285,7 @@ AddFunction("getfflag", function(Flag)
 end)
 
 AddFunction("setfflag", function(Flag, Value)
-    Expect(Flag, "string", false, 1)
+    if typeof(Flag) ~= "string" then error("expected string at argument #1, got " .. typeof(Flag), 2) end
 
     local FlagName = Flag
         :gsub("^FFlag", "")
@@ -2272,13 +2295,13 @@ AddFunction("setfflag", function(Flag, Value)
     local FlagType = Functions.getfflagtype(Flag)
 
     if FlagType == "flag" then
-        Expect(Value, "boolean", false, 2)
+        if typeof(Value) ~= "boolean" then error("expected boolean at argument #2, got " .. typeof(Value), 2) end
         return game:SetFastFlag(FlagName, Value)
     elseif FlagType == "int" then
-        Expect(Value, "number", false, 2)
+        if typeof(Value) ~= "number" then error("expected number at argument #2, got " .. typeof(Value), 2) end
         return game:SetFastInt(FlagName, Value)
     elseif FlagType == "string" then
-        Expect(Value, "string", false, 2)
+        if typeof(Value) ~= "string" then error("expected string at argument #2, got " .. typeof(Value), 2) end
         return game:SetFastString(FlagName, Value)
     end
 
@@ -2286,15 +2309,15 @@ AddFunction("setfflag", function(Flag, Value)
 end)
 
 AddFunction("setclipboard", function(Text)
-    Expect(Text, "string", false, 1)
+    if typeof(Text) ~= "string" then error("expected string at argument #1, got " .. typeof(Text), 2) end
     print(Text)
 end)
 
 local FPSCap = workspace:GetRealPhysicsFPS()
 
 AddFunction("setfpscap", function(FPS)
-    Expect(FPS, "number", false, 1)
-    assert(FPS > 0, "fps cap must be greater than 0")
+    if typeof(FPS) ~= "number" then error("expected number at argument #1, got " .. typeof(FPS), 2) end
+    if not (FPS > 0) then error("fps cap must be greater than 0", 2) end
     FPSCap = FPS
 end)
 
@@ -2303,7 +2326,7 @@ AddFunction("getfpscap", function()
 end)
 
 AddFunction("getping", function()
-    return Services.Stats.FrameRateManager["AverageFPS"]:GetValue()
+    return Services.Stats.Network.ServerStatsItem["Data Ping"]:GetValue()
 end)
 
 AddFunction("getfps", function()
@@ -2317,29 +2340,44 @@ AddFunction("getplatform", function()
 end)
 
 AddFunction("playanimation", function(Animation)
+    if typeof(Animation) ~= "string" then
+        error("expected string at argument #1, got " .. typeof(Animation), 2)
+    end
     if not Animation:find("rbxassetid") then
         Animation = "rbxassetid://" .. Animation
     end
-    local Humanoid = RakNetLib.GetHumanoid()
-    Humanoid:LoadAnimation(Animation):Play()
+    local Char = LocalPlayer.Character
+    if not Char then return end
+    local Humanoid = Char:FindFirstChildOfClass("Humanoid")
+    if not Humanoid then return end
+    local Anim = Instance.new("Animation")
+    Anim.AnimationId = Animation
+    local Track = Humanoid:LoadAnimation(Anim)
+    Track:Play()
 end)
 
 AliasFunction({"runanimation"}, "playanimation")
 
 AddFunction("base64encode", function(Data)
+    if type(Data) ~= "string" then error("expected string at argument #1, got " .. type(Data), 2) end
     return crypt.base64encode(Data)
 end)
 
 AddFunction("base64decode", function(Data)
+    if type(Data) ~= "string" then error("expected string at argument #1, got " .. type(Data), 2) end
     return crypt.base64decode(Data)
 end)
 
 -- Scripts
 
 AddFunction("getscriptclosure", function(Script)
-    Expect(Script, "Instance", false, 1)
-    assert(Script:IsA("ModuleScript"), "expected ModuleScript, got " .. Script.ClassName)
-    return function(...) return require(Script)(...) end
+    if typeof(Script) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(Script), 2) end
+    if not (Script:IsA("ModuleScript")) then error("expected ModuleScript, got " .. Script.ClassName, 2) end
+    local Result = require(Script)
+    if type(Result) == "function" then
+        return Result
+    end
+    return function() return Result end
 end)
 
 AddFunction("getscriptfromthread", function()
@@ -2355,14 +2393,14 @@ AddFunction("getallthreads", function()
 end)
 
 AddFunction("getscriptbytecode", function(Script)
-    Expect(Script, "Instance", false, 1)
+    if typeof(Script) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(Script), 2) end
     return ""
 end)
 
 AliasFunction({"dumpstring"}, "getscriptbytecode")
 
 AddFunction("decompile", function(Script)
-    Expect(Script, "Instance", false, 1)
+    if typeof(Script) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(Script), 2) end
     return request({
         Url    = "http://api.plusgiant5.com/konstant/decompile",
         Method = "POST",
@@ -2372,12 +2410,12 @@ AddFunction("decompile", function(Script)
 end)
 
 AddFunction("getscripthash", function(Script)
-    Expect(Script, "Instance", false, 1)
+    if typeof(Script) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(Script), 2) end
     return crypt.hash(getscriptbytecode(Script))
 end)
 
 AddFunction("getfunctionhash", function(Func)
-    Expect(Func, "function", false, 1)
+    if typeof(Func) ~= "function" then error("expected function at argument #1, got " .. typeof(Func), 2) end
     return crypt.hash(Func, "sha384")
 end)
 
@@ -2392,12 +2430,13 @@ local DefaultSaveOptions = {
 }
 
 AddFunction("saveinstance", function(Options)
+    if Options ~= nil and type(Options) ~= "table" then error("expected table or nil at argument #1, got " .. type(Options), 2) end
     SaveInstance(Options or DefaultSaveOptions)
 end)
 
 AliasFunction({"saveplace"}, "saveinstance")
 
-for _, Object in ipairs(game:GetDescendants()) do
+for _, Object in next, game:GetDescendants() do
     if IsScript(Object, true) then
         ScriptList[#ScriptList + 1] = Object
     end
@@ -2405,7 +2444,7 @@ end
 
 AddFunction("getrunningscripts", function()
     local Out = {}
-    for _, Script in ipairs(ScriptList) do
+    for _, Script in next, ScriptList do
         if IsScript(Script, false) then
             Out[#Out + 1] = Script
         end
@@ -2419,7 +2458,7 @@ end)
 
 AddFunction("getloadedmodules", function()
     local Modules = {}
-    for _, Script in ipairs(ScriptList) do
+    for _, Script in next, ScriptList do
         if Script:IsA("ModuleScript") then
             Modules[#Modules + 1] = Script
         end
@@ -2428,9 +2467,8 @@ AddFunction("getloadedmodules", function()
 end)
 
 AddFunction("isrequired", function(Module)
-    assert(typeof(Module) == "Instance" and Module:IsA("ModuleScript"),
-        "expected ModuleScript, got " .. typeof(Module))
-    for _, Item in ipairs(getloadedmodules()) do
+    if not (typeof(Module) == "Instance" and Module:IsA("ModuleScript")) then error("expected ModuleScript, got " .. typeof(Module), 2) end
+    for _, Item in next, getloadedmodules() do
         if Item == Module then return true end
     end
     return false
@@ -2440,7 +2478,7 @@ AliasFunction({"isloadedmodule"}, "isrequired")
 
 AddFunction("getdeletedactors", function()
     local DeletedActors = {}
-    for _, Item in ipairs(getnilinstances()) do
+    for _, Item in next, getnilinstances() do
         if Item:IsA("Actor") then
             DeletedActors[#DeletedActors + 1] = Item
         end
@@ -2450,7 +2488,7 @@ end)
 
 AddFunction("getremotes", function()
     local Remotes = {}
-    for _, Object in ipairs(game:GetDescendants()) do
+    for _, Object in next, game:GetDescendants() do
         if Object:IsA("RemoteEvent") or Object:IsA("RemoteFunction") then
             Remotes[#Remotes + 1] = Object
         end
@@ -2459,9 +2497,9 @@ AddFunction("getremotes", function()
 end)
 
 AddFunction("hookremote", function(Remote, Hook)
-    Expect(Remote, "Instance", false, 1)
-    assert(Remote:IsA("RemoteEvent") or Remote:IsA("RemoteFunction"), "expected RemoteEvent or RemoteFunction")
-    Expect(Hook, "function", false, 2)
+    if typeof(Remote) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(Remote), 2) end
+    if not (Remote:IsA("RemoteEvent") or Remote:IsA("RemoteFunction")) then error("expected RemoteEvent or RemoteFunction", 2) end
+    if typeof(Hook) ~= "function" then error("expected function at argument #2, got " .. typeof(Hook), 2) end
     local OldNamecall
     OldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
         local Method = getnamecallmethod()
@@ -2491,7 +2529,7 @@ local function ScanRoots(Root, Seen)
     if RootType == "table" then
         GCRegistry[#GCRegistry + 1]    = Root
         GCCollection[#GCCollection + 1] = Root
-        for Key, Value in pairs(Root) do
+        for Key, Value in next, Root do
             if not IsNaN(Key) then ScanRoots(Key, Seen) end
             if not IsNaN(Value) then ScanRoots(Value, Seen) end
         end
@@ -2519,8 +2557,18 @@ AddFunction("getreg", function()
     return GCRegistry
 end)
 
-AddFunction("getgc", function()
-    return GCCollection
+AddFunction("getgc", function(IncludeTables)
+    if IncludeTables ~= nil and type(IncludeTables) ~= "boolean" then error("expected boolean or nil at argument #1, got " .. type(IncludeTables), 2) end
+    if IncludeTables then
+        return GCCollection
+    end
+    local Out = {}
+    for _, Item in next, GCCollection do
+        if type(Item) == "function" then
+            Out[#Out + 1] = Item
+        end
+    end
+    return Out
 end)
 
 AddFunction("filtergc", function(FilterType, FilterOptions, ReturnOne)
@@ -2631,10 +2679,10 @@ end)
 
 AddFunction("dumpenv", function()
     local Result = {}
-    for Key, Value in pairs(getgenv()) do
+    for Key, Value in next, getgenv() do
         if typeof(Value) == "table" then
             local Sub = {}
-            for SubKey, SubValue in pairs(Value) do
+            for SubKey, SubValue in next, Value do
                 Sub[SubKey] = SubValue
             end
             Result[Key] = Sub
@@ -2647,19 +2695,18 @@ end)
 
 AddFunction("printenv", function()
     local Env = dumpenv()
-    for Key, Value in pairs(Env) do
-        print(Key, Translate(Value))
+    for Key, Value in next, Env do
+        print(Key, tostring(Value))
         if typeof(Value) == "table" then
-            for SubKey, SubValue in pairs(Value) do
-                print("\t", SubKey, Translate(SubValue))
+            for SubKey, SubValue in next, Value do
+                print("\t", SubKey, tostring(SubValue))
             end
         end
     end
 end)
 
 AddFunction("getsenv", function(Script)
-    assert(typeof(Script) == "Instance" and Script:IsA("LocalScript"),
-        "expected LocalScript, got " .. typeof(Script))
+    if not (typeof(Script) == "Instance" and Script:IsA("LocalScript")) then error("expected LocalScript, got " .. typeof(Script), 2) end
     return getfenv(0)
 end)
 
@@ -2676,7 +2723,7 @@ local function TestThreadIdentity()
         Try(function() return Instance.new("SurfaceAppearance") end),
         Try(function() Instance.new("MeshPart").MeshId = "" end),
     }
-    for Index, Check in ipairs(Checks) do
+    for Index, Check in next, Checks do
         if not Check() then return Index - 1 end
     end
     return #Checks
@@ -2689,7 +2736,7 @@ AliasFunction({"getthreadidentity", "getthreadcontext", "getthreadcaps", "getthr
 end)
 
 AliasFunction({"setthreadidentity", "setidentity"}, function(Identity)
-    Expect(Identity, "number", false, 1)
+    if typeof(Identity) ~= "number" then error("expected number at argument #1, got " .. typeof(Identity), 2) end
     ThreadIdentity = Identity
 end)
 
@@ -2706,6 +2753,7 @@ end
 AddFunction("WebSocket", {})
 
 AddFunction("WebSocket.connect", function(URL)
+    if type(URL) ~= "string" then error("expected string at argument #1, got " .. type(URL), 2) end
     local Self = {
         Url       = URL,
         _open     = true,
@@ -2714,6 +2762,7 @@ AddFunction("WebSocket.connect", function(URL)
     }
 
     Self.Send = function(self, Message)
+    if type(Message) ~= "string" then error("expected string at argument #1, got " .. type(Message), 2) end
         if not self._open then
             warn("WebSocket is closed")
             return
@@ -2748,16 +2797,16 @@ AddFunction("create_comm_channel", function()
 end)
 
 AddFunction("get_comm_channel", function(ID)
-    Expect(ID, "number", false, 1)
+    if typeof(ID) ~= "number" then error("expected number at argument #1, got " .. typeof(ID), 2) end
     return CommunicationChannels[ID]
 end)
 
 AddFunction("run_on_actor", function(Actor, ScriptSource, ...)
-    assert(typeof(Actor) == "Instance" and Actor:IsA("Actor"), "expected Actor, got " .. typeof(Actor))
-    Expect(ScriptSource, "string", false, 2)
+    if not (typeof(Actor) == "Instance" and Actor:IsA("Actor")) then error("expected Actor, got " .. typeof(Actor), 2) end
+    if typeof(ScriptSource) ~= "string" then error("expected string at argument #2, got " .. typeof(ScriptSource), 2) end
     local Thread = task.spawn(function(...)
         local Fn, Err = loadstring(ScriptSource)
-        if not Fn then error(Err) end
+        if not Fn then error(Err, 2) end
         setfenv(Fn, getgenv())
         Fn(...)
     end, ...)
@@ -2766,7 +2815,7 @@ end)
 
 AddFunction("getactors", function()
     local Actors = {}
-    for _, Object in ipairs(game:GetDescendants()) do
+    for _, Object in next, game:GetDescendants() do
         if Object:IsA("Actor") then
             Actors[#Actors + 1] = Object
         end
@@ -2787,7 +2836,7 @@ local function NewLuaState(IsActor)
     }
     State.GetActors = function(self) return self._actors end
     State.Execute   = function(self, Code)
-        Expect(Code, "string", false, 1)
+        if typeof(Code) ~= "string" then error("expected string at argument #1, got " .. typeof(Code), 2) end
         local Fn, Err = loadstring(Code)
         if not Fn then error(Err, 2) end
         return Fn()
@@ -2811,7 +2860,7 @@ end)
 
 AddFunction("getluastate", function(Object)
     if not Object then return GetGlobalState() end
-    Expect(Object, "Instance", false, 1)
+    if typeof(Object) ~= "Instance" then error("expected Instance at argument #1, got " .. typeof(Object), 2) end
     local Cached = LuaStateCache[Object]
     if Cached then return Cached end
     local State
@@ -2829,7 +2878,7 @@ AddFunction("getluastate", function(Object)
         end
         State._scripts[#State._scripts + 1] = Object
     else
-        error("expected Actor or BaseScript")
+        error("expected Actor or BaseScript", 2)
     end
     LuaStateCache[Object] = State
     return State
@@ -2851,10 +2900,10 @@ game.DescendantAdded:Connect(function(Object)
 end)
 
 AddFunction("run_on_thread", function(Thread, ScriptSource, ...)
-    assert(type(Thread) == "thread", "expected thread, got " .. type(Thread))
-    Expect(ScriptSource, "string", false, 2)
+    if not (type(Thread) == "thread") then error("expected thread, got " .. type(Thread), 2) end
+    if typeof(ScriptSource) ~= "string" then error("expected string at argument #2, got " .. typeof(ScriptSource), 2) end
     local Fn, Err = loadstring(ScriptSource)
-    if not Fn then error(Err) end
+    if not Fn then error(Err, 2) end
     setfenv(Fn, getgenv())
     local T = task.spawn(function(...)
         coroutine.resume(Thread, Fn, ...)
@@ -2864,7 +2913,7 @@ end)
 
 AddFunction("getactorthreads", function()
     local Alive = {}
-    for _, Thread in ipairs(ActorThreadList) do
+    for _, Thread in next, ActorThreadList do
         if coroutine.status(Thread) ~= "dead" then
             Alive[#Alive + 1] = Thread
         end
@@ -2875,18 +2924,18 @@ end)
 -- Loader
 
 local Added = 0
-GlobalEnv.loaded = {}
+getgenv().loaded = {}
 
-for Name, Func in pairs(Functions) do
+for Name, Func in next, Functions do
     if typeof(Name) ~= "string" then
         warn("skipping bad entry: " .. tostring(Name))
         continue
     end
-    if GlobalEnv[Name] then continue end
+    if getgenv()[Name] then continue end
     Added += 1
-    GlobalEnv.loaded[#GlobalEnv.loaded + 1] = { name = Name, func = Func }
+    getgenv().loaded[#getgenv().loaded + 1] = { name = Name, func = Func }
     print("Adding:", Name, tostring(Func) .. "\t #" .. Added)
-    GlobalEnv[Name] = Func
+    getgenv()[Name] = Func
 end
 
 print(string.format(
@@ -2896,15 +2945,15 @@ print(string.format(
     string.rep("\t", 4) .. "Join my discord server (https://discord.gg/bSPRYhBGtf) or dm 'matpatz' on discord for any inquiries or suggestions"
 ))
 
-GlobalEnv.unload = function(Verbose)
-    for _, Entry in ipairs(GlobalEnv.loaded) do
+getgenv().unload = function(Verbose)
+    for _, Entry in next, getgenv().loaded do
         if Entry.name then
-            GlobalEnv[Entry.name] = nil
+            getgenv()[Entry.name] = nil
             Added -= 1
             if Verbose then
                 print("Removing:", Entry.name, tostring(Entry.func) .. "\t #" .. Added)
             end
         end
     end
-    table.clear(GlobalEnv.loaded)
+    table.clear(getgenv().loaded)
 end
