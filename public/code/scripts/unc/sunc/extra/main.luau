@@ -119,6 +119,7 @@ AddFunction("cpexec", function(Command)
     CmdSocket:Send(Command)
 end)
 
+--[[
 AddFunction("getenv", function(Var)
     if not AllowTerminal() then return nil end
     local Result, Done = nil, false
@@ -132,6 +133,7 @@ AddFunction("getenv", function(Var)
     repeat task.wait() until Done
     return Result
 end)
+]]
 
 AddFunction("downloadLune", function()
     local Steps = {
@@ -1878,10 +1880,12 @@ AddFunction("setrbxclipboard", function(Data)
     if typeof(Data) ~= "string" then error("expected string at argument #1, got " .. typeof(Data), 2) end
 end)
 
+-- dont replace with Services.
+
 local RenderStepBindings = {}
 if hookfunction then
     local OldBindToRenderStep
-    OldBindToRenderStep = hookfunction(Services.RunService.BindToRenderStep, function(self, Name, Priority, Fn)
+    OldBindToRenderStep = hookfunction(game:GetService("RunService").BindToRenderStep, function(self, Name, Priority, Fn)
         RenderStepBindings[Name] = {
             Function     = Fn,
             Priority     = Priority,
@@ -2063,12 +2067,12 @@ do
 
     AddFunction("rlecompress", function(Data)
         if typeof(Data) ~= "string" then error("expected string at argument #1, got " .. typeof(Data), 2) end
-        return RLELib.encode(Data)
+        return StringFromBuf(RLELib.encode(Data))
     end)
 
     AddFunction("rledecompress", function(Data)
         if typeof(Data) ~= "string" then error("expected string at argument #1, got " .. typeof(Data), 2) end
-        return RLELib.decode(Data)
+        return RLELib.decode(BufFromString(Data))
     end)
 end
 
