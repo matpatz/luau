@@ -1,29 +1,30 @@
-local rep = game:GetService("ReplicatedStorage")
-local flagmod = require(rep.Packages.GameData.Flags)
-local flags = rep.Packages.Knit.Services.FlagsService
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local FlagsModule = require(ReplicatedStorage.Packages.GameData.Flags)
+local FlagsService = ReplicatedStorage.Packages.Knit.Services.FlagsService
 
 local SolveRemote = FlagsService.RF.Solve
+local TriggerEvent = FlagsService.RE.TriggerGameSolution
 
-flags.RE.TriggerGameSolution.OnClientEvent:Connect(function(eventType, data)
+TriggerEvent.OnClientEvent:Connect(function(Identifer, data)
 	task.wait(tonumber(getgenv().timer))
-    if eventType ~= "ShowFlag" then return end
+    if Identifer ~= "ShowFlag" then return end
 
-    local imageId = data.SolutionImageId
-    local difc = data.Rarity or "Cakewalk"
-    local countryName
+    local ImageId = data.SolutionImageId
+    local Rarity = data.Rarity or "Cakewalk"
+    local Country
 
-    for _, flag in ipairs(flagmod[difc] or {}) do
-        if flag.ImageId == imageId then
-            countryName = flag.CountryName
+    for _, flag in ipairs(FlagsModule[Rarity] or {}) do
+        if flag.ImageId == ImageId then
+            Country = flag.CountryName
             break
         end
     end
 
-    if countryName then
-        SolveRemote:InvokeServer(countryName)
-        print("Answered:", countryName)
-        getgenv().LastAnswer = countryName
+    if Country then
+        SolveRemote:InvokeServer(Country)
+        print("Answered:", Country)
+        getgenv().LastAnswer = Country
     else
-        warn("failed, image Id:", imageId)
+        warn("failed, image Id:", ImageId)
     end
 end)
