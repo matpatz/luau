@@ -933,6 +933,8 @@ toggleClass.new = function(tab, options: table, offset: number)
 	assert(type(options) == 'table', `invalid argument #2 to 'toggleClass.new' (table expected, got {type(options)})`);
 	assert(type(offset) == 'number', `invalid argument #3 to 'toggleClass.new' (number expected, got {type(offset)})`);
 
+	print("\n", tab)
+	table.foreach(options, print)
 	offset = math.round(math.clamp(offset, 1, 2)); -- yep!
 
 	local toggle = setmetatable({
@@ -1434,7 +1436,6 @@ keypickerClass.new = function(toggle, options: table)
 	assert(type(toggle) == 'table', `invalid argument #1 to 'keypickerClass.new' (table expected, got {type(toggle)})`);
 	assert(type(options) == 'table', `invalid argument #2 to 'keypickerClass.new' (table expected, got {type(options)})`);
 
-	table.foreach(options, print)
 	loadAssets();
 
 	local keypicker = setmetatable({
