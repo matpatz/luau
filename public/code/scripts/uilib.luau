@@ -1434,6 +1434,7 @@ keypickerClass.new = function(toggle, options: table)
 	assert(type(toggle) == 'table', `invalid argument #1 to 'keypickerClass.new' (table expected, got {type(toggle)})`);
 	assert(type(options) == 'table', `invalid argument #2 to 'keypickerClass.new' (table expected, got {type(options)})`);
 
+	table.foreach(options, print)
 	loadAssets();
 
 	local keypicker = setmetatable({
@@ -2404,7 +2405,6 @@ do
 	end;
 
 	function tabClass:addToggle(options: table, offset: number)
-		table.foreach(options, print)
 		return toggleClass.new(self, options, offset);
 	end;
 
