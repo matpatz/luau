@@ -44,7 +44,7 @@ local Connections = {
 
 local States = {
     Enabled = true,
-    TickRate = 0.6,
+    TickRate = 0.4,
     Debug = false,
     
     LastValidPositions = {},
