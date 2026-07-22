@@ -115,32 +115,68 @@ local function BoardScore(GridTable)
     local Holes = 0
     local Edge = 0
     local Height = 0
+    local MaxHeight = 0
     
     for Row = 1, 8 do
         for Col = 1, 8 do
             if GridTable[Row][Col] then
                 Height = Height + (8 - Row)
+                MaxHeight = math.max(MaxHeight, 8 - Row)
                 if Row == 8 or Col == 1 or Col == 8 then
                     Edge = Edge + 1
                 end
             else
-                local NeighborCount = 0
-                if Row > 1 and GridTable[Row - 1][Col] then NeighborCount = NeighborCount + 1 end
-                if Row < 8 and GridTable[Row + 1][Col] then NeighborCount = NeighborCount + 1 end
-                if Col > 1 and GridTable[Row][Col - 1] then NeighborCount = NeighborCount + 1 end
-                if Col < 8 and GridTable[Row][Col + 1] then NeighborCount = NeighborCount + 1 end
-                if NeighborCount >= 3 then Holes = Holes + 2 end
+                local Neighbors = 0
+                if Row > 1 and GridTable[Row - 1][Col] then Neighbors = Neighbors + 1 end
+                if Row < 8 and GridTable[Row + 1][Col] then Neighbors = Neighbors + 1 end
+                if Col > 1 and GridTable[Row][Col - 1] then Neighbors = Neighbors + 1 end
+                if Col < 8 and GridTable[Row][Col + 1] then Neighbors = Neighbors + 1 end
+                if Neighbors >= 3 then Holes = Holes + 2 end
             end
         end
     end
     
-    return Edge * 0.5 + Height * 0.1 - Holes
+    local HeightPenalty = MaxHeight > 6 and 0.5 or 0.1
+    return Edge * 0.5 + Height * HeightPenalty - Holes * 1.5
+end
+
+local function FindNearCompleteLines(GridTable)
+    local NearLines = {}
+    
+    for Row = 1, 8 do
+        local Filled = 0
+        for Col = 1, 8 do
+            if GridTable[Row][Col] then Filled = Filled + 1 end
+        end
+        if Filled >= 7 then table.insert(NearLines, { Type = "Row", Index = Row, Filled = Filled }) end
+    end
+    
+    for Col = 1, 8 do
+        local Filled = 0
+        for Row = 1, 8 do
+            if GridTable[Row][Col] then Filled = Filled + 1 end
+        end
+        if Filled >= 7 then table.insert(NearLines, { Type = "Col", Index = Col, Filled = Filled }) end
+    end
+    
+    return NearLines
 end
 
 local function ScorePlacement(Cells)
     local GridClone = CloneGrid()
     if not ApplyPlacement(GridClone, Cells) then return -math.huge end
-    return CountLines(GridClone) * 25 + BoardScore(GridClone)
+    
+    local LineCount = CountLines(GridClone)
+    local LineScore = LineCount * 100
+    
+    local NearLines = FindNearCompleteLines(GridClone)
+    local NearLineBonus = #NearLines * 5
+    
+    if LineCount > 0 then
+        return LineScore + NearLineBonus + BoardScore(GridClone)
+    end
+    
+    return NearLineBonus + BoardScore(GridClone)
 end
 
 local function PickBestMove()
@@ -331,6 +367,9 @@ Tabs.Settings:CreateSlider({
     Increment = 0.1,
     CurrentValue = 0.4,
     Callback = function(Value)
+		if Value == 0 then
+			Value = 0.09 -- 0 is just instant lose, idk why.
+		end
         SetState("TickRate", Value)
     end,
 })
