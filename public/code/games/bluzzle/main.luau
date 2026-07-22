@@ -169,14 +169,11 @@ local function ScorePlacement(Cells)
     local LineCount = CountLines(GridClone)
     local LineScore = LineCount * 100
     
-    local NearLines = FindNearCompleteLines(GridClone)
-    local NearLineBonus = #NearLines * 5
-    
     if LineCount > 0 then
-        return LineScore + NearLineBonus + BoardScore(GridClone)
+        return LineScore + BoardScore(GridClone)
     end
     
-    return NearLineBonus + BoardScore(GridClone)
+    return BoardScore(GridClone)
 end
 
 local function PickBestMove()
