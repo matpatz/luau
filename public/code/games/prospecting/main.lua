@@ -28,6 +28,7 @@ local window = Rayfield:CreateWindow({
 
 local Tabs = {
     main = window:CreateTab("Main", 4483362458),
+    awdf = window:CreateTab("Lebron james")
 }
 
 local Connections = {
