@@ -2,17 +2,17 @@
 //        feels the aura
 const webhooks = {
     // lucky block
-    "662417684": "https://discord.com/api/webhooks/1489794802097852618/rS50RLlVMw3_7Lj5RFuPI5fNGaLwsyoc7c7NBf2Jnua8RzJg2x3QvD-qb9E3MtezdXfQ",
+    "662417684": "https://discord.com/api/webhooks/1531439138597900509/8AoCPcECLJ82oQ22logS72TtqWZWjK34hsrcAjELHlAZx8l1j1B2egdscXFd0w8Mx0Se",
     // prospecting
-    "129827112113663": "https://discord.com/api/webhooks/1422374009600741430/NFfvcty5NZPHOH4_sUZCJkOjz7n_99W3FMqlvSZkNout4Rb1Yb-n2WDYmRZllJMpfFPi",
+    "129827112113663": "https://discord.com/api/webhooks/1531439267665154088/G0XGiQCMXF_DDii0iXUzaD1xvI6QGUZIoV9KS-2oFQzqHtjnOogNFWOpjDg5ALKRNRkF",
     // answer or die
-    "11966456877": "https://discord.com/api/webhooks/1422790373016735745/SLR6ujXdmNqNjtjeDTcm6Fsq2cP41jY20VFPd5Ol0n96ksHcta30etmzTDi7Spuqb968",
+    "11966456877": "https://discord.com/api/webhooks/1531439690480091177/j1AY2pwGRo_doV7gnKsUtlS9L7ymddV8lhRYGn29lM4_PzFrxtu7961UydJ7H9nhcLts",
     // Guess the Country Flag or Die
-    "88817068170433": "https://discord.com/api/webhooks/1422774328100913272/EY0fzME1MD1mhBH4TrPxm5fWjkkbNCLnPn_FQLcJ5lhlVSG-s7y1pwy4uAsoXm45Bg_K",
+    "88817068170433": "https://discord.com/api/webhooks/1531439764245581834/bJsqvOIscNk-CAazZ6JD2V_9KwUBoxiY0l49nwH2RwMHD2UByr5xe9bUaRevf-ClfW1f",
     // Idle Blocks
     "101759436219635": "https://discord.com/api/webhooks/1502821413390913666/F7pOBvhXavuv8SHBlRY5bUtVcStj5aJZt12nJzFx3ijD1X5wAayD7TcLa1ezH3BovGTF",
     // teen titan
-    "3082002798": "https://discord.com/api/webhooks/1433582234442403890/cCN2SL7MwbhVV2esOfThdlL42JqNYw14cQXi5VXyKw5GtpAeQud5v6hP_O2IQ0fnStqq"
+    "3082002798": "https://discord.com/api/webhooks/1531438831587561624/bt7gssxuo48ZSs5bw7G-8V_V27W2I_Aiq6qPZYQkD3YpVF4hWBfnAYF_GK1I3F4pZuWJ"
 };
 
 export default async function handler(req, res) {
