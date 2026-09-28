@@ -1,2 +1,2 @@
-shared.script = "gamess/Teen-Titan-Battleground"
+shared.script = "games/Teen-Titan-Battleground"
 loadstring(game:HttpGet("https://voltex.website/init.lua"))()
